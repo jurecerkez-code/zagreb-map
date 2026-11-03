@@ -49,10 +49,7 @@ jobs:
             echo "no leak rules in this copy"
           fi
 
+      # scripts/web-tests.mjs runs the same suite with the tests still written for Stockholm skipped and counted
+      # (web/test/legacy_upstream.json), so this gate means what it says.
       - name: Web unit tests
-        run: |
-          if ls web/test/*.test.mjs >/dev/null 2>&1; then
-            node --test "web/test/*.test.mjs"
-          else
-            echo "no web/test/*.test.mjs yet"
-          fi
+        run: node scripts/web-tests.mjs
