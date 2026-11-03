@@ -37,7 +37,24 @@ def network_enabled(config) -> bool:
     return bool(config.getoption("--network")) or os.environ.get("HFH_NETWORK") == "1"
 
 
+LEGACY = Path(__file__).with_name("legacy_upstream.txt")
+
+
+def legacy_ids() -> set[str]:
+    """The tests listed as not ported yet (tests/legacy_upstream.txt): one node id a line, '#' a comment."""
+    if not LEGACY.exists():
+        return set()
+    return {line.strip() for line in LEGACY.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.startswith("#")}
+
+
 def pytest_collection_modifyitems(config, items):
+    legacy = legacy_ids()
+    if legacy:
+        mark = pytest.mark.legacy
+        for item in items:
+            if item.nodeid in legacy:
+                item.add_marker(mark)
     if network_enabled(config):
         return
     skip = pytest.mark.skip(reason="needs --network or HFH_NETWORK=1")

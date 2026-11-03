@@ -116,8 +116,11 @@ def main() -> int:
         ji = np.flatnonzero((en[:-1] > y0) & (en[1:] < y1))
         if len(ei) and len(ji):
             ii = integral(img)
-            px = lambda E: np.clip(np.round((E - x0) / args.tile * args.px), 0, args.px).astype(int)
-            py = lambda N: np.clip(np.round((y1 - N) / args.tile * args.px), 0, args.px).astype(int)
+            def px(E):
+                return np.clip(np.round((E - x0) / args.tile * args.px), 0, args.px).astype(int)
+
+            def py(N):
+                return np.clip(np.round((y1 - N) / args.tile * args.px), 0, args.px).astype(int)
             xa, xb = px(ex[ei]), px(ex[ei + 1])
             ya, yb = py(en[ji]), py(en[ji + 1])
             S = ii[np.ix_(yb, xb)] - ii[np.ix_(ya, xb)] - ii[np.ix_(yb, xa)] + ii[np.ix_(ya, xa)]

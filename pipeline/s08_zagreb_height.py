@@ -23,7 +23,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import shapely
 from rasterio.features import rasterize
 from rasterio.transform import Affine
 

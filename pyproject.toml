@@ -45,4 +45,5 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
     "network: downloads real data; enabled with --network or HFH_NETWORK=1",
+    "legacy: written for Stockholm, not ported to Zagreb yet (tests/legacy_upstream.txt)",
 ]

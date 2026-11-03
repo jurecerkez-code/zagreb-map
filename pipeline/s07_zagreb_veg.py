@@ -19,7 +19,6 @@ Sources and honesty rules:
 import argparse
 import gzip
 import json
-import struct
 from pathlib import Path
 
 import geopandas as gpd
@@ -98,9 +97,11 @@ def main(argv=None) -> int:
             continue
         XX, ZZ = np.meshgrid(gx, gz)
         inside = shapely.contains_xy(loc, XX.ravel(), ZZ.ravel())
-        fx.append(XX.ravel()[inside]); fz.append(ZZ.ravel()[inside])
+        fx.append(XX.ravel()[inside])
+        fz.append(ZZ.ravel()[inside])
     if fx:
-        fx = np.concatenate(fx); fz = np.concatenate(fz)
+        fx = np.concatenate(fx)
+        fz = np.concatenate(fz)
         fy = terr.at(fx, fz)
         forest_arr = np.c_[fx, fy + 0.2, fz].astype(np.float32)
         tree_arr = np.vstack([tree_arr, forest_arr]) if len(tree_arr) else forest_arr
@@ -112,7 +113,6 @@ def main(argv=None) -> int:
     # hills and sinks under them, so whole forests (Maksimir, Medvednica) were invisible from above. A mask follows the
     # ground by construction, cannot z-fight and costs one byte per cell.
     import rasterio.features
-    from rasterio.transform import from_origin
     g = gpd.read_parquet(VEG / "green.parquet")
     MASK_CELL = 16.0
     lg = g.geometry.bounds  # (minx, miny, maxx, maxy) in EPSG:3765, before the local shift
