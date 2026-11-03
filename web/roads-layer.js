@@ -21,13 +21,16 @@ const NIGHT_TINT = 'vec3(0.30, 0.36, 0.56)';   // the walls' own night cooling (
 
 // The class palette: asphalt greys for the carriageway, warmer greys for the pavements, so a street reads from a
 // pavement without either shouting. The motorway is the darkest, a service lane the lightest.
+// Measured off Zagreb, not picked: asphalt reads #4f5450 in the aerial imagery and a kerb side pavement #8d908e, so
+// the streets are the colour of the streets. The classes keep a step or two between them, enough to read the network
+// at the zoom where a street is a few pixels wide.
 const COLOUR = {
-  motorway: '#5b606a', trunk: '#61666f', primary: '#666b74', secondary: '#6c717a', tertiary: '#737880',
-  residential: '#787d85', unclassified: '#7d828a', living_street: '#82878e', service: '#888d94', pedestrian: '#a29a8e',
-  footway: '#b6b2ab', tram: '#6b6f76', path: '#bdb9b2', steps: '#b0aba3', cycleway: '#b2afa9',
+  motorway: '#4a4e4b', trunk: '#4b4f4c', primary: '#4c504d', secondary: '#4e524f', tertiary: '#4f5350',
+  residential: '#4f5450', unclassified: '#515652', living_street: '#545955', service: '#575c58', pedestrian: '#7d817b',
+  footway: '#8d908e', path: '#9a9791', steps: '#8a8781', cycleway: '#8b8f8c', tram: '#4d524e',
 };
 const PAVEMENT = new Set(['footway', 'path', 'steps', 'cycleway', 'pedestrian']);
-const SIDEWALK = '#b9b4ac';   // the band a carriageway sits in: the pavements on both sides, at a glance
+const SIDEWALK = '#8d908e';   // the band a carriageway sits in: the pavements on both sides, at a glance
 
 // The ground the streets are laid on. surfaceAt is the exact surface, but the terrain draws each chunk as flat
 // quads on a coarse grid, so on a slope the drawn ground stands metres above it and the street sinks into the hill.
