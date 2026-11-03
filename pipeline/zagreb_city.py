@@ -32,10 +32,8 @@ import pandas as pd
 import shapely
 from scipy.spatial import cKDTree
 
-from . import city, codes, terrain
+from . import city, codes
 from . import estimate as est
-from .s02_attributes import floors_from_height
-from .s02_years import MIN_PRIVATE_OVERLAP, PERIOD_FROM, PERIOD_TO
 from .yearrules import FLOOR_YEAR, LATEST_YEAR
 
 DATA = Path("data")
@@ -178,7 +176,6 @@ def split_oversized(parts: gpd.GeoDataFrame, osm_b: gpd.GeoDataFrame):
         return parts
     tree = shapely.STRtree(osm_b.geometry.values)
     geoms = list(parts.geometry.values)
-    out_geoms, out_rows = [], []
     rest_idx = []
     for i in range(len(parts)):
         if area[i] <= MAX_FEATURE_M2:
@@ -199,7 +196,6 @@ def split_oversized(parts: gpd.GeoDataFrame, osm_b: gpd.GeoDataFrame):
     keep_rows = [i for i in big if pieces[i]]
     skip = set(big) - set(keep_rows)
     base = parts.loc[parts.index[rest_idx + sorted(skip)]].copy()
-    add = parts.loc[parts.index[keep_rows]].copy()
     rows, geos = [], []
     for i in keep_rows:
         for cut in pieces[i]:
@@ -438,8 +434,8 @@ def dem_sampler(paths):
         lon, lat = tr.transform(np.asarray(e), np.asarray(n))
         out = np.full(len(lon), np.nan)
         for s in srcs:
-            l, b_, r, t = s.bounds
-            m = (lon >= l) & (lon < r) & (lat > b_) & (lat <= t)
+            left, b_, r, t = s.bounds
+            m = (lon >= left) & (lon < r) & (lat > b_) & (lat <= t)
             if m.any():
                 out[m] = [v[0] for v in s.sample(zip(lon[m], lat[m]))]
         return out

@@ -18,7 +18,8 @@ HERO = {"two-hills": 6, "earthquake-1880": 5, "green-horseshoe": 4, "interwar-es
 PERIOD_COLOURS = {"<1800": "#8ed3d0", "1800-79": "#47a0a5", "1880-1918": "#387b88", "1919-45": "#465262",
                   "1946-90": "#aa6446", "1991-": "#e49f75"}
 ocr = RapidOCR()
-words = lambda s: set(re.findall(r"[a-zà-ž]{4,}", s.lower()))
+def words(s):
+    return set(re.findall(r"[a-zà-ž]{4,}", s.lower()))
 for sid, hero in HERO.items():
     shot = SCREENS / f"scene_{sid}.png"
     if not shot.exists():

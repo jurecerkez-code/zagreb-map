@@ -5,7 +5,6 @@
 No framework: a scenario that matters names the command that proves it, and this runs the commands and reports.
 @pending:reason and @manual are listed but not run, so an unproven scenario stays visible instead of passing quietly.
 """
-import re
 import subprocess
 import sys
 from pathlib import Path
