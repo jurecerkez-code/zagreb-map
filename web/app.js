@@ -3701,16 +3701,18 @@ function stepTramTip() {
   if (tramTip.shown && !tramsTakePointer()) tramTip.hide();
 }
 // ---------- Riding a tram ----------
-// Vozim se in a tram's sheet (web/trams.js tramHtml; the click is caught at the sheet above) gives the camera that
-// tram to ride: it drops to 14 m behind and 7 m over the street, looks at the tram, and every frame closes again on
-// the place the layer draws it in (trams-layer.js list), so ZET's live position and the timetable are followed the
-// same way. The camera eases towards that place (RIDE_EASE_S) rather than snapping, since a live vehicle may jump a
-// hundred metres between two feeds. The controls are off for the ride, or their damping would keep pulling the
-// camera back to the orbit it had; the camera is put back exactly where it was when the ride ends, by the Izađi
-// button, by Escape, or by a click on the map.
-const RIDE_BACK = 14;         // metres behind the tram
-const RIDE_UP = 7;            // metres above the street
-const RIDE_AIM = 2;           // metres above the street: the tram's body, not its wheels
+// The ride is the driver's view: the camera stands just past the roof's front edge, 3.8 m up, looking down the line
+// and slightly up, so the street ahead and the buildings over it are in the picture rather than the floor. It closes
+// every frame on the place the layer draws the tram in (trams-layer.js list), so ZET's live position and the
+// timetable are followed the same way. The camera eases towards that place (RIDE_EASE_S) rather than snapping, since
+// a live vehicle may jump a hundred metres between two feeds. The controls are off for the ride, or their damping
+// would keep pulling the camera back to the orbit it had; the camera is put back exactly where it was when the ride
+// ends, by the Izađi button, by Escape, or by a click on the map.
+const RIDE_LEN = 32;          // metres the layer draws a tram long (trams-layer.js L)
+const RIDE_AHEAD = 1.75;      // metres in front of the roof's front edge
+const RIDE_UP = 3.8;          // metres above the street: the roof, not the street
+const RIDE_LOOK = 90;         // metres ahead the camera looks
+const RIDE_LOOK_UP = 12;      // metres up at that distance: a few degrees over the level, so the skyline reads
 const RIDE_EASE_S = 0.22;     // seconds to close most of the way to where the tram has got to
 const RIDE_GONE_MS = 12000;   // a tram the layer stops drawing (a trip that ended) ends its ride after this long
 const RIDE_FOG = 900;         // metres the fog is measured from while riding: 15 m would grey out the street ahead
@@ -3762,10 +3764,12 @@ function stepRide(dt) {
   // The layer reports the direction it draws the tram in; a tram whose direction it cannot say keeps the last one.
   if (Number.isFinite(o.heading)) ride.heading = o.heading;
   const fx = Math.cos(ride.heading), fz = Math.sin(ride.heading);  // the engine's angle: from +x towards +z
-  const bx = o.x - fx * RIDE_BACK, bz = o.z - fz * RIDE_BACK;
-  // 7 m over the higher end of the street the camera stands on: behind a climbing tram a hill may rise.
+  // The front of the roof, a little past it, so the view is the driver's and the tram's own body is out of the frame.
+  const ahead = RIDE_LEN / 2 + RIDE_AHEAD;
+  const bx = o.x + fx * ahead, bz = o.z + fz * ahead;
+  // 3.8 m over the higher end of the street the camera stands on: ahead of a climbing tram a hill may rise.
   ridePos.set(bx, Math.max(g, surfaceAt(bx, bz)) + RIDE_UP, bz);
-  rideAim.set(o.x, g + RIDE_AIM, o.z);
+  rideAim.set(bx + fx * RIDE_LOOK, surfaceAt(bx + fx * RIDE_LOOK, bz + fz * RIDE_LOOK) + RIDE_LOOK_UP, bz + fz * RIDE_LOOK);
   ride.pos.lerp(ridePos, k);
   ride.aim.lerp(rideAim, k);
   camera.position.copy(ride.pos);
