@@ -37,7 +37,7 @@ import { makeGround, cutFactor, levelAt, LOD_TOL, parsePolygons, fadeWidth, fade
   FETCH_TIMEOUT_MS } from './terrain.js';
 import { RELIEF_KEY, RELIEF_MAX, RELIEF_STEP, initialRelief, reliefNote, reliefValue, ease } from './relief.js';
 import { howto } from './howto.js';
-import { northTurn, turnAt, needleDeg } from './north.js';
+import { needleDeg } from './north.js';
 import { mountSearch } from './searchbox.js';
 import { makeHighlight } from './highlight.js';
 import { aboutHtml, aboutTarget } from './about.js';
@@ -1787,9 +1787,8 @@ function updateLods() {
 // at 2.5x the ground rises within metres, and the ground's back faces are not drawn), and the near and far planes
 // follow the distance, which keeps depth precise enough for wall bottoms, quays and water from 60 m to 30 km (a fixed
 // near of 5 m flickered at 20 km).
-// The north turn (stepNorth) runs before the controls and keeps the camera's height; the ride then moves target and
-// camera together, so the turn keeps its azimuth. On hills the floor may lift the camera during a north turn (the
-// floor wins over the north button's "keeps the tilt"), but the turn still ends exactly north.
+// The ride moves target and camera together and keeps its azimuth; a press of the north button takes the camera back
+// (faceNorth ends the ride first). On hills the floor may lift the camera, but a press lands exactly north.
 // The ride closes the gap with a time constant of RIDE_S whatever the frame rate (dt, seconds since the last frame),
 // all of it at once for a viewer who asks for less motion, and stops within 1 mm. A camera the floor lifts is aimed at
 // the target again before the frame is drawn. The far plane stays at 60 km until the terrain is in: the flat land and
@@ -2337,10 +2336,9 @@ canvas.addEventListener('pointerleave', () => {
 });
 
 // ---------- Flying to a building ----------
-let flight = null, turn = null;
+let flight = null;
 function flyTo(x, z, done, distance = 520, up = 0) {
   if (ride) endRide();   // the ride has the camera: a flight to a place takes it back first
-  turn = null;           // and a flight ends a north turn the way it always did
   const dir = camera.position.clone().sub(controls.target).normalize();
   if (dir.y < 0.45) { dir.y = 0.45; dir.normalize(); }
   // a phone's search pick looks down at least this steeply (flyAbove); the direction it faces is kept
@@ -3487,39 +3485,29 @@ function flipUnknown() {
 }
 
 // ---------- Facing north ----------
-// The compass next to Look and About (index.html .north-open, web/north.js). A press, or the N key, turns the map to
-// face north the short way round in half a second, at once for a viewer who asks for less motion (calm, above). Only
-// the azimuth changes: each frame the camera moves round the place at its own height and distance, so the place, the
-// zoom and the tilt stay, and a zoom during the turn is kept. A drag on the map cancels it. The controls' inertia
-// (damping) is stopped as the turn starts and their spin held at nought while it runs, so the turn ends exactly north
-// and stays there. A flight (flyTo) owns the camera until it lands: a press during one does nothing, and a flight that
-// starts during a turn ends it (review round 1: the flight used to put the map back in one frame). The needle follows
-// the azimuth on every frame it changes (stepNeedle); the hero view and flights move the camera as before, and the
-// needle simply follows.
+// The compass next to Look and About (index.html .north-open, web/north.js). A press, or the N key, faces the map north
+// on that frame, wherever it was: only the azimuth changes, the camera moves round the place at its own height and
+// distance, so the place, the zoom and the tilt stay. It also ends a flight and a ride, which both hold the camera.
+// The controls' inertia (damping) is stopped at the press, so a fling just before cannot carry on past north. The
+// needle follows the azimuth on every frame it changes (stepNeedle); the hero view and flights move the camera as
+// before, and the needle simply follows.
 const northBtn = document.querySelector('.north-open');
 const needleEl = northBtn.querySelector('svg');
 let needleAt = null;
 function faceNorth() {
-  if (ride) return;   // a ride owns the camera until it ends
-  flight = null;      // a press takes the camera back from a flight instead of doing nothing
-  turn = northTurn(controls.getAzimuthalAngle(), performance.now(), { calm: calm.matches });
+  // North on the frame the button is pressed: no eased turn, no state to get stuck in. An eased turn ended in the same
+  // place when it finished, but it needed frames, and a press made while a flight or a ride held the camera (or in a
+  // frame-starved tab) could finish in a camera nobody redrew. That read as a button that works once per session.
+  if (ride) endRide();            // the ride owns the camera: a press is the viewer asking for it back
+  flight = null;                  // and a flight gives way the same way
+  const p = camera.position, c = controls.target, h = Math.hypot(p.x - c.x, p.z - c.z);
+  // Straight above the target the azimuth means nothing; otherwise put the camera due south of it, which is azimuth 0.
+  if (h > 1e-3) p.set(c.x, p.y, c.z + h);
   // The vendored OrbitControls' (r186) own inertia: a fling just before must not carry on (web/test/north.test.mjs).
   controls._sphericalDelta.set(0, 0, 0);
   controls._panOffset.set(0, 0, 0);
-}
-function stepNorth(now) {
-  if (!turn) return;
-  const { theta, done } = turnAt(turn, now);
-  const p = camera.position, c = controls.target, h = Math.hypot(p.x - c.x, p.z - c.z);
-  // Straight above the place the azimuth means nothing and sin/cos would drag the camera through the target.
-  if (h > 1e-3) p.set(c.x + h * Math.sin(theta), p.y, c.z + h * Math.cos(theta));
-  controls._sphericalDelta.theta = 0;
-  // The deadline is what makes a second press work: a turn that lost its frames (a tab in the background, a long
-  // stall between frames) used to sit in `turn` forever, and every later press only moved a camera nobody redrew.
-  if (done || now - turn.t0 > turn.dur + 400) {
-    turn = null;
-    controls._sphericalDelta.set(0, 0, 0);
-  }
+  controls.update();
+  needleAt = null;                // stepNeedle only writes a changed bearing, and this one must be written
 }
 function stepNeedle() {
   const deg = needleDeg(controls.getAzimuthalAngle());
@@ -3528,7 +3516,6 @@ function stepNeedle() {
   needleEl.style.transform = `rotate(${deg}deg)`;
 }
 northBtn.onclick = faceNorth;
-canvas.addEventListener('pointerdown', () => { turn = null; });
 addEventListener('keydown', e => {
   if ((e.key === 'n' || e.key === 'N') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && !typingIn(e.target)) faceNorth();
 });
@@ -3722,7 +3709,6 @@ const ridePos = new THREE.Vector3(), rideAim = new THREE.Vector3();
 function startRide(tram) {
   if (ride || tram?.trip === undefined) return;
   flight = null;                       // a flight owns the camera until it lands; the ride takes it now
-  turn = null;
   ride = {
     trip: tram.trip,                   // what the layer's list is looked up by: the feed may move it between frames
     pos: camera.position.clone(),      // the ride's camera, eased towards the tram's place
@@ -4164,7 +4150,6 @@ renderer.setAnimationLoop(now => {
   if (lastFrameAt) { frameMs.push(now - lastFrameAt); if (frameMs.length > 60) frameMs.shift(); }
   lastFrameAt = now;
   stepFlight(now);
-  stepNorth(now);
   stepRelief(now);
   uniforms.uNow.value = now / 1000;
   uniforms.uMask.value = maskTarget;
