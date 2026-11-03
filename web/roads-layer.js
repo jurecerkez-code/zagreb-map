@@ -11,8 +11,8 @@
 import { gunzip } from './veg.js';
 
 const TILE = 1200;          // metres: the buildings' own tile size
-const LIFT = 0.45;          // metres above the ground: over the terrain, under nothing else
-const KERB_LIFT = 0.30;     // the pavement band, just under the asphalt: one polygon each, no z-fighting between them
+const LIFT = 0.18;          // metres above the ground: over the terrain, under nothing else
+const KERB_LIFT = 0.10;     // the pavement band, just under the asphalt: one polygon each, no z-fighting between them
 const KERB = 3.4;           // metres of pavement each side of a carriageway
 const POOL_R = 12;          // metres of the light pool a lamp throws on the pavement
 const POOL_Y = 0.14;        // metres above the ground, under the road at LIFT? no: pools lie on the pavement
@@ -28,6 +28,19 @@ const COLOUR = {
 };
 const PAVEMENT = new Set(['footway', 'path', 'steps', 'cycleway', 'pedestrian']);
 const SIDEWALK = '#b9b4ac';   // the band a carriageway sits in: the pavements on both sides, at a glance
+
+// The ground the streets are laid on. surfaceAt is the exact surface, but the terrain draws each chunk as flat
+// quads on a coarse grid, so on a slope the drawn ground stands metres above it and the street sinks into the hill.
+// The highest of the surface a cell either side is what the drawn quad stands on, and a street there stays on top.
+const CROSS = [[0, 0], [16, 0], [-16, 0], [0, 16], [0, -16]];
+const layOn = (surfaceAt, x, z) => {
+  let h = surfaceAt(x, z);
+  for (let i = 1; i < CROSS.length; i++) {
+    const v = surfaceAt(x + CROSS[i][0], z + CROSS[i][1]);
+    if (v > h) h = v;
+  }
+  return h;
+};
 
 function ribbon(tile, pts, o, n, w, colour, surfaceAt, lift = LIFT) {
   const half = w / 2;
