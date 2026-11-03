@@ -22,6 +22,7 @@ import { makeMetroLayer } from './metro-layer.js';
 import { BOATS_KEY, boatsOnFrom, boatsShown, parseFerries, boatInfo, boatHtml } from './ferries.js';
 import { makeFerries } from './ferries-layer.js';
 import { makeTrams } from './trams-layer.js';
+import { makeRoads } from './roads-layer.js';
 import { tramInfo, tramHtml } from './trams.js';
 import { mountBoatTip } from './boat-tip.js';
 import { estimateTone, inkOn, rgba, luma, rgb, unknownFill } from './tone.js';
@@ -513,6 +514,7 @@ let ferries = null;
 // The trams (web/trams-layer.js), once trams.json and the binaries are in; step() places them every frame while they
 // show. Declared here, with the boats: the pick pass reads it, and it is emptied and refilled after the city stands.
 let trams = null;
+let roads = null;
 // The vegetation (web/veg.js), loaded after the map stands. Declared here too: the pick pass hides it.
 let veg = null;
 async function loadFerries() {
@@ -956,6 +958,32 @@ const FRAG = /* glsl */`
       float line = mix(hatchLine(0.5 * s, 0.5 * fw), hatchLine(s, fw), smoothstep(4.0, 6.0, 1.0 / fw));
       float fade = smoothstep(3.0, 6.0, 2.0 / fw) * (1.0 - smoothstep(2600.0, 3600.0, d));
       vec3 base = mix(vColor, vHatchInk, vHatch * mix(${HATCH_W.toFixed(6)}, line, fade));
+      // The skin: windows, a plinth and a little plaster grain on the walls, in metres along the wall and above its
+      // own foot, so they are the same real size on every building. No texture: a grid, softened by one pixel and
+      // gone before it would alias (past a few hundred metres the cells fall under a pixel) or add cost to the far
+      // city. Roofs keep the period colour the map is made of; only the walls get the facade.
+      if (roof < 0.5) {
+        float ux = dot(vWorld.xz, along);
+        vec2 step2 = vec2(3.2, 3.3);                     // metres between windows, floor to floor
+        vec2 g = vec2(ux, vRel) / step2;
+        vec2 aa = fwidth(g) + 1e-5;                       // cells per pixel, each way
+        vec2 cell = fract(g);
+        // one window per cell: a soft-edged rectangle, 1 px of edge, 0.55 m above the floor
+        float wx = smoothstep(0.20 - aa.x, 0.20 + aa.x, cell.x) * (1.0 - smoothstep(0.74 - aa.x, 0.74 + aa.x, cell.x));
+        float wy = smoothstep(0.38 - aa.y, 0.38 + aa.y, cell.y) * (1.0 - smoothstep(0.78 - aa.y, 0.78 + aa.y, cell.y));
+        float win = wx * wy;
+        // the shopfront band at the foot: wider openings, every other cell, below 4 m
+        float shop = (1.0 - smoothstep(0.06 - aa.y, 0.06 + aa.y, cell.y)) * (1.0 - smoothstep(0.62, 0.70, abs(cell.y - 0.45)));
+        float skin = (1.0 - smoothstep(0.11, 0.30, max(aa.x, aa.y))) * (1.0 - smoothstep(300.0, 850.0, d));
+        vec3 glass = mix(base * 0.30, vec3(0.52, 0.58, 0.65), 0.45);
+        glass = mix(glass, vec3(0.86, 0.78, 0.55), uNight * 0.55);   // windows lit after dark
+        base = mix(base, glass, win * skin * 0.85);
+        base = mix(base, base * 0.42, shop * skin * 0.5);
+        base *= mix(1.0, 0.80, (1.0 - smoothstep(0.0, 1.4, vRel)) * skin);       // plinth
+        // a building's own grain: a few percent, fixed to the wall
+        float gr = fract(sin(dot(floor(vec2(ux, vRel) * 2.0), vec2(12.9898, 78.233))) * 43758.5453);
+        base *= 1.0 + (gr - 0.5) * 0.07 * skin;
+      }
       // Foto: a sampled roof takes its photographed colour (the mean of its own pixels in the City's orthophoto);
       // a building with no samples keeps the period colour (alpha 0).
       if (uFoto > 0.5 && roof > 0.5) {
@@ -1140,6 +1168,7 @@ function syncVegNight() {
     veg.setNight(sunMode === 'night', THEME_NAME);
   } catch { /* not built yet */ }
   trams?.setNight(sunMode === 'night');   // the trams are unlit too
+  roads?.setNight(sunMode === 'night');   // and the street lamps are only lit then
 }
 
 // ---------- The sun's button ----------
@@ -4053,6 +4082,17 @@ makeTrams({ THREE, base: DATA, scene, camera, surfaceAt, on: tramsOn })
     t.step(tramsShown());
   })
   .catch(e => console.warn('The trams did not load.', e));
+// The streets (pipeline/s17_zagreb_roads.py): 95,754 ways and 5,821 lamps, laid under the buildings, and lit in the
+// Night mode. Behind the trams' own fetch, so a ride has its road by the time a tram can be ridden; a map without them
+// is still a map, so a failure here is a warning and nothing more.
+makeRoads({ THREE, base: DATA, scene, surfaceAt, uniforms })
+  .then(r => {
+    roads = r;
+    window.__roads = () => r;          // a dev hook: what was drawn, for probes
+    roads.setNight(sunMode === 'night');
+    console.log('streets', r.drawn);
+  })
+  .catch(e => console.warn('The streets did not load.', e));
 // ?at=x,z (engine local metres, +x east, -z north) and &dist=meters: open the map over a chosen place, e.g. a park.
 {
   const q = new URLSearchParams(location.search);
