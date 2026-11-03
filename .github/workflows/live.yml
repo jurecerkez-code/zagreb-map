@@ -1,0 +1,45 @@
+name: Live
+# The map invites you to watch real trams move, and ZET's feed sends no CORS header, so a browser cannot read it.
+# The dev server parses it at /rt; a static host has nothing to parse with. This job writes the same JSON every five
+# minutes to a one-file `live` branch, and raw.githubusercontent serves that branch with CORS, so the page on Pages
+# has a feed that is at most a few minutes old.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: live
+  cancel-in-progress: false
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: src
+      - name: The timetable the feed is filtered against
+        working-directory: src
+        run: |
+          base=https://jurecerkez-code.github.io/zagreb-map/data
+          curl -fsS "$base/current.json" -o web/data/current.json 2>/dev/null || { mkdir -p web/data; curl -fsS "$base/current.json" -o web/data/current.json; }
+          v=$(python3 -c "import json;print(json.load(open('web/data/current.json'))['version'])")
+          mkdir -p "web/data/$v"
+          curl -fsS "$base/$v/trams.json" -o "web/data/$v/trams.json"
+          echo "schedule $v, $(wc -c < "web/data/$v/trams.json") bytes"
+      - name: Snapshot
+        working-directory: src
+        run: python3 scripts/rt_snapshot.py rt.json
+      - name: Publish to the live branch
+        working-directory: src
+        run: |
+          cp rt.json "$RUNNER_TEMP/rt.json"
+          git config user.name live
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git checkout --orphan live
+          git rm -rqf .
+          cp "$RUNNER_TEMP/rt.json" rt.json
+          git add rt.json
+          git commit -qm "live $(date -u +%FT%TZ)"
+          git push -f origin live

@@ -114,12 +114,28 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
   }
 
   // ---- the live feed: ZET's own positions, already in engine metres (scripts/serve.py projects them)
+  // ZET's feed sends no CORS header, so a browser cannot read it directly and the dev server parses it at /rt. A
+  // static host has no such endpoint, so a scheduled workflow publishes the same JSON to the `live` branch, and
+  // raw.githubusercontent serves that with CORS. Local first, snapshot second.
+  const RT_SNAPSHOT = 'https://raw.githubusercontent.com/jurecerkez-code/zagreb-map/live/rt.json';
   let liveVehicles = [];
   let liveAt = 0;
+  async function fetchRt() {
+    const bust = Math.floor(Date.now() / 60000);
+    for (const url of [new URL('rt', location.href).href, `${RT_SNAPSHOT}?t=${bust}`]) {
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) continue;
+        const json = await res.json();
+        if (json && Array.isArray(json.vehicles) && json.vehicles.length) return json;
+      } catch { /* the next source may still answer */ }
+    }
+    return null;
+  }
   async function poll() {
     try {
-      const res = await fetch(new URL('rt', location.href), { cache: 'no-store' });
-      const feed = await res.json();
+      const feed = (await fetchRt()) || {};
+
       // Only trams: a vehicle whose trip id is not in the schedule is a bus on another ZET line. Each is put on its
       // own shape once here, not every frame: a live position holds until the next answer.
       const seen = new Set(), out = [];
