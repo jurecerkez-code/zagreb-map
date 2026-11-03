@@ -196,10 +196,14 @@ export function tramInfo(net, { trip, live = false, next = null }, T) {
     heading: toward ? T('tram.heading', { place: toward }) : '',
     next: next && next.name ? T('tram.next', { name: next.name }) : '',
     note: live ? T('tram.live') : T('tram.schedule'),
+    ride: trip !== undefined,   // a tram can be ridden (app.js startRide); a stop's sheet has no trip and no ride
   };
 }
 
-// The tooltip's HTML, each line escaped (esc), the empty ones left out.
+// The tooltip's HTML, each line escaped (esc), the empty ones left out, and last the button that rides the tram. The
+// button's words are Croatian, as the ride's own way out is (app.js startRide), and it is a button, so the sheet's
+// tapped state (styles.css .tram-tip.tapped) is what makes it take a click.
 export const tramHtml = (info, esc) => [['tram-title', info.title], ['tram-route', info.route],
   ['tram-heading', info.heading], ['tram-next', info.next], ['tram-note', info.note]].filter(([, t]) => t)
-  .map(([cls, t]) => `<p class="${cls}">${esc(t)}</p>`).join('');
+  .map(([cls, t]) => `<p class="${cls}">${esc(t)}</p>`).join('')
+  + (info.ride ? '<p class="tram-ride"><button type="button" class="tram-ride-btn">Vozim se</button></p>' : '');

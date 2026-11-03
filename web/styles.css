@@ -908,6 +908,19 @@ h1 { margin: 0; font-size: clamp(34px, 4.4vw, 56px); font-weight: 800; letter-sp
 .tram-tip .tram-heading { margin-top: 3px; font-weight: 600; }
 .tram-tip .tram-next { margin-top: 3px; }
 .tram-tip .tram-note { margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+/* Vozim se (app.js startRide): the sheet's one button, as wide as the sheet and dark as the timeline's handle, so it
+   reads as the way in and not as one more line about the tram. */
+.tram-tip .tram-ride { margin: 9px -4px 0; }
+.tram-tip .tram-ride-btn { display: block; width: 100%; border: 0; border-radius: 7px; padding: 8px 10px; cursor: pointer;
+  background: var(--ink); color: var(--panel); font: inherit; font-size: 13px; font-weight: 600; }
+.tram-tip .tram-ride-btn:hover { background: var(--accent); }
+/* The ride's own way out (app.js startRide), at the right edge halfway down: the top of the screen is the modes' bar
+   and the search, the corner the tally, and the bottom the timeline. It holds still while the map under it moves. */
+.ride-exit { position: fixed; z-index: 13; right: var(--gutter); top: 50%; transform: translateY(-50%);
+  border: 0; border-radius: 999px; padding: 9px 18px; cursor: pointer;
+  background: var(--ink); color: var(--panel); font: inherit; font-size: 13px; font-weight: 600;
+  box-shadow: 0 4px 16px rgba(30, 40, 50, .24); }
+.ride-exit[hidden] { display: none; }
 .card.tram-tip.tapped { pointer-events: auto; }
 /* A tapped one takes taps (a tap on it closes it, boat-tip.js), so none reaches the modes, the timeline or the map
    under it; a hovered one lets the pointer through, as the hover card. */

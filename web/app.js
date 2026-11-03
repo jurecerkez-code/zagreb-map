@@ -1796,7 +1796,9 @@ function updateLods() {
 // water have no fog, so a nearer far plane would cut them off in plain view.
 const RIDE_S = 0.1;
 function followGround(dist, dt) {
-  if (!flight) {
+  // A ride (stepRide, below) sets the target and the camera itself, 7 m over the street: the target's gap and the
+  // floor would put both back down. Its near and far planes still follow the ride's distance.
+  if (!flight && !ride) {
     const gap = surfaceAt(controls.target.x, controls.target.z) - controls.target.y;
     if (Math.abs(gap) > 1e-3) {
       const dy = gap * (calm.matches ? 1 : 1 - Math.exp(-dt / RIDE_S));
@@ -1806,7 +1808,9 @@ function followGround(dist, dt) {
   const { x, z } = camera.position, r = Math.max(30, 0.05 * dist);
   let under = surfaceAt(x, z);
   for (let k = 0; k < 8; k++) under = Math.max(under, surfaceAt(x + r * Math.cos(k * Math.PI / 4), z + r * Math.sin(k * Math.PI / 4)));
-  const floor = under + Math.max(20, 0.05 * dist);
+  // A ride (stepRide, below) holds the camera 7 m over the street, under the floor a map view keeps off the ground:
+  // it has no floor.
+  const floor = ride ? -Infinity : under + Math.max(20, 0.05 * dist);
   if (camera.position.y < floor) { camera.position.y = floor; camera.lookAt(controls.target); }
   const near = THREE.MathUtils.clamp(dist * 0.02, 2, 400);
   const far = terrainState === 'ready' ? Math.max(4000, dist * 4.5) : 60000;
@@ -2020,9 +2024,15 @@ const boatTip = mountBoatTip(document.getElementById('boat-tip'),
   { html: b => boatHtml(boatInfo(b.route, b.toward, T), esc) });
 // A tram's tooltip, the boat's mounted a second time: which line, where it is headed, its next stop, and whether the
 // place is ZET's live feed or the timetable (web/trams.js tramInfo). app.js's loop finds the tram (trams-layer.js
-// hitAt) and calls hover and hide; a tap on a phone opens the same sheet.
-const tramTip = mountBoatTip(document.getElementById('tram-tip'),
-  { html: h => (trams ? trams.html(h, T, esc) : '') });
+// hitAt) and calls hover and hide; a tap on a phone opens the same sheet. The sheet's Vozim se rides the tram it was
+// drawn for, so the tram it last drew is kept (tipTram, Riding a tram, below).
+const tramTipEl = document.getElementById('tram-tip');
+let tipTram = null;
+const tramTip = mountBoatTip(tramTipEl,
+  { html: h => { tipTram = h; return trams ? trams.html(h, T, esc) : ''; } });
+tramTipEl.addEventListener('click', e => {
+  if (e.target.closest('.tram-ride-btn') && tipTram) startRide(tipTram);
+});
 // A statue's hover tip (monTipShow below): its photo, name and year under the pointer, no click needed. Mouse only;
 // on a touch screen the click card is the way in. Pointer events never reach it (pointer-events: none in styles.css).
 const monTip = document.createElement('div');
@@ -2299,6 +2309,7 @@ canvas.addEventListener('pointerup', e => {
   dragging = false;
   if (!downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5) return;
   if (postcard.on) return;   // while a postcard is framed a click opens nothing: the cards are out of the picture
+  if (ride) { endRide(); return; }   // a click on the map is the way out of a ride, and it opens nothing else
   const station = stationUnder(e.clientX, e.clientY);
   if (station) { pinStation(station, e.clientX, e.clientY); return; }
   const fact = facts?.under(e.clientX, e.clientY);
@@ -2326,8 +2337,10 @@ canvas.addEventListener('pointerleave', () => {
 });
 
 // ---------- Flying to a building ----------
-let flight = null;
+let flight = null, turn = null;
 function flyTo(x, z, done, distance = 520, up = 0) {
+  if (ride) endRide();   // the ride has the camera: a flight to a place takes it back first
+  turn = null;           // and a flight ends a north turn the way it always did
   const dir = camera.position.clone().sub(controls.target).normalize();
   if (dir.y < 0.45) { dir.y = 0.45; dir.normalize(); }
   // a phone's search pick looks down at least this steeply (flyAbove); the direction it faces is kept
@@ -3485,9 +3498,10 @@ function flipUnknown() {
 // needle simply follows.
 const northBtn = document.querySelector('.north-open');
 const needleEl = northBtn.querySelector('svg');
-let turn = null, needleAt = null;
+let needleAt = null;
 function faceNorth() {
-  if (flight) return;
+  if (ride) return;   // a ride owns the camera until it ends
+  flight = null;      // a press takes the camera back from a flight instead of doing nothing
   turn = northTurn(controls.getAzimuthalAngle(), performance.now(), { calm: calm.matches });
   // The vendored OrbitControls' (r186) own inertia: a fling just before must not carry on (web/test/north.test.mjs).
   controls._sphericalDelta.set(0, 0, 0);
@@ -3495,12 +3509,17 @@ function faceNorth() {
 }
 function stepNorth(now) {
   if (!turn) return;
-  if (flight) { turn = null; return; }
   const { theta, done } = turnAt(turn, now);
   const p = camera.position, c = controls.target, h = Math.hypot(p.x - c.x, p.z - c.z);
-  p.set(c.x + h * Math.sin(theta), p.y, c.z + h * Math.cos(theta));
+  // Straight above the place the azimuth means nothing and sin/cos would drag the camera through the target.
+  if (h > 1e-3) p.set(c.x + h * Math.sin(theta), p.y, c.z + h * Math.cos(theta));
   controls._sphericalDelta.theta = 0;
-  if (done) turn = null;
+  // The deadline is what makes a second press work: a turn that lost its frames (a tab in the background, a long
+  // stall between frames) used to sit in `turn` forever, and every later press only moved a camera nobody redrew.
+  if (done || now - turn.t0 > turn.dur + 400) {
+    turn = null;
+    controls._sphericalDelta.set(0, 0, 0);
+  }
 }
 function stepNeedle() {
   const deg = needleDeg(controls.getAzimuthalAngle());
@@ -3515,6 +3534,7 @@ addEventListener('keydown', e => {
 });
 // + and - zoom (= and _ too, the same keys unshifted), as the arrows pan and Shift + arrows turn (the audit's finding 9).
 function zoomBy(k) {
+  if (ride) return;   // the ride keeps its own distance behind the tram
   flight = null;
   const off = camera.position.clone().sub(controls.target);
   off.setLength(THREE.MathUtils.clamp(off.length() * k, controls.minDistance, controls.maxDistance));
@@ -3680,6 +3700,86 @@ function tramTap(tram, x, y) {
 function stepTramTip() {
   if (tramTip.shown && !tramsTakePointer()) tramTip.hide();
 }
+// ---------- Riding a tram ----------
+// Vozim se in a tram's sheet (web/trams.js tramHtml; the click is caught at the sheet above) gives the camera that
+// tram to ride: it drops to 14 m behind and 7 m over the street, looks at the tram, and every frame closes again on
+// the place the layer draws it in (trams-layer.js list), so ZET's live position and the timetable are followed the
+// same way. The camera eases towards that place (RIDE_EASE_S) rather than snapping, since a live vehicle may jump a
+// hundred metres between two feeds. The controls are off for the ride, or their damping would keep pulling the
+// camera back to the orbit it had; the camera is put back exactly where it was when the ride ends, by the Izađi
+// button, by Escape, or by a click on the map.
+const RIDE_BACK = 14;         // metres behind the tram
+const RIDE_UP = 7;            // metres above the street
+const RIDE_AIM = 2;           // metres above the street: the tram's body, not its wheels
+const RIDE_EASE_S = 0.22;     // seconds to close most of the way to where the tram has got to
+const RIDE_GONE_MS = 12000;   // a tram the layer stops drawing (a trip that ended) ends its ride after this long
+const RIDE_FOG = 900;         // metres the fog is measured from while riding: 15 m would grey out the street ahead
+const rideExit = document.getElementById('ride-exit');
+let ride = null;
+const ridePos = new THREE.Vector3(), rideAim = new THREE.Vector3();
+function startRide(tram) {
+  if (ride || tram?.trip === undefined) return;
+  flight = null;                       // a flight owns the camera until it lands; the ride takes it now
+  turn = null;
+  ride = {
+    trip: tram.trip,                   // what the layer's list is looked up by: the feed may move it between frames
+    pos: camera.position.clone(),      // the ride's camera, eased towards the tram's place
+    aim: controls.target.clone(),
+    heading: Number.isFinite(tram.heading) ? tram.heading : 0,   // the way it was drawn, until the layer says again
+    from: { pos: camera.position.clone(), target: controls.target.clone() },   // where the ride gives it back
+    gone: 0,                           // when the layer last drew this trip
+  };
+  controls.enabled = false;
+  controls._sphericalDelta.set(0, 0, 0);   // a drag's glide must not start the ride off course
+  controls._panOffset.set(0, 0, 0);
+  rideExit.hidden = false;
+  tramTip.hide();   // the sheet's own click hides it too; this covers a ride started any other way
+}
+function endRide() {
+  if (!ride) return;
+  const { pos, target } = ride.from;
+  ride = null;
+  rideExit.hidden = true;
+  camera.position.copy(pos);
+  controls.target.copy(target);
+  controls._sphericalDelta.set(0, 0, 0);
+  controls._panOffset.set(0, 0, 0);
+  controls.enabled = true;
+  controls.update();
+}
+function stepRide(dt) {
+  if (!trams?.on) { endRide(); return; }        // the trams left the map (a year in the past): so does the ride
+  const o = trams.list.find(t => t.trip === ride.trip);
+  if (!o) {
+    // A trip that ended, or one the feed dropped: hold the last view, then give the camera back.
+    if (!ride.gone) ride.gone = performance.now();
+    if (performance.now() - ride.gone > RIDE_GONE_MS) endRide();
+    return;
+  }
+  ride.gone = 0;
+  const k = calm.matches ? 1 : 1 - Math.exp(-dt / RIDE_EASE_S);   // reduced motion: no glide, the camera is there
+  const g = surfaceAt(o.x, o.z);
+  // The layer reports the direction it draws the tram in; a tram whose direction it cannot say keeps the last one.
+  if (Number.isFinite(o.heading)) ride.heading = o.heading;
+  const fx = Math.cos(ride.heading), fz = Math.sin(ride.heading);  // the engine's angle: from +x towards +z
+  const bx = o.x - fx * RIDE_BACK, bz = o.z - fz * RIDE_BACK;
+  // 7 m over the higher end of the street the camera stands on: behind a climbing tram a hill may rise.
+  ridePos.set(bx, Math.max(g, surfaceAt(bx, bz)) + RIDE_UP, bz);
+  rideAim.set(o.x, g + RIDE_AIM, o.z);
+  ride.pos.lerp(ridePos, k);
+  ride.aim.lerp(rideAim, k);
+  camera.position.copy(ride.pos);
+  controls.target.copy(ride.aim);
+  camera.lookAt(ride.aim);   // the camera's up is the world's, so the horizon stays level whatever the street does
+  // The loop measures the fog from the camera's distance to its target, and a ride has none worth the name (15 m):
+  // from here it is measured from a street's, or the city would grey out a hundred metres ahead.
+  const [fogNear, fogFar] = weather.fog();
+  uniforms.uFog.value.set(RIDE_FOG * fogNear, RIDE_FOG * fogFar);
+}
+rideExit.addEventListener('click', endRide);
+addEventListener('keydown', e => {
+  if (ride && e.key === 'Escape' && !(e.target instanceof Element && e.target.closest('dialog'))) endRide();
+});
 function stepBoatTip() {
   const t = boatTip.shown;
   if (!t) return;
@@ -4065,7 +4165,7 @@ renderer.setAnimationLoop(now => {
   uniforms.uNow.value = now / 1000;
   uniforms.uMask.value = maskTarget;
   stepUnknown(dt);
-  controls.update();
+  if (!ride) controls.update();   // a ride (stepRide) sets the camera itself; the controls would pull it back
   stepNeedle();
   const dist = camera.position.distanceTo(controls.target);
   followGround(dist, dt);
@@ -4073,13 +4173,16 @@ renderer.setAnimationLoop(now => {
   if (weather.step(dt, dist, controls.target)) applySky();   // the sky moves only while the weather eases
   const [fogNear, fogFar] = weather.fog();
   uniforms.uFog.value.set(dist * fogNear, dist * fogFar);
-  if (frame % 6 === 0) { updateLabels(dist); updatePlaqueMarkers(); updateMetro(dist); stepPick(); }
+  // A name is sized and placed from that same distance, so a ride (stepRide) borrows the app's closest zoom, which is
+  // the street view the ride is.
+  if (frame % 6 === 0) { updateLabels(ride ? controls.minDistance : dist); updatePlaqueMarkers(); updateMetro(dist); stepPick(); }
   if (frame % 6 === 3) roofYears?.update();
   if (monuments && frame % 20 === 9) { monuments.place(); monuments.group.visible = monumentsOn && !faintOn && !document.body.classList.contains('scene-on'); }
   roofYears?.step(dt);
   ferries?.step(now / 1000, dist, boatsNow());
   veg?.step(dt);          // the Sljeme cable car's cabins along the mapped line
   trams?.step(tramsShown());   // the trams: the timetable now, or ZET's live position where the feed has one
+  if (ride) stepRide(dt);      // the camera behind the tram it is riding, once the layer has drawn it this frame
   facts?.setYear(uniforms.uYear.value);   // an event appears once the timeline reaches its year
   highlight.step(now, THEME.ui['--accent'], meshes);
   if (playing) {
@@ -4159,6 +4262,7 @@ window.__dbg = { get veg() { return veg; }, get facts() { return facts; }, pinFa
   get monuments() { return monuments; }, pinMonument, setMonuments, scenePlayer, renderer, stats, goHome, viewAt, pick, uniforms, camera, controls, setLayer, layers, pinCard, showCard, building, attrTally, setHideEst, setPhotoOnly, setPlaques, get plaquesOn() { return plaquesOn; }, setMetro, get metroOn() { return metroOn; }, get storyLayers() { return [...storyLayers]; }, metroLayer,
   get ferries() { return ferries; }, setBoats, get boatTip() { return boatTip.shown; }, get boatsOn() { return boatsOn; }, pinStation, plaqueGroup, get photoGids() { return photoGids; }, meshes, labelGroup, get labels() { return labels; }, flyTo, faceNorth, startPlay, questClick, startQuest, get quests() { return quests; },
   get trams() { return trams; }, get tramTip() { return tramTip.shown; }, tramOver,
+  get riding() { return ride ? ride.trip : null; }, startRide, endRide,
   surfaceAt, setRelief, chooseRelief, get relief() { return relief; }, terrain: () => ({ state: terrainState, source: TERRAIN?.source, relief: uRelief.value, cutK: uCutK.value, chunks: chunkMeshes.length }),
   get timelineLabels() { return placedLabels; }, get pinned() { return pinnedGid; }, districtOf,
   get forced() { return forcedGid; }, force, scene, highlight: () => highlight.state(),

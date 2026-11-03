@@ -102,7 +102,8 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
   const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0),
     P = new THREE.Vector3(), S = new THREE.Vector3(1, 1, 1), C = new THREE.Color();
   const lineColour = trams.lines.map(l => l.text || l.colour || '#1c3f94');
-  // What each drawn instance is, for the tooltip and for __dbg: index -> {trip, live, x, z, d}
+  // What each drawn instance is, for the tooltip, the ride (app.js stepRide, which stands behind the tram) and for
+  // __dbg: index -> {trip, live, x, z, heading, d}
   let drawnSched = [], drawnLive = [];
 
   function put(p, i, x, y, z, heading, colour) {
@@ -172,7 +173,7 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
       const heading = Number.isFinite(o.bearing) ? Math.atan2(-Math.cos(o.bearing * Math.PI / 180), Math.sin(o.bearing * Math.PI / 180))
         : o.heading;
       put(live, drawnLive.length, o.x, surfaceAt(o.x, o.z), o.z, heading, lineColour[net.trips[o.trip * 5 + 3]] || '#1c3f94');
-      drawnLive.push({ k: `tram:${o.trip}`, trip: o.trip, live: true, x: o.x, z: o.z, d: o.d, next: net.nextStopAt(o.trip, o.d) });
+      drawnLive.push({ k: `tram:${o.trip}`, trip: o.trip, live: true, x: o.x, z: o.z, heading, d: o.d, next: net.nextStopAt(o.trip, o.d) });
     }
 
     drawnSched = [];
@@ -181,7 +182,7 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
       const p = net.positionAt(trip, sec);
       if (!p) continue;
       put(sched, drawnSched.length, p.x, surfaceAt(p.x, p.z), p.z, p.heading, lineColour[net.trips[trip * 5 + 3]] || '#1c3f94');
-      drawnSched.push({ k: `tram:${trip}`, trip, live: false, x: p.x, z: p.z, d: p.d, next: net.nextStopAt(trip, p.d) });
+      drawnSched.push({ k: `tram:${trip}`, trip, live: false, x: p.x, z: p.z, heading: p.heading, d: p.d, next: net.nextStopAt(trip, p.d) });
     }
 
     for (const p of [sched, live]) {
