@@ -3520,8 +3520,7 @@ function flipUnknown() {
 // The controls' inertia (damping) is stopped at the press, so a fling just before cannot carry on past north. The
 // needle follows the azimuth on every frame it changes (stepNeedle); the hero view and flights move the camera as
 // before, and the needle simply follows.
-const northBtn = document.querySelector('.north-open');
-const needleEl = northBtn.querySelector('svg');
+const northBtn = () => document.querySelector('.north-open');
 let needleAt = null;
 function faceNorth() {
   // North on the frame the button is pressed: no eased turn, no state to get stuck in. An eased turn ended in the same
@@ -3542,9 +3541,23 @@ function stepNeedle() {
   const deg = needleDeg(controls.getAzimuthalAngle());
   if (deg === needleAt) return;
   needleAt = deg;
-  needleEl.style.transform = `rotate(${deg}deg)`;
+  const svg = northBtn()?.querySelector('svg');
+  if (svg) svg.style.transform = `rotate(${deg}deg)`;
 }
-northBtn.onclick = faceNorth;
+// The press is taken on the document, not on the button: the header is redrawn (the period's name, the count, the
+// language), and a handler bound to the first button stops arriving after that redraw. A touch that is answered on
+// the way down answers the click it would send too, so it is not counted twice.
+let northPressedAt = -1e9;
+addEventListener('pointerdown', e => {
+  if (!e.target?.closest?.('.north-open')) return;
+  northPressedAt = performance.now();
+  faceNorth();
+}, true);
+addEventListener('click', e => {
+  if (!e.target?.closest?.('.north-open')) return;
+  if (performance.now() - northPressedAt < 700) return;
+  faceNorth();
+}, true);
 addEventListener('keydown', e => {
   if ((e.key === 'n' || e.key === 'N') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && !typingIn(e.target)) faceNorth();
 });
@@ -3827,8 +3840,11 @@ function applyStaticText() {
   // Every static text and label by its id (data-i18n, data-i18n-aria in index.html)
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = T(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-aria]').forEach(el => el.setAttribute('aria-label', T(el.dataset.i18nAria)));
-  northBtn.setAttribute('aria-label', T('ui.north'));
-  northBtn.title = `${T('ui.north')} (N)`;
+  const nb = northBtn();
+  if (nb) {
+    nb.setAttribute('aria-label', T('ui.north'));
+    nb.title = `${T('ui.north')} (N)`;
+  }
   postcardBtn.title = `${T('postcard.open')} (P)`;
   renderAbout();
   document.getElementById('credit').innerHTML = cornerHtml(config.attribution, T);   // the corner credit
