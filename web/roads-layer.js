@@ -11,8 +11,8 @@
 import { gunzip } from './veg.js';
 
 const TILE = 1200;          // metres: the buildings' own tile size
-const LIFT = 0.12;          // metres above the ground: over the terrain, under nothing else
-const KERB_LIFT = 0.06;     // the pavement band, just under the asphalt: one polygon each, no z-fighting between them
+const LIFT = 0.45;          // metres above the ground: over the terrain, under nothing else
+const KERB_LIFT = 0.30;     // the pavement band, just under the asphalt: one polygon each, no z-fighting between them
 const KERB = 3.4;           // metres of pavement each side of a carriageway
 const POOL_R = 12;          // metres of the light pool a lamp throws on the pavement
 const POOL_Y = 0.14;        // metres above the ground, under the road at LIFT? no: pools lie on the pavement
@@ -24,7 +24,7 @@ const NIGHT_TINT = 'vec3(0.30, 0.36, 0.56)';   // the walls' own night cooling (
 const COLOUR = {
   motorway: '#5b606a', trunk: '#61666f', primary: '#666b74', secondary: '#6c717a', tertiary: '#737880',
   residential: '#787d85', unclassified: '#7d828a', living_street: '#82878e', service: '#888d94', pedestrian: '#a29a8e',
-  footway: '#b6b2ab', path: '#bdb9b2', steps: '#b0aba3', cycleway: '#b2afa9',
+  footway: '#b6b2ab', tram: '#6b6f76', path: '#bdb9b2', steps: '#b0aba3', cycleway: '#b2afa9',
 };
 const PAVEMENT = new Set(['footway', 'path', 'steps', 'cycleway', 'pedestrian']);
 const SIDEWALK = '#b9b4ac';   // the band a carriageway sits in: the pavements on both sides, at a glance
@@ -42,6 +42,7 @@ function ribbon(tile, pts, o, n, w, colour, surfaceAt, lift = LIFT) {
     const nx = -dz * half, nz = dx * half;
     const y = surfaceAt(x, z) + lift;
     tile.pos.push(x + nx, y, z + nz, x - nx, y, z - nz);
+    tile.lift.push(lift, lift);   // kept, so the streets can be laid on the ground again when the relief moves
     tile.col.push(colour[0], colour[1], colour[2], colour[0], colour[1], colour[2]);
   }
   for (let i = 0; i < n - 1; i++) {
@@ -84,7 +85,7 @@ export async function makeRoads({ THREE, base, scene, surfaceAt, uniforms, on = 
     const mid = way.o + (n >> 1);
     const key = `${Math.floor(pts[mid * 2] / TILE)},${Math.floor(pts[mid * 2 + 1] / TILE)}`;
     let tile = tiles.get(key);
-    if (!tile) tiles.set(key, tile = { pos: [], col: [], idx: [], v: 0 });
+    if (!tile) tiles.set(key, tile = { pos: [], col: [], lift: [], idx: [], v: 0 });
     let colour = colourCache.get(way.cls);
     if (!colour) {
       const c = new THREE.Color(COLOUR[way.cls] || '#94989c').convertSRGBToLinear();
@@ -137,6 +138,7 @@ export async function makeRoads({ THREE, base, scene, surfaceAt, uniforms, on = 
   });
 
   let tris = 0;
+  const meshes = [];
   for (const tile of tiles.values()) {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(tile.pos, 3));
@@ -144,6 +146,8 @@ export async function makeRoads({ THREE, base, scene, surfaceAt, uniforms, on = 
     geo.setIndex(tile.idx);
     geo.computeBoundingSphere();
     const mesh = new THREE.Mesh(geo, mat);
+    mesh.userData.lift = tile.lift;
+    meshes.push(mesh);
     mesh.frustumCulled = true;
     group.add(mesh);
     tris += tile.idx.length / 3;
@@ -188,8 +192,35 @@ export async function makeRoads({ THREE, base, scene, surfaceAt, uniforms, on = 
 
   scene.add(group);
 
+  // The relief is 0 until the terrain arrives (app.js setRelief), so a layer built before it lies flat under a city
+  // that rises metres higher: the streets disappear into the ground on every slope. This lays them on the ground
+  // again, and the lamps with them; app.js calls it when the relief lands and when its slider is let go.
+  function rebuild() {
+    for (const mesh of meshes) {
+      const a = mesh.geometry.attributes.position, arr = a.array, lift = mesh.userData.lift;
+      for (let i = 0; i < a.count; i++) {
+        const k = i * 3;
+        arr[k + 1] = surfaceAt(arr[k], arr[k + 2]) + lift[i];
+      }
+      a.needsUpdate = true;
+      mesh.geometry.computeBoundingSphere();
+    }
+    const ga = glow.geometry.attributes.position, gp = ga.array;
+    for (let i = 0; i < lampPts.length / 2; i++) {
+      gp[i * 3 + 1] = surfaceAt(gp[i * 3], gp[i * 3 + 2]) + LAMP_H;
+    }
+    ga.needsUpdate = true;
+    for (let i = 0; i < lampPts.length / 2; i++) {
+      v3.set(lampPts[i * 2], surfaceAt(lampPts[i * 2], lampPts[i * 2 + 1]) + POOL_Y, lampPts[i * 2 + 1]);
+      m.compose(v3, q, s);
+      pools.setMatrixAt(i, m);
+    }
+    pools.instanceMatrix.needsUpdate = true;
+  }
+
   const api = {
     group,
+    rebuild,
     get drawn() { return { tiles: tiles.size, triangles: tris, lamps: lampPts.length / 2 }; },
     setNight(night) {
       lamps.visible = !!night && on;

@@ -49,6 +49,7 @@ CLASSES = [
     ("footway", 1.8),
     ("path", 1.5),
     ("steps", 1.5),
+    ("tram", 7.0),
     ("cycleway", 1.8),
 ]
 WIDTH = dict(CLASSES)
@@ -77,8 +78,11 @@ def read_ways():
     lon0, lat0, lon1, lat1 = city.BOX_WGS84
     # osm_id and name are read so a later check can join a way back to its OSM tags; neither goes into the output.
     df = pyogrio.read_dataframe(PBF, layer="lines", bbox=city.BOX_WGS84,
-                                columns=["osm_id", "name", "highway"])
-    keep = np.array([class_of(h) is not None for h in df["highway"]])
+                                columns=["osm_id", "name", "highway", "railway"])
+    # A tram track laid in its own corridor, not in a street, carries no highway tag: the tram would then ride over
+    # bare ground. It is read as class "tram", under the rails trams-layer draws.
+    tram = np.array([r == "tram" and class_of(h) is None for h, r in zip(df["highway"], df["railway"])])
+    keep = np.array([class_of(h) is not None for h in df["highway"]]) | tram
     dropped = df.loc[~keep, "highway"].value_counts(dropna=False)
     df = df[keep].copy()
     # A way that crosses the box edge is cut there, so no vertex of the output sits outside the box.
@@ -112,7 +116,7 @@ def main(argv=None):
     out.mkdir(parents=True, exist_ok=True)
 
     df, dropped = read_ways()
-    df["cls"] = [class_of(h) for h in df["highway"]]
+    df["cls"] = [class_of(h) or "tram" for h in df["highway"]]
     print(f"{len(df):,} highway ways in the box, {len(WIDTH)} classes", flush=True)
     in_skip = int(sum(n for t, n in dropped.items() if t in SKIP))
     stray = int(sum(n for t, n in dropped.items() if t not in SKIP))

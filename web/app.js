@@ -1782,14 +1782,14 @@ function setRelief(value, animate = true) {
   const dur = reliefRisen ? 600 : 1200;
   if (terrainState === 'ready') reliefRisen = true;
   reliefTween = animate && !calm.matches && from !== to ? { from, to, t0: performance.now(), dur } : null;
-  if (!reliefTween) applyRelief(to);
+  if (!reliefTween) { applyRelief(to); roads?.rebuild?.(); }   // the streets follow the ground they lie on
   switcher.markRelief();
 }
 function stepRelief(now) {
   if (!reliefTween) return;
   const k = (now - reliefTween.t0) / reliefTween.dur;
   applyRelief(ease(reliefTween.from, reliefTween.to, k));
-  if (k >= 1) reliefTween = null;
+  if (k >= 1) { reliefTween = null; roads?.rebuild?.(); }
 }
 // A move of the slider is the visitor's choice: remembered (the number), and ?relief= leaves the address (as look.js
 // keeps ?theme= current), so a reload keeps the move instead of the link it was made on.
