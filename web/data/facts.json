@@ -1,0 +1,601 @@
+[
+ {
+  "id": "kaptol-1094",
+  "year": 1094,
+  "x": 178.5,
+  "z": -196.4,
+  "title_hr": "Biskupija na Kaptolu i prvi spomen imena",
+  "title_en": "The bishopric on Kaptol and the first mention of the name",
+  "text_hr": "Kralj Ladislav I. osnovao je 1094. Zagrebačku biskupiju na Kaptolu i podredio je Ostrogonu. Prvi pisani spomen imena Zagreb je u Felicijanovoj povelji iz 1134., u kojoj ostrogonski nadbiskup potvrđuje tu biskupiju.",
+  "text_en": "King Ladislaus I founded the Diocese of Zagreb on Kaptol in 1094 and placed it under Esztergom. The name Zagreb is first written down in the Felician Charter of 1134, in which the archbishop of Esztergom confirms that diocese.",
+  "place_hr": "Kaptol",
+  "kind": "event",
+  "sources": [
+   {
+    "url": "https://www.mgz.hr/hr/izlozbe/stalni-postav/prvi-spomen-zagreba-u-povijesti,1104.html"
+   },
+   {
+    "url": "https://www.katedrala.hr/felicijanova-povelja-krsni-list-zagrebacke-nad-biskupije/677"
+   },
+   {
+    "url": "https://enciklopedija.hr/clanak/zagreb"
+   }
+  ],
+  "photo": {
+   "url": "data/facts/kaptol-1094.jpg",
+   "author": "Bernard Gagnon",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Zagreb_Cathedral_03.jpg"
+  }
+ },
+ {
+  "id": "mandusevac-legenda",
+  "year": 1094,
+  "x": 60.5,
+  "z": 14.1,
+  "title_hr": "Legenda o imenu Zagreba",
+  "title_en": "The legend of the name Zagreb",
+  "text_hr": "Po legendi je Zagreb dobio ime kad je stari ban, žedan nakon bitke, rekao djevojci Mandi: „Mando, dušo, zagrabi vode“. Povjesničari ime objašnjavaju drukčije: najčešće kao mjesto „za bregom“, odnosno za brdom. Fontana Manduševac na Jelačićevu trgu postavljena je 1986.",
+  "text_en": "According to the legend Zagreb got its name when an old ban, thirsty after a battle, told the girl Manda: \"Mando, dušo, zagrabi vode\" (Manda, dear, scoop some water). Historians explain the name differently: most often as a place \"behind the hill\". The Manduševac fountain on Jelačić Square was placed in 1986.",
+  "place_hr": "Manduševac, Trg bana Josipa Jelačića",
+  "kind": "legend",
+  "sources": [
+   {
+    "url": "https://www.vecernji.hr/zagreb/prica-o-mandusevcu-ili-kako-je-legendarna-fontana-na-jelacic-placu-dala-ime-zagrebu-1534917"
+   },
+   {
+    "url": "https://hr.wikipedia.org/wiki/Zagreb"
+   }
+  ]
+ },
+ {
+  "id": "gradec-1242",
+  "year": 1242,
+  "x": -274.9,
+  "z": -367.9,
+  "title_hr": "Zlatna bula: Gradec postaje slobodni kraljevski grad",
+  "title_en": "Golden Bull: Gradec becomes a free royal city",
+  "text_hr": "Kralj Bela IV. izdao je 16. studenoga 1242. Zlatnu bulu kojom je Gradec postao slobodni kraljevski grad. Zauzvrat su građani morali o svom trošku podignuti zidine oko grada.",
+  "text_en": "On 16 November 1242 King Béla IV issued the Golden Bull that made Gradec a free royal city. In return the citizens had to build walls around the town at their own expense.",
+  "place_hr": "Trg sv. Marka (Gradec)",
+  "kind": "event",
+  "sources": [
+   {
+    "url": "https://en.wikipedia.org/wiki/Golden_Bull_of_1242"
+   },
+   {
+    "url": "https://hr.wikipedia.org/wiki/Zlatna_bula_Bele_IV."
+   },
+   {
+    "url": "https://en.wikipedia.org/wiki/Lotr%C5%A1%C4%8Dak_Tower"
+   }
+  ]
+ },
+ {
+  "id": "medvedgrad-legenda",
+  "year": 1250,
+  "x": -2778.2,
+  "z": -6292.5,
+  "title_hr": "Medvedgrad i Crna kraljica",
+  "title_en": "Medvedgrad and the Black Queen",
+  "text_hr": "Medvedgrad je sagrađen između 1249. i 1254. na obronku Medvednice iznad Zagreba. Legenda kaže da je u njemu živjela Crna kraljica, Barbara Celjska, koja je prodala dušu vragu i čiji se krici još čuju s bedema. Povjesničari tu priču ne potvrđuju i drže je narodnom predajom.",
+  "text_en": "Medvedgrad was built between 1249 and 1254 on the slope of Medvednica above Zagreb. Legend says the Black Queen, Barbara of Cilli, lived there; she sold her soul to the devil and her screams can still be heard from the walls. Historians do not confirm the story and treat it as folk tradition.",
+  "place_hr": "Medvedgrad",
+  "kind": "legend",
+  "sources": [
+   {
+    "url": "https://hr.wikipedia.org/wiki/Medvedgrad"
+   },
+   {
+    "url": "https://www.pp-medvednica.hr/priroda-i-kultura/price-i-legende/"
+   },
+   {
+    "url": "https://www.index.hr/vijesti/clanak/prica-o-medvedgradu-simbolicnom-zdanju-franje-tudjmana-i-crne-kraljice/2591461.aspx"
+   }
+  ],
+  "photo": {
+   "url": "data/facts/medvedgrad-legenda.jpg",
+   "author": "Miroslav.vajdic",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Stari_grad_Medvedgrad_-_Zagreb_02.jpg"
+  }
+ },
+ {
+  "id": "zidine-1266",
+  "year": 1266,
+  "x": -147.1,
+  "z": -292.4,
+  "title_hr": "Dovršene zidine Gradeca",
+  "title_en": "The walls of Gradec are finished",
+  "text_hr": "Građani su zidine i kule Gradeca gradili dvadesetak godina i dovršili ih 1266. Od četiriju gradskih vrata danas su sačuvana samo Kamenita vrata.",
+  "text_en": "The citizens built the walls and towers of Gradec over about twenty years and finished them in 1266. Of the four town gates only the Stone Gate survives today.",
+  "place_hr": "Kamenita vrata",
+  "kind": "object",
+  "sources": [
+   {
+    "url": "https://en.wikipedia.org/wiki/Lotr%C5%A1%C4%8Dak_Tower"
+   },
+   {
+    "url": "https://hr.wikipedia.org/wiki/Kamenita_vrata"
+   },
+   {
+    "url": "https://enciklopedija.hr/clanak/zagreb"
+   }
+  ]
+ },
+ {
+  "id": "vjestice-1360",
+  "year": 1360,
+  "x": -302.7,
+  "z": -297.4,
+  "title_hr": "Prvo zabilježeno suđenje zbog vještičarenja",
+  "title_en": "The first recorded witch trial",
+  "text_hr": "Najstariji zapis o suđenju zbog vještičarenja u Zagrebu je iz 1360. U sudskim zapisima Gradeca spominju se tada Alica i Margareta, prve zagrebačke žene optužene kao coprnice.",
+  "text_en": "The oldest record of a witchcraft trial in Zagreb dates from 1360. The court records of Gradec name Alice and Margaret, the first Zagreb women accused as witches.",
+  "place_hr": "Stara gradska vijećnica, Gradec",
+  "kind": "event",
+  "sources": [
+   {
+    "url": "https://libela.org/sa-stavom/vjestice-u-hrvatskoj/"
+   },
+   {
+    "url": "https://www.telegram.hr/zivot/imena-prvih-zagrepcanki-koje-su-spaljene-i-jos-8-stvari-koje-niste-znali-o-hrvatskim-vjesticama/"
+   }
+  ]
+ },
+ {
+  "id": "tiskara-1664",
+  "year": 1664,
+  "x": -275.5,
+  "z": -191.8,
+  "title_hr": "Prva tiskara u Zagrebu",
+  "title_en": "The first printing press in Zagreb",
+  "text_hr": "Isusovci su 1664. iz Ljubljane prenijeli tiskaru u zagrebački kolegij; to je prva tiskara u gradu. Nema podataka da je ikad radila. Prva tiskara koja je stvarno tiskala bila je Vitezovićeva, osnovana 1694.",
+  "text_en": "In 1664 the Jesuits brought a printing press from Ljubljana to the Zagreb college, the first press in the city. There is no record that it ever worked. The first press that actually printed was Vitezović's, founded in 1694.",
+  "place_hr": "Trg sv. Katarine (isusovački kolegij)",
+  "kind": "event",
+  "sources": [
+   {
+    "url": "https://tehnika.lzmk.hr/tiskarstvo/"
+   },
+   {
+    "url": "https://enciklopedija.hr/clanak/zagreb"
+   }
+  ]
+ },
+ {
+  "id": "sveuciliste-1669",
+  "year": 1669,
+  "x": -568.3,
+  "z": 267.6,
+  "title_hr": "Diploma Leopolda I. i početak Sveučilišta",
+  "title_en": "Leopold I's diploma and the beginning of the University",
+  "text_hr": "Diplomom cara Leopolda I. od 23. rujna 1669. isusovačka akademija u Zagrebu dobila je prava i povlastice sveučilišne ustanove. Sveučilište u Zagrebu tu godinu slavi kao godinu osnutka.",
+  "text_en": "By a diploma of Emperor Leopold I dated 23 September 1669 the Jesuit academy in Zagreb received the rights and privileges of a university. The University of Zagreb counts that year as its founding.",
+  "place_hr": "Sveučilište u Zagrebu (Rektorat)",
+  "kind": "event",
+  "sources": [
+   {
+    "url": "https://www.unizg.hr/o-sveucilistu/sveuciliste-jucer-danas-sutra/povijest-sveucilista/detalj/"
+   },
+   {
+    "url": "https://enciklopedija.hr/clanak/zagreb"
+   }
+  ]
+ },
+ {
+  "id": "herucina-1758",
+  "year": 1758,
+  "x": -616.6,
+  "z": -251.0,
+  "title_hr": "Suđenja vješticama i slučaj Herucina",
+  "title_en": "The witch trials and the Herucina case",
+  "text_hr": "Smaknuća osuđenih u Zagrebu obavljala su se na Zvedišću, kod današnjeg kina Tuškanac. Posljednji proces u Hrvatskoj bio je 1758. protiv Magdalene Logomer, zvane Herucina; poslana je u Beč liječniku Van Swietenu, a carica Marija Terezija ju je oslobodila i suđenja su prestala.",
+  "text_en": "Executions in Zagreb took place at Zvedišće, by today's Tuškanac cinema. The last case in Croatia was in 1758 against Magdalena Logomer, known as Herucina; she was sent to Vienna to the physician Van Swieten, and Empress Maria Theresa freed her, after which the trials ended.",
+  "place_hr": "Tuškanac (Zvedišće, kod kina Tuškanac)",
+  "kind": "event",
+  "sources": [
+   {
+    "url": "https://www.24sata.hr/fun/jeza-na-tuskancu-kako-je-u-zagrebu-spaljeno-250-vjestica-497193"
+   },
+   {
+    "url": "https://blaga.hr/o-prijelomnom-slucaju-magdalene-lugomer-herucine-koju-je-carica-marija-terezija-spasila-od-lomace/30186/"
+   },
+   {
+    "url": "https://hr.wikipedia.org/wiki/Tu%C5%A1kanac"
+   }
+  ]
+ },
+ {
+  "id": "mirogoj-1876",
+  "year": 1876,
+  "x": 680.2,
+  "z": -2746.1,
+  "title_hr": "Otvoren Mirogoj",
+  "title_en": "Mirogoj opens",
+  "text_hr": "Gradsko groblje Mirogoj otvoreno je 6. studenoga 1876., na imanju koje je grad 1873. kupio od Ljudevita Gaja. Arkade i crkvu Krista Kralja projektirao je Hermann Bollé.",
+  "text_en": "The Mirogoj city cemetery opened on 6 November 1876, on land the city bought from Ljudevit Gaj in 1873. The arcades and the Church of Christ the King were designed by Hermann Bollé.",
+  "place_hr": "Mirogoj",
+  "kind": "object",
+  "sources": [
+   {
+    "url": "https://www.gradskagroblja.hr/povijest/522"
+   },
+   {
+    "url": "https://enciklopedija.hr/clanak/zagreb"
+   },
+   {
+    "url": "https://hr.wikipedia.org/wiki/Mirogoj"
+   }
+  ],
+  "photo": {
+   "url": "data/facts/mirogoj-1876.jpg",
+   "author": "Admiral Norton",
+   "licence": "CC BY-SA 3.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Mirogoj_arkade_jug.jpg"
+  }
+ },
+ {
+  "id": "gricki-top-1877",
+  "year": 1877,
+  "x": -304.9,
+  "z": -171.6,
+  "title_hr": "Grički top počinje pucati u podne",
+  "title_en": "The Grič cannon starts firing at noon",
+  "text_hr": "Prvi put je top u podne opalio 1. siječnja 1877., na poticaj gradskog vijećnika Đure Deželića. Top danas stoji u kuli Lotrščak i puca svaki dan u podne.",
+  "text_en": "The noon shot was first fired on 1 January 1877, at the initiative of city councillor Đuro Deželić. The cannon now stands in Lotrščak Tower and fires every day at noon.",
+  "place_hr": "Kula Lotrščak",
+  "kind": "object",
+  "sources": [
+   {
+    "url": "https://hr.wikipedia.org/wiki/Gri%C4%8Dki_top"
+   },
+   {
+    "url": "https://www.poslovni.hr/hrvatska/prvi-put-od-prvog-svjetskog-rata-simbol-grada-zagreba-stao-s-tradicijom-starom-143-godine-4223737"
+   }
+  ],
+  "photo": {
+   "url": "data/facts/gricki-top-1877.jpg",
+   "author": "Bernard Gagnon",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Lotr%C5%A1%C4%8Dak_Tower,_Zagreb.jpg"
+  }
+ },
+ {
+  "id": "potres-1880",
+  "year": 1880,
+  "x": 207.3,
+  "z": -149.6,
+  "title_hr": "Potres 1880.",
+  "title_en": "The 1880 earthquake",
+  "text_hr": "Dana 9. studenoga 1880. Zagreb je pogodio potres s epicentrom na Medvednici. U katedrali je srušio svodove, a obnova koja je poslije uslijedila dala je Donjem gradu današnji izgled.",
+  "text_en": "On 9 November 1880 an earthquake with its epicentre on Medvednica hit Zagreb. It brought down the vaults of the cathedral, and the rebuilding that followed gave the Lower Town its present layout.",
+  "place_hr": "Zagrebačka katedrala",
+  "kind": "event",
+  "sources": [
+   {
+    "url": "https://en.wikipedia.org/wiki/1880_Zagreb_earthquake"
+   },
+   {
+    "url": "https://hr.wikipedia.org/wiki/Potres_u_Zagrebu_1880."
+   },
+   {
+    "url": "https://en.wikipedia.org/wiki/History_of_Zagreb"
+   }
+  ],
+  "photo": {
+   "url": "data/facts/potres-1880.jpg",
+   "author": "Bernard Gagnon",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Zagreb_Cathedral_03.jpg"
+  }
+ },
+ {
+  "id": "uspinjaca-1890",
+  "year": 1890,
+  "x": -318.7,
+  "z": -47.1,
+  "title_hr": "Puštena u promet uspinjača",
+  "title_en": "The funicular opens",
+  "text_hr": "Zagrebačka uspinjača puštena je u promet 8. listopada 1890. Duga je 66 metara i najkraća je žičana željeznica u svijetu.",
+  "text_en": "The Zagreb funicular opened on 8 October 1890. It is 66 metres long and is the shortest cable railway in the world.",
+  "place_hr": "Uspinjača, Tomićeva ulica",
+  "kind": "object",
+  "sources": [
+   {
+    "url": "https://magazin.hrt.hr/zanimljivosti/zagrebacka-uspinjaca-slavi-136-godina-12946574"
+   },
+   {
+    "url": "https://www.index.hr/magazin/clanak/na-danasnji-dan-u-pogon-je-pustena-zagrebacka-uspinjaca-najkraca-je-na-svijetu/2605075.aspx"
+   },
+   {
+    "url": "https://www.infozagreb.hr/hr/novosti/najkraca-zicana-zeljeznica-u-svijetu"
+   }
+  ],
+  "photo": {
+   "url": "data/facts/uspinjaca-1890.jpg",
+   "author": "Diego Delso",
+   "licence": "CC BY-SA 3.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Funicular_de_Zagreb,_Croacia,_2014-04-20,_DD_01.JPG"
+  }
+ },
+ {
+  "id": "konjski-tramvaj-1891",
+  "year": 1891,
+  "x": -2.5,
+  "z": 1.2,
+  "title_hr": "Prvi konjski tramvaj",
+  "title_en": "The first horse tram",
+  "text_hr": "Prvi konjski tramvaj krenuo je 5. rujna 1891. iz spremišta na Savskoj, na mjestu današnjeg Tehničkog muzeja. Vozio je preko Jelačićeva trga i Ilice do Južnog kolodvora, današnjeg Zapadnog kolodvora, brzinom od oko 7 km/h.",
+  "text_en": "The first horse tram set off on 5 September 1891 from the depot on Savska, where the Technical Museum stands today. It ran across Jelačić Square and up Ilica to the South Station, today's West Station, at about 7 km/h.",
+  "place_hr": "Trg bana Josipa Jelačića",
+  "kind": "event",
+  "sources": [
+   {
+    "url": "https://zgh.hr/aktualnosti-10/novosti-170/120-obljetnica-organiziranoga-javnog-gradskog-prijevoza/895"
+   },
+   {
+    "url": "https://www.zagreb.hr/od-konjskog-do-niskopodnog-tramvaja/19152"
+   }
+  ]
+ },
+ {
+  "id": "hnk-1895",
+  "year": 1895,
+  "x": -560.0,
+  "z": 401.3,
+  "title_hr": "Otvoreno Hrvatsko narodno kazalište",
+  "title_en": "The Croatian National Theatre opens",
+  "text_hr": "Nova zgrada Hrvatskog narodnog kazališta otvorena je 14. listopada 1895., po projektu bečkog ureda Fellner i Helmer. Otvorio ju je car Franjo Josip I. udarcem srebrnog čekića.",
+  "text_en": "The new building of the Croatian National Theatre opened on 14 October 1895, designed by the Vienna firm Fellner & Helmer. Emperor Franz Joseph I opened it with a blow of a silver hammer.",
+  "place_hr": "Hrvatsko narodno kazalište",
+  "kind": "object",
+  "sources": [
+   {
+    "url": "https://hr.wikipedia.org/wiki/Hrvatsko_narodno_kazali%C5%A1te_u_Zagrebu"
+   },
+   {
+    "url": "https://en.wikipedia.org/wiki/Croatian_National_Theatre,_Zagreb"
+   }
+  ],
+  "photo": {
+   "url": "data/facts/hnk-1895.jpg",
+   "author": "Bernard Gagnon",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Croatian_National_Theater,_Zagreb_01.jpg"
+  }
+ },
+ {
+  "id": "film-1896",
+  "year": 1896,
+  "x": -539.9,
+  "z": 496.0,
+  "title_hr": "Prva filmska projekcija u Zagrebu",
+  "title_en": "The first film screening in Zagreb",
+  "text_hr": "Prva filmska projekcija u Zagrebu održana je 8. listopada 1896. u dvorani Kola, u zgradi Hrvatskog sokola. U toj je zgradi danas Akademija dramske umjetnosti.",
+  "text_en": "The first film screening in Zagreb took place on 8 October 1896 in the Kolo hall, in the building of the Hrvatski sokol. The Academy of Dramatic Art is in that building today.",
+  "place_hr": "Trg maršala Tita 5 (Akademija dramske umjetnosti)",
+  "kind": "event",
+  "sources": [
+   {
+    "url": "https://www.vecernji.hr/zagreb/zagreb-postao-grad-filma-1896-prvi-studio-dobio-vec-1926-godine-947819"
+   },
+   {
+    "url": "https://hrvatskispomenar.com/dogodilo-se-na-danasnji-dan/dogodilo-se-na-danasnji-dan-8-listopada/"
+   }
+  ]
+ },
+ {
+  "id": "elektricni-tramvaj-1910",
+  "year": 1910,
+  "x": -1677.8,
+  "z": 407.6,
+  "title_hr": "Prvi električni tramvaj",
+  "title_en": "The first electric tram",
+  "text_hr": "Prvi električni tramvaj provozao je Zagrebom 18. kolovoza 1910., a konjska je vuča na sporednim prugama ostala još godinu dana. Grad je vlastitu elektranu dobio 1907., pa je elektrifikacija krenula tek tada.",
+  "text_en": "The first electric tram ran through Zagreb on 18 August 1910, and horse traction stayed on side lines for another year. The city got its own power station only in 1907, which is why electrification came so late.",
+  "place_hr": "Zapadni kolodvor",
+  "kind": "event",
+  "sources": [
+   {
+    "url": "https://www.zagreb.hr/od-konjskog-do-niskopodnog-tramvaja/19152"
+   },
+   {
+    "url": "https://www.nacional.hr/iz-povijesti-kako-je-zagreb-dobio-prvi-elektricni-tramvaj/"
+   }
+  ]
+ },
+ {
+  "id": "radio-1926",
+  "year": 1926,
+  "x": -261.3,
+  "z": -300.6,
+  "title_hr": "Počinje Radio Zagreb",
+  "title_en": "Radio Zagreb goes on air",
+  "text_hr": "Radio Zagreb počeo je emitirati 15. svibnja 1926. u 20:20 iz dvorišne zgrade na Trgu sv. Marka 9. Bio je to prvi radijski program u Hrvatskoj.",
+  "text_en": "Radio Zagreb went on air on 15 May 1926 at 20:20 from a courtyard building at Trg sv. Marka 9. It was the first radio programme in Croatia.",
+  "place_hr": "Trg sv. Marka 9",
+  "kind": "event",
+  "sources": [
+   {
+    "url": "https://www.kgz.hr/hr/dogadjanja/1926-godina-i-otvorenje-radnicke-knjiznice/35891"
+   },
+   {
+    "url": "https://www.hnd.hr/halo-halo-ovdje-radio-zagreb"
+   },
+   {
+    "url": "https://hr.wikipedia.org/wiki/Hrvatski_radio"
+   }
+  ]
+ },
+ {
+  "id": "dolac-1930",
+  "year": 1930,
+  "x": 7.4,
+  "z": -121.4,
+  "title_hr": "Otvorena tržnica Dolac",
+  "title_en": "The Dolac market opens",
+  "text_hr": "Tržnica Dolac otvorena je 1. rujna 1930. na mjestu starih gradskih zidina, po kojima se i danas zove ulica Pod zidom.",
+  "text_en": "The Dolac market opened on 1 September 1930 on the site of the old city walls, which still give their name to the street Pod zidom.",
+  "place_hr": "Dolac",
+  "kind": "object",
+  "sources": [
+   {
+    "url": "https://www.trznice-zg.hr/default.aspx?id=4887"
+   },
+   {
+    "url": "https://www.zagreb.hr/hr/trznica-dolac-osamdeset-joj-je-godina-tek/28436"
+   },
+   {
+    "url": "https://hr.wikipedia.org/wiki/Dolac_(Zagreb)"
+   }
+  ],
+  "photo": {
+   "url": "data/facts/dolac-1930.jpg",
+   "author": "Rilegator",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Dolac_01.JPG"
+  }
+ },
+ {
+  "id": "tunel-gric-1943",
+  "year": 1943,
+  "x": -498.3,
+  "z": -173.1,
+  "title_hr": "Prokopan tunel Grič",
+  "title_en": "The Grič tunnel is dug",
+  "text_hr": "Tunel Grič projektiran je 1943., kada su počela saveznička bombardiranja, a dovršen je 1945. Dug je 350 metara i povezuje Mesničku i Radićevu ulicu; za javnost je otvoren 2016.",
+  "text_en": "The Grič tunnel was designed in 1943, when Allied bombing began, and finished in 1945. It is 350 metres long and links Mesnička and Radićeva Street; it opened to the public in 2016.",
+  "place_hr": "Mesnička ulica (ulaz u tunel Grič)",
+  "kind": "object",
+  "sources": [
+   {
+    "url": "https://hr.wikipedia.org/wiki/Tunel_Gri%C4%8D"
+   },
+   {
+    "url": "https://en.wikipedia.org/wiki/Gri%C4%8D_Tunnel_(Zagreb)"
+   }
+  ],
+  "photo": {
+   "url": "data/facts/tunel-gric-1943.jpg",
+   "author": "Adam Harangozó",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Gri%C4%8D_Tunnel_in_Zagreb.jpg"
+  }
+ },
+ {
+  "id": "jelacic-1947",
+  "year": 1947,
+  "x": -46.5,
+  "z": -11.4,
+  "title_hr": "Uklonjen i vraćen Jelačićev kip",
+  "title_en": "The Jelačić statue removed and returned",
+  "text_hr": "Kip bana Josipa Jelačića, postavljen 1866., komunističke su vlasti uklonile 1947. i trg preimenovale u Trg Republike. Kip se vratio na trg u listopadu 1990.",
+  "text_en": "The statue of Ban Josip Jelačić, erected in 1866, was removed by the communist authorities in 1947 and the square was renamed Republic Square. The statue returned to the square in October 1990.",
+  "place_hr": "Trg bana Josipa Jelačića",
+  "kind": "event",
+  "sources": [
+   {
+    "url": "https://hr.wikipedia.org/wiki/Kip_bana_Josipa_Jela%C4%8Di%C4%87a_u_Zagrebu"
+   },
+   {
+    "url": "https://www.24sata.hr/lifestyle/povratak-spomenika-banu-jelacicu-1990-nosio-je-ogromnu-simboliku-1160142"
+   },
+   {
+    "url": "https://hr.wikipedia.org/wiki/Trg_bana_J._Jela%C4%8Di%C4%87a"
+   }
+  ],
+  "photo": {
+   "url": "data/facts/jelacic-1947.jpg",
+   "author": "Diego Delso",
+   "licence": "CC BY-SA 3.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/3.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Estatua_de_Ban_Jelacic,_Zagreb,_Croacia,_2014-04-13,_DD_01.JPG"
+  }
+ },
+ {
+  "id": "poplava-1964",
+  "year": 1964,
+  "x": -976.3,
+  "z": 1108.6,
+  "title_hr": "Poplava Save 1964.",
+  "title_en": "The Sava flood of 1964",
+  "text_hr": "U noći s 25. na 26. listopada 1964. Sava je probila nasip i poplavila trećinu Zagreba. Poginulo je 17 ljudi, 40.000 je ostalo bez krova, a poslije toga građen je sustav obrane od poplava.",
+  "text_en": "In the night of 25 to 26 October 1964 the Sava broke through the embankment and flooded a third of Zagreb. Seventeen people died and 40,000 were left homeless; the flood defence system was built afterwards.",
+  "place_hr": "Savska cesta",
+  "kind": "event",
+  "sources": [
+   {
+    "url": "https://www.zagreb.hr/en/sjecanje-na-poplavu-u-zagrebu-1964/57546"
+   },
+   {
+    "url": "https://hr.wikipedia.org/wiki/Poplava_u_Zagrebu_1964."
+   },
+   {
+    "url": "https://www.voda.hr/hr/novost/60-godina-od-velike-poplave-u-zagrebu"
+   }
+  ]
+ },
+ {
+  "id": "banski-dvori-1991",
+  "year": 1991,
+  "x": -327.7,
+  "z": -364.0,
+  "title_hr": "Raketiranje Banskih dvora",
+  "title_en": "The rocket attack on Banski dvori",
+  "text_hr": "Dana 7. listopada 1991. zrakoplovi JNA ispalili su rakete na Banske dvore, sjedište predsjednika i Vlade. Jedna je pogodila zgradu; napad je bio pokušaj atentata na državno vodstvo.",
+  "text_en": "On 7 October 1991 Yugoslav People's Army aircraft fired rockets at Banski dvori, the seat of the president and the government. One hit the building; the attack was an attempt on the state leadership.",
+  "place_hr": "Banski dvori, Trg sv. Marka 2",
+  "kind": "event",
+  "sources": [
+   {
+    "url": "https://vlada.gov.hr/vijesti/premijer-plenkovic-polozio-lovorov-vijenac-na-obljetnicu-raketiranja-banskih-dvora-to-je-bio-prekretnicki-trenutak/30536"
+   },
+   {
+    "url": "https://vijesti.hrt.hr/hrvatska/prije-35-godina-raketirani-su-banski-dvori-12944607"
+   },
+   {
+    "url": "https://mgz.hr/hr/dogadanja/obiljezavanje-31-obljetnice-napada-na-banske-dvore-7-listopada-1991,3474.html"
+   }
+  ],
+  "photo": {
+   "url": "data/facts/banski-dvori-1991.jpg",
+   "author": "Croatv",
+   "licence": "CC BY-SA 4.0",
+   "licence_url": "https://creativecommons.org/licenses/by-sa/4.0",
+   "page": "https://commons.wikimedia.org/wiki/File:Banski_dvori_(Zagreb).jpg"
+  }
+ },
+ {
+  "id": "potres-2020",
+  "year": 2020,
+  "x": 2965.6,
+  "z": -6953.7,
+  "title_hr": "Potres 2020.",
+  "title_en": "The 2020 earthquake",
+  "text_hr": "Potres magnitude 5,5 pogodio je Zagreb 22. ožujka 2020. u 6:24, s epicentrom kod Markuševca. Oštećen je vrh južnog tornja katedrale, a obnova još traje.",
+  "text_en": "An earthquake of magnitude 5.5 hit Zagreb on 22 March 2020 at 6:24, with its epicentre near Markuševec. The top of the cathedral's south spire was damaged, and the restoration is still going on.",
+  "place_hr": "Markuševec (epicentar)",
+  "kind": "event",
+  "sources": [
+   {
+    "url": "https://hr.wikipedia.org/wiki/Potres_u_Zagrebu_2020."
+   },
+   {
+    "url": "https://en.wikipedia.org/wiki/2020_Zagreb_earthquake"
+   },
+   {
+    "url": "https://www.zagreb.hr/godina-dana-od-razornog-potresa-aktivnosti-gradski/170151"
+   }
+  ]
+ }
+]

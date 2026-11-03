@@ -1,0 +1,102 @@
+{
+ "title": {
+  "en": "A walk through the centre",
+  "hr": "Šetnja kroz centar"
+ },
+ "lede": {
+  "en": "Ten stops, about {km} km and {min} minutes on foot. The times between two stops are estimates.",
+  "hr": "Deset postaja, oko {km} km i {min} minuta hoda. Vremena između dvije postaje su procjena."
+ },
+ "km": 3.6,
+ "min": 45,
+ "stops": [
+  {
+   "n": 1,
+   "fact": "mandusevac-legenda",
+   "x": 60.5,
+   "z": 14.1,
+   "why_hr": "Start on the square: the well that gave the city its name",
+   "leg_m": 480,
+   "leg_min": 6
+  },
+  {
+   "n": 2,
+   "fact": "uspinjaca-1890",
+   "x": -318.7,
+   "z": -47.1,
+   "why_hr": "The funicular, the shortest public railway in the world",
+   "leg_m": 160,
+   "leg_min": 2
+  },
+  {
+   "n": 3,
+   "fact": "gricki-top-1877",
+   "x": -304.9,
+   "z": -171.6,
+   "why_hr": "Lotrščak tower and the cannon that marks noon",
+   "leg_m": 250,
+   "leg_min": 3
+  },
+  {
+   "n": 4,
+   "fact": "zidine-1266",
+   "x": -147.1,
+   "z": -292.4,
+   "why_hr": "The Stone Gate, the only gate of Gradec left standing",
+   "leg_m": 190,
+   "leg_min": 2
+  },
+  {
+   "n": 5,
+   "fact": "gradec-1242",
+   "x": -274.9,
+   "z": -367.9,
+   "why_hr": "St Mark's square: the free royal town and its charter",
+   "leg_m": 370,
+   "leg_min": 5
+  },
+  {
+   "n": 6,
+   "fact": "tunel-gric-1943",
+   "x": -498.3,
+   "z": -173.1,
+   "why_hr": "The tunnel dug under Gradec in the war",
+   "leg_m": 640,
+   "leg_min": 8
+  },
+  {
+   "n": 7,
+   "fact": "dolac-1930",
+   "x": 7.4,
+   "z": -121.4,
+   "why_hr": "Dolac, the market above the old walls",
+   "leg_m": 250,
+   "leg_min": 3
+  },
+  {
+   "n": 8,
+   "fact": "potres-1880",
+   "x": 207.3,
+   "z": -149.6,
+   "why_hr": "The cathedral, and the earthquake that rebuilt it",
+   "leg_m": 70,
+   "leg_min": 1
+  },
+  {
+   "n": 9,
+   "fact": "kaptol-1094",
+   "x": 178.5,
+   "z": -196.4,
+   "why_hr": "Kaptol, where the diocese and the name begin",
+   "leg_m": 1190,
+   "leg_min": 15
+  },
+  {
+   "n": 10,
+   "fact": "hnk-1895",
+   "x": -560.0,
+   "z": 401.3,
+   "why_hr": "End at the theatre on the Green Horseshoe"
+  }
+ ]
+}
