@@ -36,6 +36,7 @@ ORIGIN = (459370.1, 5074937.5)      # city.py ORIGIN, EPSG:3765
 LICENCE = ("GTFS: Zagrebacki elektricni tramvaj d.o.o., Otvorena dozvola / Open Licence (Republika Hrvatska); "
            "rails: OpenStreetMap contributors, ODbL")
 TRAM = "0"
+CONNECT = 40.0                      # metres a segment block may sit from the previous block's end to still belong
 
 
 def rows(name):
@@ -75,6 +76,46 @@ def local(lon, lat):
     return np.asarray(e) - ORIGIN[0], -(np.asarray(n) - ORIGIN[1])
 
 
+def chain(p):
+    """ZET writes one shape_id as a pile of segment blocks with several route variants merged into it, and the
+    duplicates are not marked. Read in feed order it teleports: shape 3_3 has 286 rows for 189 distinct sequences and
+    61.7 km of geometry for a line about 10 km long, with 808 m jumps between neighbouring points. A tram drives one
+    variant, so take the longest chain of blocks whose ends touch: continuous, no zigzag, no jump across town."""
+    blocks, cur = [], [p[0]]
+    for a, b in zip(p, p[1:]):
+        if b[0] == a[0] + 1:
+            cur.append(b)
+        else:
+            blocks.append(cur)
+            cur = [b]
+    blocks.append(cur)
+    if len(blocks) < 2:
+        return p
+    bx, bz = local([b[0][1] for b in blocks], [b[0][2] for b in blocks])          # block starts
+    ex, ez = local([b[-1][1] for b in blocks], [b[-1][2] for b in blocks])        # block ends
+    n = len(blocks)
+    lengths = []
+    for b in blocks:
+        lx, lz = local([q[1] for q in b], [q[2] for q in b])
+        lengths.append(float(np.hypot(np.diff(lx), np.diff(lz)).sum()) if len(b) > 1 else 0.0)
+    best = list(lengths)
+    prev = [-1] * n
+    for j in range(1, n):
+        for i in range(j):
+            if (bx[j] - ex[i]) ** 2 + (bz[j] - ez[i]) ** 2 <= CONNECT * CONNECT and best[i] + lengths[j] > best[j]:
+                best[j] = best[i] + lengths[j]
+                prev[j] = i
+    j = max(range(n), key=lambda k: best[k])
+    chosen = []
+    while j >= 0:
+        chosen.append(blocks[j])
+        j = prev[j]
+    out = []
+    for b in reversed(chosen):
+        out.extend(b[1:] if out and (out[-1][1], out[-1][2]) == (b[0][1], b[0][2]) else b)
+    return out
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--version", required=True)
@@ -104,7 +145,7 @@ def main(argv=None):
     shape_at = {s: i for i, s in enumerate(shape_ids)}
     xs, zs, index, total_len = [], [], [], []
     for s in shape_ids:
-        p = sorted(pts[s])
+        p = chain(sorted(pts[s]))
         x, z = local([q[1] for q in p], [q[2] for q in p])
         seg = np.hypot(np.diff(x), np.diff(z)).sum()
         index.append({"shape": s, "offset": len(xs), "count": len(x)})
