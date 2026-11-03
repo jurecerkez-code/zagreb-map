@@ -1,0 +1,313 @@
+{
+ "id": "across-the-sava",
+ "title": {
+  "en": "Across the Sava: Novi Zagreb",
+  "sv": "Preko Save: Novi Zagreb"
+ },
+ "year": 1956,
+ "sensitive": false,
+ "beats": [
+  {
+   "n": 1,
+   "camera": {
+    "lat": 45.808001,
+    "lon": 15.970184,
+    "height_m": 1500
+   },
+   "target": {
+    "lat": 45.785,
+    "lon": 15.976
+   },
+   "duration_s": 9,
+   "year": 1950,
+   "caption": {
+    "en": "Novi Zagreb is the part of the city south of the Sava. Building there began in the 1950s, under mayor Većeslav Holjevac.",
+    "sv": "Novi Zagreb dio je grada južno od Save. Gradnja je ondje počela 1950-ih, za gradonačelnika Većeslava Holjevca."
+   },
+   "sources": [
+    "Novi Zagreb",
+    "Novi Zagreb (hr)"
+   ],
+   "photo": {
+    "src": "img/across-the-sava-1.jpg",
+    "width": 1200,
+    "height": 901,
+    "caption": {
+     "en": "Novi Zagreb south of the Sava",
+     "sv": "Novi Zagreb južno od Save"
+    },
+    "credit": {
+     "author": "Suradnik13",
+     "licence": "CC BY-SA 3.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Novi_Zagreb_zapad.jpg"
+    }
+   }
+  },
+  {
+   "n": 2,
+   "camera": {
+    "lat": 45.787009,
+    "lon": 15.971359,
+    "height_m": 380
+   },
+   "target": {
+    "lat": 45.7865,
+    "lon": 15.9797
+   },
+   "duration_s": 9,
+   "year": 1959,
+   "caption": {
+    "en": "The Bridge of Freedom, by Krunoslav Tonković, opened on 2 September 1959. It carries the avenue that now bears Holjevac's name.",
+    "sv": "Most slobode, djelo Krunoslava Tonkovića, otvoren je 2. rujna 1959. Njime prolazi avenija koja danas nosi Holjevčevo ime."
+   },
+   "sources": [
+    "Most slobode (hr)"
+   ],
+   "photo": {
+    "src": "img/e2874b7f017a20a9e46f222ed3a94d0d85d60e28.jpg",
+    "width": 800,
+    "height": 530,
+    "credit": {
+     "author": "GrofBombelles",
+     "licence": "CC BY-SA 3.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Most_Slobode.jpg",
+     "file": "File:Most Slobode.jpg"
+    },
+    "caption": {
+     "en": "The Bridge of Freedom from the northern embankment",
+     "sv": "Most slobode sa sjevernog nasipa"
+    }
+   }
+  },
+  {
+   "n": 3,
+   "camera": {
+    "lat": 45.787767,
+    "lon": 15.968675,
+    "height_m": 520
+   },
+   "target": {
+    "lat": 45.78017,
+    "lon": 15.97264
+   },
+   "duration_s": 9,
+   "year": 1964,
+   "caption": {
+    "en": "Holjevac moved the Zagreb Fair to the meadows across the river. The City's register dates the fair grounds 1955 to 1964.",
+    "sv": "Holjevac je Zagrebački velesajam preselio na livade preko Save. Gradski registar datira velesajam od 1955. do 1964."
+   },
+   "sources": [
+    "Zagrebački velesajam (hr)",
+    "Grad Zagreb, KULTURA_ZASTITA"
+   ],
+   "photo": {
+    "src": "img/36c8960ca4cdfc11d337bed2f74fef58f6a3f5b0.jpg",
+    "width": 800,
+    "height": 600,
+    "credit": {
+     "author": "Plamen",
+     "licence": "CC BY-SA 4.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Zagreb_Fair_01.jpg",
+     "file": "File:Zagreb Fair 01.jpg"
+    },
+    "caption": {
+     "en": "A concrete shell sculpture in the fair grounds",
+     "sv": "Betonska ljuska, skulptura na prostoru Velesajma"
+    }
+   }
+  },
+  {
+   "n": 4,
+   "camera": {
+    "lat": 45.775685,
+    "lon": 15.964772,
+    "height_m": 310
+   },
+   "target": {
+    "lat": 45.77164,
+    "lon": 15.96812
+   },
+   "duration_s": 8,
+   "year": 1973,
+   "caption": {
+    "en": "In Siget, Super Andrija by Miroslav Cantinelli was built in 1973. It has 14 floors and 488 flats.",
+    "sv": "U Sigetu je 1973. izgrađen Super Andrija, djelo Miroslava Cantinellija. Ima 14 katova i 488 stanova."
+   },
+   "sources": [
+    "Super Andrija (hr)",
+    "landmark card"
+   ]
+  },
+  {
+   "n": 5,
+   "camera": {
+    "lat": 45.774165,
+    "lon": 15.987138,
+    "height_m": 400
+   },
+   "target": {
+    "lat": 45.7711111,
+    "lon": 15.9947222
+   },
+   "duration_s": 9,
+   "year": 1974,
+   "caption": {
+    "en": "Mamutica in Travno followed in 1974. It is about 240 metres long and 60 metres high, and about 5,000 people live in it.",
+    "sv": "Mamutica u Travnom slijedila je 1974. Duga je oko 240 metara, visoka 60 metara, a u njoj živi oko 5000 ljudi."
+   },
+   "sources": [
+    "Mamutica",
+    "landmark card"
+   ],
+   "photo": {
+    "src": "img/4acc9b199d115270e629430218233b22a24e45a5.jpg",
+    "width": 800,
+    "height": 450,
+    "credit": {
+     "author": "Branko Radovanović",
+     "licence": "CC BY-SA 3.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Mamutica_Zagreb_20110620_2877.jpg",
+     "file": "File:Mamutica Zagreb 20110620 2877.jpg"
+    },
+    "caption": {
+     "en": "Mamutica seen from the west",
+     "sv": "Mamutica sa zapada"
+    }
+   }
+  },
+  {
+   "n": 6,
+   "camera": {
+    "lat": 45.78247,
+    "lon": 15.978831,
+    "height_m": 280
+   },
+   "target": {
+    "lat": 45.7788131,
+    "lon": 15.9818579
+   },
+   "duration_s": 8,
+   "year": 2009,
+   "caption": {
+    "en": "The Museum of Contemporary Art moved here, into a new building by Igor Franić. It opened on 11 December 2009.",
+    "sv": "Muzej suvremene umjetnosti preselio je ovamo, u novu zgradu Igora Franića. Otvorena je 11. prosinca 2009."
+   },
+   "sources": [
+    "Museum of Contemporary Art",
+    "landmark card"
+   ],
+   "photo": {
+    "src": "img/7453f8224721aa4b2a064491b38eb16639e2e981.jpg",
+    "width": 800,
+    "height": 533,
+    "credit": {
+     "author": "Myriam Thyes",
+     "licence": "CC BY-SA 3.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Msu-museum-contemporary-art-zagreb.jpg",
+     "file": "File:Msu-museum-contemporary-art-zagreb.jpg"
+    },
+    "caption": {
+     "en": "The Museum of Contemporary Art",
+     "sv": "Muzej suvremene umjetnosti"
+    }
+   }
+  },
+  {
+   "n": 7,
+   "camera": {
+    "lat": 45.80654,
+    "lon": 15.96829,
+    "height_m": 1700
+   },
+   "target": {
+    "lat": 45.78,
+    "lon": 15.975
+   },
+   "duration_s": 9,
+   "year": 2026,
+   "caption": {
+    "en": "Most buildings south of the Sava have no year on this map yet, so they appear only when the timeline reaches today.",
+    "sv": "Većina zgrada južno od Save na ovoj karti još nema godinu, pa se pojavljuju tek kad vremenska crta dođe do danas."
+   },
+   "sources": [
+    "this map's data"
+   ]
+  }
+ ],
+ "ready": true,
+ "overlays": [
+  {
+   "type": "route",
+   "coords": [
+    [
+     45.7935,
+     15.9796
+    ],
+    [
+     45.7895,
+     15.9796
+    ],
+    [
+     45.7865,
+     15.9797
+    ],
+    [
+     45.7835,
+     15.9798
+    ],
+    [
+     45.78,
+     15.9799
+    ]
+   ],
+   "label": {
+    "en": "Most slobode, 1959",
+    "sv": "Most slobode, 1959."
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.78017,
+    15.97264
+   ],
+   "label": {
+    "en": "Zagrebački velesajam",
+    "sv": "Zagrebački velesajam"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.77164,
+    15.96812
+   ],
+   "label": {
+    "en": "Super Andrija",
+    "sv": "Super Andrija"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.7711111,
+    15.9947222
+   ],
+   "label": {
+    "en": "Mamutica",
+    "sv": "Mamutica"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.7788131,
+    15.9818579
+   ],
+   "label": {
+    "en": "Muzej suvremene umjetnosti",
+    "sv": "Muzej suvremene umjetnosti"
+   }
+  }
+ ]
+}

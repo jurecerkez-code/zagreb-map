@@ -1,0 +1,622 @@
+{
+  "id": "tre-kronor-1697",
+  "title": {
+    "en": "Tre Kronor burns, 1697",
+    "sv": "Tre Kronor brinner 1697"
+  },
+  "year": 1697,
+  "sensitive": false,
+  "beats": [
+    {
+      "n": 1,
+      "camera": {
+        "lat": 59.32906,
+        "lon": 18.08308,
+        "height_m": 579
+      },
+      "target": {
+        "lat": 59.326944,
+        "lon": 18.071667
+      },
+      "duration_s": 6,
+      "caption": {
+        "en": "Stockholm, 7 May 1697.",
+        "sv": "Stockholm den 7 maj 1697."
+      },
+      "sources": [
+        "sv Wikipedia Slottsbranden 1697"
+      ]
+    },
+    {
+      "n": 2,
+      "camera": {
+        "lat": 59.32804,
+        "lon": 18.07652,
+        "height_m": 270
+      },
+      "target": {
+        "lat": 59.32705,
+        "lon": 18.0712
+      },
+      "duration_s": 9,
+      "caption": {
+        "en": "Tre Kronor, the royal castle. Its north wing had just been rebuilt in a plain new baroque style.",
+        "sv": "Tre Kronor, kungens slott. Den norra längan hade nyss byggts om i en stram ny barock."
+      },
+      "sources": [
+        "sv Wikipedia Tre Kronor (byggnad)",
+        "sv Wikipedia Stockholms slott"
+      ],
+      "photo": {
+        "src": "img/725c3b7709a9dd3525bd6c20e0c942a3807f112f.jpg",
+        "width": 800,
+        "height": 420,
+        "credit": {
+          "author": "Govert Dircksz Camphuysen",
+          "licence": "Public domain",
+          "page": "https://commons.wikimedia.org/wiki/File:Slottet_Tre_Kronor_1661.jpg",
+          "file": "File:Slottet Tre Kronor 1661.jpg"
+        },
+        "caption": {
+          "en": "Tre Kronor in 1661, painted by Govert Camphuysen, before the new north wing",
+          "sv": "Tre Kronor 1661, målad av Govert Camphuysen, före den nya norra längan"
+        }
+      }
+    },
+    {
+      "n": 3,
+      "camera": {
+        "lat": 59.32606,
+        "lon": 18.07622,
+        "height_m": 270
+      },
+      "target": {
+        "lat": 59.32705,
+        "lon": 18.0709
+      },
+      "duration_s": 9,
+      "caption": {
+        "en": "About two in the afternoon, smoke is seen in the roof space above the hall of state.",
+        "sv": "Vid tvåtiden på eftermiddagen syns rök från vinden ovanför rikssalen."
+      },
+      "sources": [
+        "sv Wikipedia Slottsbranden 1697 (hour given only there)"
+      ],
+      "photo": {
+        "src": "img/90e34602a9f052aeef85d79ba292c8f9d74ac3a4.jpg",
+        "width": 800,
+        "height": 538,
+        "credit": {
+          "author": "Perelle, Adam, 1640-1695(Gravör), Dahlbergh, Erik, 1625-1703(Medarbetare)",
+          "licence": "Public domain",
+          "page": "https://commons.wikimedia.org/wiki/File:Suecia_1-015_;_Tre_kronor.jpg",
+          "file": "File:Suecia 1-015 ; Tre kronor.jpg"
+        },
+        "caption": {
+          "en": "Tre Kronor from the east, an engraving in Suecia antiqua printed 1670–1674",
+          "sv": "Tre Kronor från öster, ett kopparstick i Suecia antiqua, tryckt 1670–1674"
+        }
+      }
+    },
+    {
+      "n": 4,
+      "camera": {
+        "lat": 59.32901,
+        "lon": 18.07868,
+        "height_m": 386
+      },
+      "target": {
+        "lat": 59.326944,
+        "lon": 18.071667
+      },
+      "duration_s": 6,
+      "caption": {
+        "en": "The fire runs quickly through the roofs and reaches every wing.",
+        "sv": "Elden sprider sig snabbt genom taken till alla längor."
+      },
+      "sources": [
+        "sv Wikipedia Slottsbranden 1697",
+        "en Wikipedia Tre Kronor (castle)"
+      ]
+    },
+    {
+      "n": 5,
+      "camera": {
+        "lat": 59.32804,
+        "lon": 18.07652,
+        "height_m": 270
+      },
+      "target": {
+        "lat": 59.32705,
+        "lon": 18.0712
+      },
+      "duration_s": 12,
+      "caption": {
+        "en": "The old castle is lost, apart from the walls of the new north wing. Most of the national archive and the royal library burn with it.",
+        "sv": "Det gamla slottet går förlorat, utom murarna i den nya norra längan. Det mesta av riksarkivet och det kungliga biblioteket brinner upp."
+      },
+      "sources": [
+        "sv Wikipedia Slottsbranden 1697"
+      ]
+    },
+    {
+      "n": 6,
+      "camera": {
+        "lat": 59.328,
+        "lon": 18.07737,
+        "height_m": 289
+      },
+      "target": {
+        "lat": 59.326944,
+        "lon": 18.071667
+      },
+      "duration_s": 10,
+      "caption": {
+        "en": "Within the year the architect Nicodemus Tessin the Younger has plans for a new palace. The ruins are cleared until spring 1700.",
+        "sv": "Redan samma år har arkitekten Nicodemus Tessin d.y. ritningar till ett nytt slott. Ruinerna rivs fram till våren 1700."
+      },
+      "sources": [
+        "sv Wikipedia Stockholms slott",
+        "sv Wikipedia Slottsbranden 1697"
+      ]
+    },
+    {
+      "n": 7,
+      "camera": {
+        "lat": 59.328,
+        "lon": 18.07737,
+        "height_m": 289
+      },
+      "target": {
+        "lat": 59.326944,
+        "lon": 18.071667
+      },
+      "duration_s": 9,
+      "caption": {
+        "en": "Building goes on until 1709, when the war halts it. The half-finished walls stand like this until 1727.",
+        "sv": "Bygget pågår till 1709, då kriget stoppar det. De halvfärdiga murarna står så fram till 1727."
+      },
+      "sources": [
+        "sv Wikipedia Stockholms slott"
+      ]
+    },
+    {
+      "n": 8,
+      "camera": {
+        "lat": 59.32938,
+        "lon": 18.07735,
+        "height_m": 354
+      },
+      "target": {
+        "lat": 59.326944,
+        "lon": 18.071667
+      },
+      "duration_s": 9,
+      "caption": {
+        "en": "Work starts again in 1727. After Tessin's death in 1728, Carl Hårleman completes the building.",
+        "sv": "Arbetet återupptas 1727. Efter Tessins död 1728 fullbordar Carl Hårleman bygget."
+      },
+      "sources": [
+        "sv Wikipedia Stockholms slott"
+      ],
+      "photo": {
+        "src": "img/8f99ae3fef0366f5b98d98b1249632e3666cc82b.jpg",
+        "width": 800,
+        "height": 530,
+        "credit": {
+          "author": "Arild Vågen",
+          "licence": "CC BY-SA 4.0",
+          "page": "https://commons.wikimedia.org/wiki/File:Stockholms_slott_August_2015_01.jpg",
+          "file": "File:Stockholms slott August 2015 01.jpg"
+        },
+        "caption": {
+          "en": "The palace Tessin designed and Hårleman completed, in 2015",
+          "sv": "Slottet som Tessin ritade och Hårleman fullbordade, 2015"
+        }
+      }
+    },
+    {
+      "n": 9,
+      "camera": {
+        "lat": 59.33085,
+        "lon": 18.07046,
+        "height_m": 482
+      },
+      "target": {
+        "lat": 59.326,
+        "lon": 18.067
+      },
+      "duration_s": 9,
+      "caption": {
+        "en": "In 1754 the royal family moves in, after more than fifty years in the Wrangel Palace on Riddarholmen.",
+        "sv": "År 1754 flyttar kungafamiljen in, efter mer än femtio år i Wrangelska palatset på Riddarholmen."
+      },
+      "sources": [
+        "sv Wikipedia Stockholms slott",
+        "sv Wikipedia Slottsbranden 1697"
+      ],
+      "photo": {
+        "src": "img/97e894f998f8cb751ea1628ebf3a56f41077b5ae.jpg",
+        "width": 800,
+        "height": 644,
+        "credit": {
+          "author": "Le Pautre, Jean, 1618-1682(Gravör) Dahlbergh, Erik, 1625-1703(Medarbetare)",
+          "licence": "Public domain",
+          "page": "https://commons.wikimedia.org/wiki/File:Suecia_1-038_;_Wrangelska_Dahlberg.jpg",
+          "file": "File:Suecia 1-038 ; Wrangelska Dahlberg.jpg"
+        },
+        "caption": {
+          "en": "The Wrangel Palace on Riddarholmen, an engraving in Suecia antiqua printed 1670–1674",
+          "sv": "Wrangelska palatset på Riddarholmen, ett kopparstick i Suecia antiqua, tryckt 1670–1674"
+        }
+      }
+    }
+  ],
+  "ready": true,
+  "overlays": [
+    {
+      "type": "ghost",
+      "label": {
+        "en": "Tre Kronor: keep (kärntornet)",
+        "sv": "Tre Kronor: keep (kärntornet)"
+      },
+      "from": 1,
+      "heights": [
+        60
+      ],
+      "confidence": "low",
+      "until": 4,
+      "rings": [
+        [
+          [
+            59.327106,
+            18.07135
+          ],
+          [
+            59.327106,
+            18.071614
+          ],
+          [
+            59.32724,
+            18.071614
+          ],
+          [
+            59.32724,
+            18.07135
+          ],
+          [
+            59.327106,
+            18.07135
+          ]
+        ]
+      ]
+    },
+    {
+      "type": "ghost",
+      "label": {
+        "en": "Tre Kronor: högborgen (inner castle) ranges",
+        "sv": "Tre Kronor: högborgen (inner castle) ranges"
+      },
+      "from": 1,
+      "heights": [
+        20
+      ],
+      "confidence": "low",
+      "until": 4,
+      "rings": [
+        [
+          [
+            59.326989,
+            18.070963
+          ],
+          [
+            59.326989,
+            18.071755
+          ],
+          [
+            59.327348,
+            18.071755
+          ],
+          [
+            59.327348,
+            18.070963
+          ],
+          [
+            59.326989,
+            18.070963
+          ]
+        ]
+      ]
+    },
+    {
+      "type": "ghost",
+      "label": {
+        "en": "Tre Kronor: Stora borggården east range (kanslilängan)",
+        "sv": "Tre Kronor: Stora borggården east range (kanslilängan)"
+      },
+      "from": 1,
+      "heights": [
+        16
+      ],
+      "confidence": "low",
+      "until": 4,
+      "rings": [
+        [
+          [
+            59.326495,
+            18.072407
+          ],
+          [
+            59.326495,
+            18.072653
+          ],
+          [
+            59.327348,
+            18.072653
+          ],
+          [
+            59.327348,
+            18.072407
+          ],
+          [
+            59.326495,
+            18.072407
+          ]
+        ]
+      ]
+    },
+    {
+      "type": "ghost",
+      "label": {
+        "en": "Tre Kronor: Stora borggården west range",
+        "sv": "Tre Kronor: Stora borggården west range"
+      },
+      "from": 1,
+      "heights": [
+        18
+      ],
+      "confidence": "low",
+      "until": 4,
+      "rings": [
+        [
+          [
+            59.326495,
+            18.070681
+          ],
+          [
+            59.326495,
+            18.070927
+          ],
+          [
+            59.327348,
+            18.070927
+          ],
+          [
+            59.327348,
+            18.070681
+          ],
+          [
+            59.326495,
+            18.070681
+          ]
+        ]
+      ]
+    },
+    {
+      "type": "ghost",
+      "label": {
+        "en": "Tre Kronor: north range (Tessin the Younger's rebuild)",
+        "sv": "Tre Kronor: north range (Tessin the Younger's rebuild)"
+      },
+      "from": 1,
+      "heights": [
+        22
+      ],
+      "confidence": "low",
+      "until": 6,
+      "rings": [
+        [
+          [
+            59.327348,
+            18.070681
+          ],
+          [
+            59.327348,
+            18.072653
+          ],
+          [
+            59.327483,
+            18.072653
+          ],
+          [
+            59.327483,
+            18.070681
+          ],
+          [
+            59.327348,
+            18.070681
+          ]
+        ]
+      ]
+    },
+    {
+      "type": "ghost",
+      "label": {
+        "en": "Tre Kronor: ruin state",
+        "sv": "Tre Kronor: ruin state"
+      },
+      "from": 5,
+      "heights": [
+        25,
+        8
+      ],
+      "confidence": "low",
+      "until": 6,
+      "rings": [
+        [
+          [
+            59.327106,
+            18.07135
+          ],
+          [
+            59.327106,
+            18.071614
+          ],
+          [
+            59.32724,
+            18.071614
+          ],
+          [
+            59.32724,
+            18.07135
+          ],
+          [
+            59.327106,
+            18.07135
+          ]
+        ],
+        [
+          [
+            59.326495,
+            18.070681
+          ],
+          [
+            59.326495,
+            18.070927
+          ],
+          [
+            59.327348,
+            18.070927
+          ],
+          [
+            59.327348,
+            18.070681
+          ],
+          [
+            59.326495,
+            18.070681
+          ]
+        ]
+      ]
+    },
+    {
+      "type": "ghost",
+      "label": {
+        "en": "New palace: half-built state",
+        "sv": "New palace: half-built state"
+      },
+      "from": 7,
+      "heights": [
+        6,
+        6,
+        3
+      ],
+      "confidence": "low",
+      "until": 8,
+      "rings": [
+        [
+          [
+            59.326405,
+            18.07061
+          ],
+          [
+            59.326405,
+            18.072724
+          ],
+          [
+            59.326567,
+            18.072724
+          ],
+          [
+            59.326567,
+            18.07061
+          ],
+          [
+            59.326405,
+            18.07061
+          ]
+        ],
+        [
+          [
+            59.326567,
+            18.072407
+          ],
+          [
+            59.326567,
+            18.072724
+          ],
+          [
+            59.327321,
+            18.072724
+          ],
+          [
+            59.327321,
+            18.072407
+          ],
+          [
+            59.326567,
+            18.072407
+          ]
+        ],
+        [
+          [
+            59.326567,
+            18.07061
+          ],
+          [
+            59.326567,
+            18.070927
+          ],
+          [
+            59.327321,
+            18.070927
+          ],
+          [
+            59.327321,
+            18.07061
+          ],
+          [
+            59.326567,
+            18.07061
+          ]
+        ]
+      ]
+    },
+    {
+      "type": "ghost",
+      "label": {
+        "en": "Stora Bollhuset",
+        "sv": "Stora Bollhuset"
+      },
+      "from": 1,
+      "heights": [
+        10
+      ],
+      "confidence": "low",
+      "rings": [
+        [
+          [
+            59.326078,
+            18.073598
+          ],
+          [
+            59.326078,
+            18.074302
+          ],
+          [
+            59.326222,
+            18.074302
+          ],
+          [
+            59.326222,
+            18.073598
+          ],
+          [
+            59.326078,
+            18.073598
+          ]
+        ]
+      ]
+    }
+  ]
+}

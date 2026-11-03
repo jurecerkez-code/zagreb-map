@@ -1,0 +1,13 @@
+import { chromium } from '@playwright/test';
+const b = await chromium.launch({ args: ['--ignore-gpu-blocklist', '--enable-unsafe-swiftshader'] });
+const p = await b.newPage({ viewport: { width: 1400, height: 900 } });
+const errs = []; p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
+await p.goto(process.argv[2] || 'http://127.0.0.1:8642/');
+await p.locator('#loading').waitFor({ state: 'hidden', timeout: 120000 });
+const grab = () => p.evaluate(() => [...document.querySelectorAll('dialog[open], [role=dialog]')].filter(e => e.offsetParent || e.open).map(e => e.innerText).join('\n---\n'));
+await p.getByRole('button', { name: 'About', exact: true }).first().click(); await p.waitForTimeout(1200);
+const about = await grab();
+await p.getByText("What's new", { exact: true }).first().click(); await p.waitForTimeout(1200);
+const news = await grab();
+console.log(JSON.stringify({ errs, about: about.slice(1500, 4200), news: news.slice(0, 1500) }, null, 1));
+await b.close();

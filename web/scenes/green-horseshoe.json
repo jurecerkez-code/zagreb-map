@@ -1,0 +1,402 @@
+{
+ "id": "green-horseshoe",
+ "title": {
+  "en": "Lenuci's Green Horseshoe",
+  "sv": "Lenucijeva zelena potkova"
+ },
+ "year": 1889,
+ "sensitive": false,
+ "beats": [
+  {
+   "n": 1,
+   "camera": {
+    "lat": 45.795224,
+    "lon": 15.9745,
+    "height_m": 900
+   },
+   "target": {
+    "lat": 45.8078,
+    "lon": 15.9745
+   },
+   "duration_s": 9,
+   "year": 1882,
+   "caption": {
+    "en": "In 1882 the urbanist Milan Lenuci drew a U of park squares for the Lower Town. People call it the Green Horseshoe.",
+    "sv": "Urbanist Milan Lenuci osmislio je 1882. niz trgova s perivojima u obliku slova U za Donji grad. Zovu ga Zelena potkova."
+   },
+   "sources": [
+    "Lenuci Horseshoe"
+   ],
+   "photo": {
+    "src": "img/green-horseshoe-1.jpg",
+    "width": 1200,
+    "height": 900,
+    "caption": {
+     "en": "Zrinjevac, the first square of Lenuci's horseshoe",
+     "sv": "Zrinjevac, prvi trg Lenucijeve potkove"
+    },
+    "credit": {
+     "author": "Sharon Hahn Darlin",
+     "licence": "CC BY 2.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Zrinjevac_Park,_Zagreb,_Croatia_-_July_2022.jpg"
+    }
+   }
+  },
+  {
+   "n": 2,
+   "camera": {
+    "lat": 45.807266,
+    "lon": 15.980893,
+    "height_m": 290
+   },
+   "target": {
+    "lat": 45.811,
+    "lon": 15.9778
+   },
+   "duration_s": 8,
+   "year": 1888,
+   "caption": {
+    "en": "It has seven squares on three straight lines. Going clockwise, it starts at Zrinjevac.",
+    "sv": "Ima sedam trgova na tri ravne crte. U smjeru kazaljke na satu počinje Zrinjevcem."
+   },
+   "sources": [
+    "Lenuci Horseshoe"
+   ]
+  },
+  {
+   "n": 3,
+   "camera": {
+    "lat": 45.809089,
+    "lon": 15.979288,
+    "height_m": 310
+   },
+   "target": {
+    "lat": 45.8044358,
+    "lon": 15.9787044
+   },
+   "duration_s": 9,
+   "year": 1892,
+   "caption": {
+    "en": "The main railway station closes King Tomislav Square in the south. Ferenc Pfaff designed it, and it opened on 18 August 1892.",
+    "sv": "Glavni kolodvor zatvara Trg kralja Tomislava s juga. Projektirao ga je Ferenc Pfaff, a otvoren je 18. kolovoza 1892."
+   },
+   "sources": [
+    "Zagreb Glavni kolodvor",
+    "landmark card"
+   ],
+   "photo": {
+    "src": "img/2f22564ced4a830d1b8a4a8f61407388732ca916.jpg",
+    "width": 800,
+    "height": 450,
+    "credit": {
+     "author": "Miroslav.vajdic",
+     "licence": "CC BY-SA 4.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Zagreb_Glavni_kolodvor_1d_-_front.jpg",
+     "file": "File:Zagreb Glavni kolodvor 1d - front.jpg"
+    },
+    "caption": {
+     "en": "The main station today",
+     "sv": "Glavni kolodvor danas"
+    }
+   }
+  },
+  {
+   "n": 4,
+   "camera": {
+    "lat": 45.803846,
+    "lon": 15.976848,
+    "height_m": 240
+   },
+   "target": {
+    "lat": 45.8072222,
+    "lon": 15.9786111
+   },
+   "duration_s": 10,
+   "year": 1898,
+   "caption": {
+    "en": "The Art Pavilion has an iron frame made for the 1896 Millennium Exhibition in Budapest. It was shipped to Zagreb and opened here in 1898.",
+    "sv": "Umjetnički paviljon ima željeznu konstrukciju izrađenu za milenijsku izložbu u Budimpešti 1896. Prenesen je u Zagreb i otvoren 1898."
+   },
+   "sources": [
+    "Art Pavilion",
+    "landmark card"
+   ],
+   "photo": {
+    "src": "img/3f6260a676f6f2f5578cb600e5be2811ecc2adda.jpg",
+    "width": 800,
+    "height": 600,
+    "credit": {
+     "author": "Ex13",
+     "licence": "CC BY-SA 3.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Umjetni%C4%8Dki_paviljon_Zagreb.jpg",
+     "file": "File:Umjetnički paviljon Zagreb.jpg"
+    },
+    "caption": {
+     "en": "The Art Pavilion on King Tomislav Square",
+     "sv": "Umjetnički paviljon na Trgu kralja Tomislava"
+    }
+   }
+  },
+  {
+   "n": 5,
+   "camera": {
+    "lat": 45.798883,
+    "lon": 15.97333,
+    "height_m": 400
+   },
+   "target": {
+    "lat": 45.8047,
+    "lon": 15.9726
+   },
+   "duration_s": 8,
+   "year": 1898,
+   "caption": {
+    "en": "In 1889 the new Botanical Garden joined the two ends of the U.",
+    "sv": "Godine 1889. novi Botanički vrt spojio je dva kraja slova U."
+   },
+   "sources": [
+    "Lenuci Horseshoe"
+   ]
+  },
+  {
+   "n": 6,
+   "camera": {
+    "lat": 45.802397,
+    "lon": 15.968339,
+    "height_m": 270
+   },
+   "target": {
+    "lat": 45.8061111,
+    "lon": 15.9702778
+   },
+   "duration_s": 9,
+   "year": 1913,
+   "caption": {
+    "en": "On Marulić Square a building for the University Library and the Land Archive was finished in 1913. The State Archives are still in it.",
+    "sv": "Na Marulićevu trgu 1913. dovršena je zgrada za Sveučilišnu knjižnicu i Zemaljski arhiv. U njoj je i danas Hrvatski državni arhiv."
+   },
+   "sources": [
+    "Hrvatski državni arhiv (hr)",
+    "landmark card"
+   ]
+  },
+  {
+   "n": 7,
+   "camera": {
+    "lat": 45.805617,
+    "lon": 15.967972,
+    "height_m": 280
+   },
+   "target": {
+    "lat": 45.8095,
+    "lon": 15.97
+   },
+   "duration_s": 9,
+   "year": 1913,
+   "caption": {
+    "en": "On Republic of Croatia Square stands the National Theatre by Fellner and Helmer. It opened in 1895, when Emperor Franz Joseph visited.",
+    "sv": "Na Trgu Republike Hrvatske stoji Hrvatsko narodno kazalište, djelo Fellnera i Helmera. Otvoreno je 1895., za careva posjeta Zagrebu."
+   },
+   "sources": [
+    "Croatian National Theatre",
+    "HNK u Zagrebu (hr)",
+    "landmark card"
+   ],
+   "photo": {
+    "src": "img/805bbe60e0e4cb1814bf761185c941125d6f271c.jpg",
+    "width": 800,
+    "height": 533,
+    "credit": {
+     "author": "Bernard Gagnon",
+     "licence": "CC BY-SA 4.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Croatian_National_Theater,_Zagreb_01.jpg",
+     "file": "File:Croatian National Theater, Zagreb 01.jpg"
+    },
+    "caption": {
+     "en": "The Croatian National Theatre",
+     "sv": "Hrvatsko narodno kazalište"
+    }
+   }
+  },
+  {
+   "n": 8,
+   "camera": {
+    "lat": 45.808177,
+    "lon": 15.963713,
+    "height_m": 250
+   },
+   "target": {
+    "lat": 45.8094056,
+    "lon": 15.9685575
+   },
+   "duration_s": 8,
+   "year": 1913,
+   "caption": {
+    "en": "Beside it is Hermann Bollé's building for the Museum of Arts and Crafts and its school, finished in 1888.",
+    "sv": "Pokraj njega je zgrada Muzeja za umjetnost i obrt i njegove škole, djelo Hermanna Bolléa iz 1888."
+   },
+   "sources": [
+    "Museum of Arts and Crafts",
+    "landmark card"
+   ]
+  },
+  {
+   "n": 9,
+   "camera": {
+    "lat": 45.793617,
+    "lon": 15.969163,
+    "height_m": 1000
+   },
+   "target": {
+    "lat": 45.8075,
+    "lon": 15.9745
+   },
+   "duration_s": 8,
+   "year": 2026,
+   "caption": {
+    "en": "Today the horseshoe is still a chain of squares with parks, lined with museums and institutions.",
+    "sv": "Potkova je i danas niz trgova s perivojima, uz koje su muzeji i ustanove."
+   },
+   "sources": [
+    "Lenuci Horseshoe"
+   ]
+  }
+ ],
+ "ready": true,
+ "overlays": [
+  {
+   "type": "route",
+   "coords": [
+    [
+     45.8125,
+     15.978
+    ],
+    [
+     45.811,
+     15.9778
+    ],
+    [
+     45.8095,
+     15.9784
+    ],
+    [
+     45.8072,
+     15.9786
+    ],
+    [
+     45.8052,
+     15.9788
+    ],
+    [
+     45.8049,
+     15.976
+    ],
+    [
+     45.8047,
+     15.9726
+    ],
+    [
+     45.8052,
+     15.9703
+    ],
+    [
+     45.8061,
+     15.9703
+    ],
+    [
+     45.8074,
+     15.9701
+    ],
+    [
+     45.8095,
+     15.97
+    ],
+    [
+     45.8108,
+     15.9705
+    ]
+   ],
+   "label": {
+    "en": "The Green Horseshoe",
+    "sv": "Zelena potkova"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.811,
+    15.9778
+   ],
+   "label": {
+    "en": "Zrinjevac",
+    "sv": "Zrinjevac"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.8044358,
+    15.9787044
+   ],
+   "label": {
+    "en": "Glavni kolodvor",
+    "sv": "Glavni kolodvor"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.8072222,
+    15.9786111
+   ],
+   "label": {
+    "en": "Umjetnički paviljon",
+    "sv": "Umjetnički paviljon"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.8047,
+    15.9726
+   ],
+   "label": {
+    "en": "Botanički vrt",
+    "sv": "Botanički vrt"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.8061111,
+    15.9702778
+   ],
+   "label": {
+    "en": "Marulićev trg",
+    "sv": "Marulićev trg"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.8095,
+    15.97
+   ],
+   "label": {
+    "en": "HNK",
+    "sv": "HNK"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.8094056,
+    15.9685575
+   ],
+   "label": {
+    "en": "Muzej za umjetnost i obrt",
+    "sv": "Muzej za umjetnost i obrt"
+   }
+  }
+ ]
+}

@@ -1,0 +1,261 @@
+{
+ "id": "earthquake-1880",
+ "title": {
+  "en": "The 1880 earthquake and the rebuilding",
+  "sv": "Potres 1880. i obnova"
+ },
+ "year": 1880,
+ "sensitive": false,
+ "beats": [
+  {
+   "n": 1,
+   "camera": {
+    "lat": 45.798806,
+    "lon": 15.968865,
+    "height_m": 1050
+   },
+   "target": {
+    "lat": 45.814,
+    "lon": 15.9768
+   },
+   "duration_s": 9,
+   "year": 1880,
+   "caption": {
+    "en": "On 9 November 1880 an earthquake struck Zagreb. Its epicentre was on Medvednica, the mountain north of the city.",
+    "sv": "Dana 9. studenoga 1880. Zagreb je pogodio potres. Epicentar mu je bio na Medvednici, planini sjeverno od grada."
+   },
+   "sources": [
+    "1880 Zagreb earthquake",
+    "Potres u Zagrebu 1880. (hr)"
+   ],
+   "photo": {
+    "src": "img/earthquake-1880-1.jpg",
+    "width": 1200,
+    "height": 1289,
+    "caption": {
+     "en": "Damage after the earthquake of 9 November 1880",
+     "sv": "Šteta nakon potresa 9. studenoga 1880."
+    },
+    "credit": {
+     "author": "Hinko Krapek",
+     "licence": "Public domain",
+     "page": "https://commons.wikimedia.org/wiki/File:67c_potres_1880_katedrala_BDM_Zagreb.jpg"
+    }
+   }
+  },
+  {
+   "n": 2,
+   "camera": {
+    "lat": 45.810399,
+    "lon": 15.976371,
+    "height_m": 320
+   },
+   "target": {
+    "lat": 45.8144444,
+    "lon": 15.9797222
+   },
+   "duration_s": 9,
+   "year": 1880,
+   "caption": {
+    "en": "Many buildings were damaged. In the cathedral the quake brought down the vaults and damaged the bell tower.",
+    "sv": "Mnoge su zgrade oštećene. U katedrali je potres srušio svodove i oštetio zvonik."
+   },
+   "sources": [
+    "1880 Zagreb earthquake",
+    "Potres u Zagrebu 1880. (hr)"
+   ],
+   "photo": {
+    "src": "img/79418bb53e1adab8729f1dcd0803fe75472c7d47.jpg",
+    "width": 800,
+    "height": 548,
+    "credit": {
+     "author": "Ivan Standl",
+     "licence": "Public domain",
+     "page": "https://commons.wikimedia.org/wiki/File:Zagreb_Cathedral_interior_1880.jpg",
+     "file": "File:Zagreb Cathedral interior 1880.jpg"
+    },
+    "caption": {
+     "en": "Inside the cathedral after the earthquake, 1880 (photo Ivan Standl)",
+     "sv": "Unutrašnjost katedrale nakon potresa, 1880. (snimio Ivan Standl)"
+    }
+   }
+  },
+  {
+   "n": 3,
+   "camera": {
+    "lat": 45.813034,
+    "lon": 15.975374,
+    "height_m": 250
+   },
+   "target": {
+    "lat": 45.816411,
+    "lon": 15.9736107
+   },
+   "duration_s": 10,
+   "year": 1882,
+   "caption": {
+    "en": "St Mark's Church was being renovated when the quake hit. The work ended in 1882, in neo-Gothic style, to designs by Friedrich von Schmidt and Hermann Bollé.",
+    "sv": "Crkva sv. Marka bila je u obnovi kad je udario potres. Radovi su završeni 1882. u neogotičkom stilu, prema nacrtima Friedricha von Schmidta i Hermanna Bolléa."
+   },
+   "sources": [
+    "St. Mark's Church",
+    "landmark card"
+   ],
+   "photo": {
+    "src": "img/1eb9ea4c6fdbc9746fa3ffddaeb38b29bc78f653.jpg",
+    "width": 800,
+    "height": 471,
+    "credit": {
+     "author": "Paula Borkovic",
+     "licence": "CC BY-SA 4.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Roof_of_St,_Mark%27s_Church,_Zagreb.jpg",
+     "file": "File:Roof of St, Mark's Church, Zagreb.jpg"
+    },
+    "caption": {
+     "en": "The tiled roof of St Mark's",
+     "sv": "Krov crkve sv. Marka"
+    }
+   }
+  },
+  {
+   "n": 4,
+   "camera": {
+    "lat": 45.811995,
+    "lon": 15.971638,
+    "height_m": 240
+   },
+   "target": {
+    "lat": 45.8152024,
+    "lon": 15.9733127
+   },
+   "duration_s": 9,
+   "year": 1886,
+   "caption": {
+    "en": "Bollé also built the Greek Catholic church of Saints Cyril and Methodius, on the site of a chapel the quake had damaged.",
+    "sv": "Bollé je projektirao i grkokatoličku crkvu sv. Ćirila i Metoda, na mjestu kapele oštećene u potresu."
+   },
+   "sources": [
+    "Zagreb (hr)",
+    "landmark card"
+   ]
+  },
+  {
+   "n": 5,
+   "camera": {
+    "lat": 45.808704,
+    "lon": 15.976725,
+    "height_m": 400
+   },
+   "target": {
+    "lat": 45.8144444,
+    "lon": 15.9797222
+   },
+   "duration_s": 10,
+   "year": 1902,
+   "caption": {
+    "en": "The cathedral was rebuilt in neo-Gothic style, led by Hermann Bollé to plans by Friedrich von Schmidt. Its spires rise about 108 metres.",
+    "sv": "Katedrala je obnovljena u neogotičkom stilu. Radove je vodio Hermann Bollé prema nacrtima Friedricha von Schmidta. Tornjevi su visoki oko 108 metara."
+   },
+   "sources": [
+    "Zagreb Cathedral",
+    "Zagrebačka katedrala (hr)",
+    "landmark card"
+   ],
+   "photo": {
+    "src": "img/863bd9c78b2697858c7d1a3589b7f508d6a04d5a.jpg",
+    "width": 800,
+    "height": 859,
+    "credit": {
+     "author": "Hinko Krapek",
+     "licence": "Public domain",
+     "page": "https://commons.wikimedia.org/wiki/File:67c_potres_1880_katedrala_BDM_Zagreb.jpg",
+     "file": "File:67c potres 1880 katedrala BDM Zagreb.jpg"
+    },
+    "caption": {
+     "en": "The old cathedral after the earthquake, 1880 (photo Hinko Krapek)",
+     "sv": "Stara katedrala nakon potresa, 1880. (snimio Hinko Krapek)"
+    }
+   }
+  },
+  {
+   "n": 6,
+   "camera": {
+    "lat": 45.793229,
+    "lon": 15.9755,
+    "height_m": 1000
+   },
+   "target": {
+    "lat": 45.8085,
+    "lon": 15.9755
+   },
+   "duration_s": 10,
+   "year": 1914,
+   "caption": {
+    "en": "Between 1880 and 1914 the city grew fast and took its present layout. Many of the dated Lower Town buildings on this map come from these years.",
+    "sv": "Između 1880. i 1914. grad je brzo rastao i dobio današnji raspored. Mnoge datirane zgrade Donjeg grada na ovoj karti potječu iz tih godina."
+   },
+   "sources": [
+    "History of Zagreb",
+    "this map's data"
+   ]
+  },
+  {
+   "n": 7,
+   "camera": {
+    "lat": 45.810735,
+    "lon": 15.972121,
+    "height_m": 430
+   },
+   "target": {
+    "lat": 45.8144444,
+    "lon": 15.9797222
+   },
+   "duration_s": 10,
+   "year": 2026,
+   "caption": {
+    "en": "On 22 March 2020 the strongest earthquake since 1880 hit Zagreb. It damaged one of the cathedral's spires, and the restoration is still going on.",
+    "sv": "Dana 22. ožujka 2020. Zagreb je pogodio najjači potres nakon 1880. Oštetio je jedan od tornjeva katedrale, a obnova još traje."
+   },
+   "sources": [
+    "History of Zagreb",
+    "Zagreb Cathedral"
+   ]
+  }
+ ],
+ "ready": true,
+ "overlays": [
+  {
+   "type": "marker",
+   "at": [
+    45.8144444,
+    15.9797222
+   ],
+   "label": {
+    "en": "Katedrala",
+    "sv": "Katedrala"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.816411,
+    15.9736107
+   ],
+   "label": {
+    "en": "Crkva sv. Marka",
+    "sv": "Crkva sv. Marka"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.8152024,
+    15.9733127
+   ],
+   "label": {
+    "en": "Grkokatolička konkatedrala",
+    "sv": "Grkokatolička konkatedrala"
+   }
+  }
+ ]
+}

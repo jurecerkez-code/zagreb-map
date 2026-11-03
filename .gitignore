@@ -1,0 +1,23 @@
+.venv/
+data/
+web/data/
+__pycache__/
+.env*
+temp_trash/
+node_modules/
+test-results/
+playwright-report/
+.DS_Store
+dist/
+.wrangler/
+# throwaway probe scripts, kept out of the tree (the real tests live in web/test and tests/)
+_*.mjs
+.dist-versions.json
+# Takedown requests name the homes that asked (spec §6.3, Plan 4b): never committed
+pipeline/suppress.yml
+web/_shots/
+
+# Zagreb port: local check screenshots and backups
+/*.png
+*.orig
+*.pre-about

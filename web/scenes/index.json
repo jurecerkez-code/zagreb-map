@@ -1,0 +1,54 @@
+{
+  "scenes": [
+    {
+      "id": "two-hills",
+      "title": {
+        "en": "Two hills: Gradec and Kaptol",
+        "sv": "Dva brda: Gradec i Kaptol"
+      },
+      "year": 1242,
+      "beats": 8,
+      "ready": true
+    },
+    {
+      "id": "earthquake-1880",
+      "title": {
+        "en": "The 1880 earthquake and the rebuilding",
+        "sv": "Potres 1880. i obnova"
+      },
+      "year": 1880,
+      "beats": 7,
+      "ready": true
+    },
+    {
+      "id": "green-horseshoe",
+      "title": {
+        "en": "Lenuci's Green Horseshoe",
+        "sv": "Lenucijeva zelena potkova"
+      },
+      "year": 1889,
+      "beats": 9,
+      "ready": true
+    },
+    {
+      "id": "interwar-estates",
+      "title": {
+        "en": "Between the wars: new estates",
+        "sv": "Između dvaju ratova: nova naselja"
+      },
+      "year": 1923,
+      "beats": 8,
+      "ready": true
+    },
+    {
+      "id": "across-the-sava",
+      "title": {
+        "en": "Across the Sava: Novi Zagreb",
+        "sv": "Preko Save: Novi Zagreb"
+      },
+      "year": 1956,
+      "beats": 7,
+      "ready": true
+    }
+  ]
+}

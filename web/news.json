@@ -1,0 +1,14 @@
+[
+  {
+    "date": "2026-10-21",
+    "kind": "feature",
+    "title": {
+      "en": "All of Zagreb, building by building",
+      "sv": "Cijeli Zagreb, zgradu po zgradu"
+    },
+    "text": {
+      "en": "The map now covers the whole City of Zagreb, all 17 city districts: 297,377 buildings at their measured height from the City's ZG3D 2022 model, its 357,540 parts merged into buildings along OpenStreetMap footprints, on terrain from Medvednica to the Sava. Years are still scarce: 2,446 buildings (0.8%) have a year from an open record (the Zagreb Building Stock Model, Wikidata or OpenStreetMap), 4,183 interwar houses next to dated ones are estimated, and everything else is honestly marked Year unknown.",
+      "sv": "Karta sada pokriva cijeli Grad Zagreb, svih 17 gradskih četvrti: 297.377 zgrada u izmjerenoj visini iz modela ZG3D 2022 Grada Zagreba, njegovih 357.540 dijelova spojenih u zgrade prema obrisima iz OpenStreetMapa, na terenu od Medvednice do Save. Godina je još malo: 2.446 zgrada (0,8 %) ima godinu iz otvorenog izvora (Zagreb Building Stock Model, Wikidata ili OpenStreetMap), 4.183 međuratne kuće uz datirane su procijenjene, a sve ostalo je pošteno označeno kao godina nepoznata."
+    }
+  }
+]

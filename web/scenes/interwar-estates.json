@@ -1,0 +1,274 @@
+{
+ "id": "interwar-estates",
+ "title": {
+  "en": "Between the wars: new estates",
+  "sv": "Između dvaju ratova: nova naselja"
+ },
+ "year": 1923,
+ "sensitive": false,
+ "beats": [
+  {
+   "n": 1,
+   "camera": {
+    "lat": 45.787773,
+    "lon": 15.968247,
+    "height_m": 1500
+   },
+   "target": {
+    "lat": 45.808,
+    "lon": 15.985
+   },
+   "duration_s": 9,
+   "year": 1918,
+   "caption": {
+    "en": "In the 1920s Zagreb's population grew by 70 percent. New housing estates went up at the edge of the city.",
+    "sv": "U 1920-ima broj stanovnika Zagreba porastao je za 70 posto. Na rubu grada nicala su nova stambena naselja."
+   },
+   "sources": [
+    "History of Zagreb",
+    "Radović 1992 (IPU)"
+   ],
+   "photo": {
+    "src": "img/interwar-estates-1.jpg",
+    "width": 1200,
+    "height": 900,
+    "caption": {
+     "en": "Trg kralja Tomislava in the interwar years",
+     "sv": "Trg kralja Tomislava u međuratnim godinama"
+    },
+    "credit": {
+     "author": "Fred Romero from Paris, France",
+     "licence": "CC BY 2.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Zagreb_-_Trg_kralja_Tomislava_(4).jpg"
+    }
+   }
+  },
+  {
+   "n": 2,
+   "camera": {
+    "lat": 45.809932,
+    "lon": 16.018726,
+    "height_m": 430
+   },
+   "target": {
+    "lat": 45.81601,
+    "lon": 16.0219
+   },
+   "duration_s": 9,
+   "year": 1923,
+   "caption": {
+    "en": "In Maksimir, the Railway Colony: rows of houses with gardens for railway staff, beside the line where most of them worked.",
+    "sv": "U Maksimiru, Željeznička kolonija: kuće u nizu s vrtovima za željezničare, uz prugu na kojoj je većina njih radila."
+   },
+   "sources": [
+    "Radović 1992 (IPU)"
+   ]
+  },
+  {
+   "n": 3,
+   "camera": {
+    "lat": 45.812845,
+    "lon": 16.025711,
+    "height_m": 290
+   },
+   "target": {
+    "lat": 45.81601,
+    "lon": 16.0219
+   },
+   "duration_s": 10,
+   "year": 1927,
+   "caption": {
+    "en": "It was planned in 1923 and built by 1927. The City's heritage register dates it 1923, so on this map it stands from that year.",
+    "sv": "Planirana je 1923., a izgrađena do 1927. Gradski registar zaštite datira je u 1923., pa na ovoj karti stoji od te godine."
+   },
+   "sources": [
+    "Radović 1992 (IPU)",
+    "Grad Zagreb, KULTURA_ZASTITA"
+   ]
+  },
+  {
+   "n": 4,
+   "camera": {
+    "lat": 45.796316,
+    "lon": 15.945638,
+    "height_m": 370
+   },
+   "target": {
+    "lat": 45.80155,
+    "lon": 15.94837
+   },
+   "duration_s": 8,
+   "year": 1935,
+   "caption": {
+    "en": "In Trešnjevka, the estate of the Prva hrvatska štedionica savings bank was built in 1934 and 1935.",
+    "sv": "Na Trešnjevci je 1934. i 1935. izgrađeno naselje Prve hrvatske štedionice."
+   },
+   "sources": [
+    "Grad Zagreb, KULTURA_ZASTITA"
+   ]
+  },
+  {
+   "n": 5,
+   "camera": {
+    "lat": 45.806406,
+    "lon": 15.985332,
+    "height_m": 260
+   },
+   "target": {
+    "lat": 45.8099517,
+    "lon": 15.9871834
+   },
+   "duration_s": 8,
+   "year": 1938,
+   "caption": {
+    "en": "Ivan Meštrović designed this round exhibition hall, built in 1938 on today's Square of the Victims of Fascism.",
+    "sv": "Ivan Meštrović projektirao je ovu okruglu izložbenu dvoranu, sagrađenu 1938. na današnjem Trgu žrtava fašizma."
+   },
+   "sources": [
+    "Meštrović Pavilion",
+    "landmark card"
+   ],
+   "photo": {
+    "src": "img/1d43026ed0c5223c88213d3009459a3eb7f5cd96.jpg",
+    "width": 800,
+    "height": 600,
+    "credit": {
+     "author": "Branko Radovanović",
+     "licence": "CC BY-SA 4.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Me%C5%A1trovi%C4%87_Pavilion_20180428_5522.jpg",
+     "file": "File:Meštrović Pavilion 20180428 5522.jpg"
+    },
+    "caption": {
+     "en": "The Meštrović Pavilion",
+     "sv": "Meštrovićev paviljon"
+    }
+   }
+  },
+  {
+   "n": 6,
+   "camera": {
+    "lat": 45.808661,
+    "lon": 15.99227,
+    "height_m": 260
+   },
+   "target": {
+    "lat": 45.8099517,
+    "lon": 15.9871834
+   },
+   "duration_s": 8,
+   "year": 1938,
+   "caption": {
+    "en": "It was later a mosque and then the Museum of the Revolution. Since 1990 it has been the artists' house again.",
+    "sv": "Kasnije je bio džamija, a zatim Muzej revolucije. Od 1990. ponovno je dom likovnih umjetnika."
+   },
+   "sources": [
+    "Meštrović Pavilion"
+   ]
+  },
+  {
+   "n": 7,
+   "camera": {
+    "lat": 45.78685,
+    "lon": 15.963054,
+    "height_m": 410
+   },
+   "target": {
+    "lat": 45.79259,
+    "lon": 15.96605
+   },
+   "duration_s": 10,
+   "year": 1940,
+   "caption": {
+    "en": "In 1939 the architect Vlado Antolić planned Cvjetno naselje, the first planned estate by the Sava. Its houses date from 1939 and 1940.",
+    "sv": "Arhitekt Vlado Antolić osmislio je 1939. Cvjetno naselje, prvo plansko naselje uz Savu. Kuće su iz 1939. i 1940."
+   },
+   "sources": [
+    "Cvjetno naselje (hr)",
+    "Grad Zagreb, KULTURA_ZASTITA"
+   ],
+   "photo": {
+    "src": "img/8110312cf15c91bbd004f42f58a4b58584981272.jpg",
+    "width": 800,
+    "height": 600,
+    "credit": {
+     "author": "Flammard",
+     "licence": "CC BY-SA 3.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Cvjetno_naselje,_Zagreb.JPG",
+     "file": "File:Cvjetno naselje, Zagreb.JPG"
+    },
+    "caption": {
+     "en": "Cvjetno naselje in 2014, with later towers behind",
+     "sv": "Cvjetno naselje 2014., iza njega kasniji neboderi"
+    }
+   }
+  },
+  {
+   "n": 8,
+   "camera": {
+    "lat": 45.77346,
+    "lon": 15.963288,
+    "height_m": 1700
+   },
+   "target": {
+    "lat": 45.8,
+    "lon": 15.97
+   },
+   "duration_s": 8,
+   "year": 1941,
+   "caption": {
+    "en": "After the First World War the city reached towards the Sava, and the first embankment was built along the river.",
+    "sv": "Nakon Prvoga svjetskog rata grad se približio Savi, a uz rijeku je izgrađen prvi nasip."
+   },
+   "sources": [
+    "Cvjetno naselje (hr)"
+   ]
+  }
+ ],
+ "ready": true,
+ "overlays": [
+  {
+   "type": "marker",
+   "at": [
+    45.81601,
+    16.0219
+   ],
+   "label": {
+    "en": "Željeznička kolonija",
+    "sv": "Željeznička kolonija"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.80155,
+    15.94837
+   ],
+   "label": {
+    "en": "Prva hrvatska štedionica, Trešnjevka",
+    "sv": "Prva hrvatska štedionica, Trešnjevka"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.8099517,
+    15.9871834
+   ],
+   "label": {
+    "en": "Meštrovićev paviljon",
+    "sv": "Meštrovićev paviljon"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.79259,
+    15.96605
+   ],
+   "label": {
+    "en": "Cvjetno naselje",
+    "sv": "Cvjetno naselje"
+   }
+  }
+ ]
+}

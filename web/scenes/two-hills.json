@@ -1,0 +1,320 @@
+{
+ "id": "two-hills",
+ "title": {
+  "en": "Two hills: Gradec and Kaptol",
+  "sv": "Dva brda: Gradec i Kaptol"
+ },
+ "year": 1242,
+ "sensitive": false,
+ "beats": [
+  {
+   "n": 1,
+   "camera": {
+    "lat": 45.802538,
+    "lon": 15.969588,
+    "height_m": 900
+   },
+   "target": {
+    "lat": 45.8152,
+    "lon": 15.9762
+   },
+   "duration_s": 8,
+   "year": 1242,
+   "caption": {
+    "en": "Zagreb grew from two towns on two neighbouring hills: Gradec in the west and Kaptol in the east.",
+    "sv": "Zagreb je nastao od dvaju naselja na dva susjedna brežuljka: Gradeca na zapadu i Kaptola na istoku."
+   },
+   "sources": [
+    "Gornji grad",
+    "History of Zagreb"
+   ],
+   "photo": {
+    "src": "img/two-hills-1.jpg",
+    "width": 1200,
+    "height": 883,
+    "caption": {
+     "en": "The Stone Gate, the only gate of Gradec still standing",
+     "sv": "Kamenita vrata, jedina sačuvana vrata Gradeca"
+    },
+    "credit": {
+     "author": "Diego Delso",
+     "licence": "CC BY-SA 3.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Puerta_de_Piedra,_Zagreb,_Croacia,_2014-04-20,_DD_02.JPG"
+    }
+   }
+  },
+  {
+   "n": 2,
+   "camera": {
+    "lat": 45.808958,
+    "lon": 15.982587,
+    "height_m": 400
+   },
+   "target": {
+    "lat": 45.8144444,
+    "lon": 15.9797222
+   },
+   "duration_s": 8,
+   "year": 1242,
+   "caption": {
+    "en": "Kaptol was the bishop's town. The Diocese of Zagreb was founded here in 1094.",
+    "sv": "Kaptol je bio biskupov grad. Zagrebačka biskupija ovdje je osnovana 1094."
+   },
+   "sources": [
+    "Kaptol"
+   ]
+  },
+  {
+   "n": 3,
+   "camera": {
+    "lat": 45.810924,
+    "lon": 15.970745,
+    "height_m": 400
+   },
+   "target": {
+    "lat": 45.816411,
+    "lon": 15.9736107
+   },
+   "duration_s": 8,
+   "year": 1242,
+   "caption": {
+    "en": "In 1242 King Béla IV made Gradec a free royal city with the Golden Bull.",
+    "sv": "Kralj Bela IV. proglasio je 1242. Gradec slobodnim kraljevskim gradom Zlatnom bulom."
+   },
+   "sources": [
+    "Golden Bull"
+   ],
+   "photo": {
+    "src": "img/two-hills-3.jpg",
+    "width": 1200,
+    "height": 900,
+    "caption": {
+     "en": "St Mark's Church on Gradec's square",
+     "sv": "Crkva sv. Marka na Gradečevu trgu"
+    },
+    "credit": {
+     "author": "CroatianPalpatine",
+     "licence": "CC BY-SA 4.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Crkva_sv._Marka_Zagreb.jpg"
+    }
+   }
+  },
+  {
+   "n": 4,
+   "camera": {
+    "lat": 45.81038,
+    "lon": 15.972177,
+    "height_m": 280
+   },
+   "target": {
+    "lat": 45.8146268,
+    "lon": 15.9732508
+   },
+   "duration_s": 8,
+   "year": 1266,
+   "caption": {
+    "en": "The citizens built walls and towers, finished by 1266. Lotrščak tower guarded the southern gate.",
+    "sv": "Građani su podigli zidine i kule, dovršene do 1266. Kula Lotrščak čuvala je južna gradska vrata."
+   },
+   "sources": [
+    "Lotrščak Tower",
+    "landmark card"
+   ],
+   "photo": {
+    "src": "img/55ffe1b772892b762d686e0108ac11f9f7d384e1.jpg",
+    "width": 800,
+    "height": 533,
+    "credit": {
+     "author": "Bernard Gagnon",
+     "licence": "CC BY-SA 4.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Lotr%C5%A1%C4%8Dak_Tower,_Zagreb.jpg",
+     "file": "File:Lotrščak Tower, Zagreb.jpg"
+    },
+    "caption": {
+     "en": "Lotrščak tower today",
+     "sv": "Kula Lotrščak danas"
+    }
+   }
+  },
+  {
+   "n": 5,
+   "camera": {
+    "lat": 45.810088,
+    "lon": 15.975557,
+    "height_m": 450
+   },
+   "target": {
+    "lat": 45.8168,
+    "lon": 15.9764
+   },
+   "duration_s": 9,
+   "year": 1667,
+   "caption": {
+    "en": "Between the hills ran the Medveščak stream, where Tkalčićeva street is today. In 1667 the two towns clashed over a bridge across it.",
+    "sv": "Između brda tekao je potok Medveščak, gdje je danas Tkalčićeva ulica. Godine 1667. dva su se grada sukobila oko mosta preko njega."
+   },
+   "sources": [
+    "History of Zagreb"
+   ]
+  },
+  {
+   "n": 6,
+   "camera": {
+    "lat": 45.814003,
+    "lon": 15.979765,
+    "height_m": 250
+   },
+   "target": {
+    "lat": 45.8158,
+    "lon": 15.9753
+   },
+   "duration_s": 8,
+   "year": 1760,
+   "caption": {
+    "en": "The Stone Gate is the only one of the four town gates still standing. It took its present form in 1760.",
+    "sv": "Kamenita vrata jedina su sačuvana od četiriju gradskih vrata. Današnji oblik dobila su 1760."
+   },
+   "sources": [
+    "Gornji grad",
+    "Kamenita vrata (hr)",
+    "landmark card"
+   ],
+   "photo": {
+    "src": "img/1774911ba5845f55a6ed722c40f9dc876a83bed0.jpg",
+    "width": 800,
+    "height": 1067,
+    "credit": {
+     "author": "Suradnik13",
+     "licence": "CC BY-SA 4.0",
+     "page": "https://commons.wikimedia.org/wiki/File:Kamenita_vrata_W.jpg",
+     "file": "File:Kamenita vrata W.jpg"
+    },
+    "caption": {
+     "en": "The Stone Gate from the Upper Town side",
+     "sv": "Kamenita vrata s gornjogradske strane"
+    }
+   }
+  },
+  {
+   "n": 7,
+   "camera": {
+    "lat": 45.797961,
+    "lon": 15.972395,
+    "height_m": 1000
+   },
+   "target": {
+    "lat": 45.813,
+    "lon": 15.9762
+   },
+   "duration_s": 8,
+   "year": 1850,
+   "caption": {
+    "en": "In 1850 Gradec, Kaptol and the settlements around them were joined into one city: Zagreb.",
+    "sv": "Godine 1850. Gradec, Kaptol i okolna naselja spojeni su u jedan grad: Zagreb."
+   },
+   "sources": [
+    "History of Zagreb",
+    "Zagreb (hr)"
+   ]
+  },
+  {
+   "n": 8,
+   "camera": {
+    "lat": 45.787523,
+    "lon": 15.979196,
+    "height_m": 1350
+   },
+   "target": {
+    "lat": 45.809,
+    "lon": 15.9765
+   },
+   "duration_s": 8,
+   "year": 2026,
+   "caption": {
+    "en": "From the two hills the city spread south across the plain, towards the Sava.",
+    "sv": "S dvaju brda grad se širio na jug preko ravnice, prema Savi."
+   },
+   "sources": [
+    "History of Zagreb"
+   ]
+  }
+ ],
+ "ready": true,
+ "overlays": [
+  {
+   "type": "route",
+   "coords": [
+    [
+     45.8205,
+     15.976
+    ],
+    [
+     45.8185,
+     15.9762
+    ],
+    [
+     45.8165,
+     15.9764
+    ],
+    [
+     45.815,
+     15.9767
+    ],
+    [
+     45.8137,
+     15.9771
+    ]
+   ],
+   "label": {
+    "en": "Medveščak stream, today Tkalčićeva street (approximate)",
+    "sv": "Potok Medveščak, danas Tkalčićeva ulica (približno)"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.816411,
+    15.9736107
+   ],
+   "label": {
+    "en": "Gradec",
+    "sv": "Gradec"
+   },
+   "always": true
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.8144444,
+    15.9797222
+   ],
+   "label": {
+    "en": "Kaptol",
+    "sv": "Kaptol"
+   },
+   "always": true
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.8146268,
+    15.9732508
+   ],
+   "label": {
+    "en": "Lotrščak",
+    "sv": "Lotrščak"
+   }
+  },
+  {
+   "type": "marker",
+   "at": [
+    45.8158,
+    15.9753
+   ],
+   "label": {
+    "en": "Kamenita vrata",
+    "sv": "Kamenita vrata"
+   }
+  }
+ ]
+}

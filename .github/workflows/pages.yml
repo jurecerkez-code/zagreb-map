@@ -1,0 +1,35 @@
+name: Pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Prune data versions the site does not serve
+        run: |
+          current=$(python3 -c "import json;print(json.load(open('web/data/current.json'))['version'])")
+          echo "serving $current"
+          for d in web/data/v*; do
+            [ -d "$d" ] || continue
+            [ "$(basename "$d")" = "$current" ] || rm -rf "$d"
+          done
+          du -sh web
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deploy
+        uses: actions/deploy-pages@v4

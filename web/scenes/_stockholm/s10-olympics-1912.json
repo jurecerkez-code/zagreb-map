@@ -1,0 +1,462 @@
+{
+  "id": "s10-olympics-1912",
+  "title": {
+    "en": "The Stockholm Olympics, 1912",
+    "sv": "Olympiska spelen i Stockholm 1912"
+  },
+  "year": 1912,
+  "sensitive": true,
+  "beats": [
+    {
+      "n": 1,
+      "camera": {
+        "lat": 59.34107,
+        "lon": 18.07589,
+        "height_m": 418
+      },
+      "target": {
+        "lat": 59.345278,
+        "lon": 18.078889
+      },
+      "duration_s": 10,
+      "caption": {
+        "en": "Stockholm gets the 1912 Games in 1909. Work on a stadium starts in November 1910, designed by the architect Torben Grut.",
+        "sv": "Stockholm får spelen 1912 år 1909. Bygget av en arena börjar i november 1910, ritad av arkitekten Torben Grut."
+      },
+      "sources": [
+        "sv Wikipedia: Stockholms stadion (IOC choice 28 May 1909",
+        "foundations from 23 November 1910",
+        "architect Torben Grut",
+        "builders Kreuger & Toll)"
+      ],
+      "photo": {
+        "src": "img/c2463e8a833e561494cdfef0d2f3733fe8af0c46.jpg",
+        "width": 800,
+        "height": 580,
+        "credit": {
+          "author": "unknown author",
+          "licence": "Public domain",
+          "page": "https://commons.wikimedia.org/wiki/File:Stockholms_stadion_bygget_1911-12.jpg",
+          "file": "File:Stockholms stadion bygget 1911-12.jpg"
+        },
+        "caption": {
+          "en": "Stadion under construction, 1911–1912",
+          "sv": "Stadion under bygget, 1911–1912"
+        }
+      }
+    },
+    {
+      "n": 2,
+      "camera": {
+        "lat": 59.344,
+        "lon": 18.0835,
+        "height_m": 180
+      },
+      "target": {
+        "lat": 59.345278,
+        "lon": 18.078889
+      },
+      "duration_s": 8,
+      "caption": {
+        "en": "Dark hand-made brick and a horseshoe plan after the ancient stadium. It opens on 1 June 1912.",
+        "sv": "Mörkt handslaget tegel och en hästskoform efter den antika arenan. Den invigs 1 juni 1912."
+      },
+      "sources": [
+        "sv Wikipedia: Stockholms stadion (Helsingborg brick",
+        "horseshoe plan",
+        "opened 1 June 1912)"
+      ],
+      "photo": {
+        "src": "img/5cda0fad4616ae5a5a6f61e7c2a13b2ffc0c589c.jpg",
+        "width": 800,
+        "height": 570,
+        "credit": {
+          "author": "unknown author",
+          "licence": "Public domain",
+          "page": "https://commons.wikimedia.org/wiki/File:Stockholms_stadion_1912.jpg",
+          "file": "File:Stockholms stadion 1912.jpg"
+        },
+        "caption": {
+          "en": "Stadion being built, 1912",
+          "sv": "Stadion byggs, 1912"
+        }
+      }
+    },
+    {
+      "n": 3,
+      "camera": {
+        "lat": 59.347,
+        "lon": 18.074,
+        "height_m": 200
+      },
+      "target": {
+        "lat": 59.345278,
+        "lon": 18.078889
+      },
+      "duration_s": 8,
+      "caption": {
+        "en": "The Games open here on 6 July 1912: 2,408 competitors from 28 nations, 48 of them women.",
+        "sv": "Spelen invigs här den 6 juli 1912: 2 408 deltagare från 28 länder, varav 48 kvinnor."
+      },
+      "sources": [
+        "en Wikipedia: 1912 Summer Olympics"
+      ],
+      "photo": {
+        "src": "img/c748b92c7d7a1690ea07fa2f054669485a07c206.jpg",
+        "width": 800,
+        "height": 228,
+        "credit": {
+          "author": "unknown author",
+          "licence": "Public domain",
+          "page": "https://commons.wikimedia.org/wiki/File:Stockholms_stadion_1912_invigning_panorama.jpg",
+          "file": "File:Stockholms stadion 1912 invigning panorama.jpg"
+        },
+        "caption": {
+          "en": "Stadion in a panorama long titled the opening; Commons dates it probably after 1912, as the north stand is missing",
+          "sv": "Stadion i ett panorama som kallats invigningen; Commons daterar det troligen efter 1912, eftersom norra läktaren saknas"
+        }
+      }
+    },
+    {
+      "n": 4,
+      "camera": {
+        "lat": 59.34235,
+        "lon": 18.07177,
+        "height_m": 380
+      },
+      "target": {
+        "lat": 59.345278,
+        "lon": 18.078889
+      },
+      "duration_s": 8,
+      "caption": {
+        "en": "Jim Thorpe of the USA wins the pentathlon and the new decathlon. Stripped of his medals in 1913, he was named sole champion again in 2022.",
+        "sv": "Jim Thorpe från USA vinner femkampen och den nya tiokampen. Medaljerna togs ifrån honom 1913; 2022 blev han åter ensam segrare."
+      },
+      "sources": [
+        "en Wikipedia: 1912 Summer Olympics"
+      ]
+    },
+    {
+      "n": 5,
+      "camera": {
+        "lat": 59.34789,
+        "lon": 18.08651,
+        "height_m": 380
+      },
+      "target": {
+        "lat": 59.345278,
+        "lon": 18.078889
+      },
+      "duration_s": 8,
+      "caption": {
+        "en": "Electric timing is used in athletics for the first time, and the Games hold the first Olympic art competitions.",
+        "sv": "Elektrisk tidtagning används i friidrott för första gången, och spelen har de första olympiska konsttävlingarna."
+      },
+      "sources": [
+        "en Wikipedia: 1912 Summer Olympics"
+      ]
+    },
+    {
+      "n": 6,
+      "camera": {
+        "lat": 59.25312,
+        "lon": 18.1993,
+        "height_m": 8507
+      },
+      "target": {
+        "lat": 59.3729,
+        "lon": 18.0428
+      },
+      "duration_s": 11,
+      "caption": {
+        "en": "The marathon on 14 July 1912 starts here at 13:48: 40.2 km out to Sollentuna and back, in strong heat.",
+        "sv": "Maratonloppet den 14 juli 1912 startar här kl. 13.48: 40,2 km ut till Sollentuna och tillbaka, i stark hetta."
+      },
+      "sources": [
+        "en Wikipedia: Athletics at the 1912 Summer Olympics – Men's marathon",
+        "sv Wikipedia: Shiso Kanaguri (turning point)",
+        "Commons: File:Marathon Stockholm 14 juli 1912.gif (start 13.48)"
+      ],
+      "photo": {
+        "src": "img/296b56bb602da116cf73bc0e4ea8012d0b3ad3c4.gif",
+        "width": 800,
+        "height": 524,
+        "credit": {
+          "author": "unknown author",
+          "licence": "Public domain",
+          "page": "https://commons.wikimedia.org/wiki/File:Marathon_Stockholm_14_juli_1912.gif",
+          "file": "File:Marathon Stockholm 14 juli 1912.gif"
+        },
+        "caption": {
+          "en": "The start of the marathon in Stadion, 14 July 1912",
+          "sv": "Starten av maratonloppet på Stadion, 14 juli 1912"
+        }
+      }
+    },
+    {
+      "n": 7,
+      "camera": {
+        "lat": 59.34851,
+        "lon": 18.0812,
+        "height_m": 321
+      },
+      "target": {
+        "lat": 59.345278,
+        "lon": 18.078889
+      },
+      "duration_s": 12,
+      "caption": {
+        "en": "Ken McArthur of South Africa wins. Francisco Lázaro of Portugal collapsed during the race and died the next day; a memorial was held here the following weekend.",
+        "sv": "Ken McArthur från Sydafrika vinner. Francisco Lázaro från Portugal föll ihop under loppet och dog dagen efter; en minnesstund hölls här helgen därpå."
+      },
+      "sources": [
+        "en Wikipedia: Athletics at the 1912 Summer Olympics – Men's marathon",
+        "en Wikipedia: Francisco Lázaro"
+      ]
+    },
+    {
+      "n": 8,
+      "camera": {
+        "lat": 59.34,
+        "lon": 18.07,
+        "height_m": 400
+      },
+      "target": {
+        "lat": 59.345278,
+        "lon": 18.078889
+      },
+      "duration_s": 8,
+      "caption": {
+        "en": "Stadion is a listed building since 1990 and the oldest Olympic arena still in use. Athletes have set 83 world records here.",
+        "sv": "Stadion är byggnadsminne sedan 1990 och den äldsta olympiska arenan som fortfarande används. Här har 83 världsrekord satts."
+      },
+      "sources": [
+        "sv Wikipedia: Stockholms stadion (byggnadsminne 1990",
+        "oldest active Olympic arena",
+        "83 world records)"
+      ]
+    }
+  ],
+  "ready": true,
+  "overlays": [
+    {
+      "type": "route",
+      "coords": [
+        [
+          59.345278,
+          18.078889
+        ],
+        [
+          59.385556,
+          18.061389
+        ],
+        [
+          59.466667,
+          17.918333
+        ],
+        [
+          59.428611,
+          17.935833
+        ],
+        [
+          59.345278,
+          18.078889
+        ]
+      ],
+      "label": {
+        "en": "Marathon route, 14 July 1912",
+        "sv": "Maratonbanan 14 juli 1912"
+      }
+    },
+    {
+      "type": "marker",
+      "at": [
+        59.345278,
+        18.078889
+      ],
+      "label": {
+        "en": "Stockholms stadion (start)",
+        "sv": "Stockholms stadion (start)"
+      }
+    },
+    {
+      "type": "marker",
+      "at": [
+        59.385556,
+        18.061389
+      ],
+      "label": {
+        "en": "Stocksund (5 km checkpoint)",
+        "sv": "Stocksund (5 km checkpoint)"
+      }
+    },
+    {
+      "type": "marker",
+      "at": [
+        59.466667,
+        17.918333
+      ],
+      "label": {
+        "en": "Turning point at Sollentuna church, 20 km",
+        "sv": "Vändpunkt vid Sollentuna kyrka, 20 km"
+      },
+      "always": true
+    },
+    {
+      "type": "marker",
+      "at": [
+        59.428611,
+        17.935833
+      ],
+      "label": {
+        "en": "Tureberg (about 30 km)",
+        "sv": "Tureberg (about 30 km)"
+      }
+    },
+    {
+      "type": "ghost",
+      "label": {
+        "en": "Stadion north stand (temporary 1912)",
+        "sv": "Stadion north stand (temporary 1912)"
+      },
+      "from": 1,
+      "heights": [
+        12
+      ],
+      "confidence": "low",
+      "rings": [
+        [
+          [
+            59.345907,
+            18.07792
+          ],
+          [
+            59.345907,
+            18.079858
+          ],
+          [
+            59.346069,
+            18.079858
+          ],
+          [
+            59.346069,
+            18.07792
+          ],
+          [
+            59.345907,
+            18.07792
+          ]
+        ]
+      ]
+    },
+    {
+      "type": "ghost",
+      "label": {
+        "en": "Swimming stadium in Djurgårdsbrunnsviken",
+        "sv": "Swimming stadium in Djurgårdsbrunnsviken"
+      },
+      "from": 1,
+      "heights": [
+        4
+      ],
+      "confidence": "low",
+      "rings": [
+        [
+          [
+            59.330477,
+            18.118587
+          ],
+          [
+            59.330477,
+            18.120525
+          ],
+          [
+            59.330801,
+            18.120525
+          ],
+          [
+            59.330801,
+            18.118587
+          ],
+          [
+            59.330477,
+            18.118587
+          ]
+        ]
+      ]
+    },
+    {
+      "type": "ghost",
+      "label": {
+        "en": "Tranebergs IP",
+        "sv": "Tranebergs IP"
+      },
+      "from": 1,
+      "heights": [
+        3
+      ],
+      "confidence": "low",
+      "rings": [
+        [
+          [
+            59.334386,
+            17.987137
+          ],
+          [
+            59.334386,
+            17.989075
+          ],
+          [
+            59.335014,
+            17.989075
+          ],
+          [
+            59.335014,
+            17.987137
+          ],
+          [
+            59.334386,
+            17.987137
+          ]
+        ]
+      ]
+    },
+    {
+      "type": "ghost",
+      "label": {
+        "en": "Råsunda IP (1910 ground)",
+        "sv": "Råsunda IP (1910 ground)"
+      },
+      "from": 1,
+      "heights": [
+        5
+      ],
+      "confidence": "low",
+      "rings": [
+        [
+          [
+            59.362428,
+            17.995338
+          ],
+          [
+            59.362428,
+            17.997278
+          ],
+          [
+            59.363056,
+            17.997278
+          ],
+          [
+            59.363056,
+            17.995338
+          ],
+          [
+            59.362428,
+            17.995338
+          ]
+        ]
+      ]
+    }
+  ]
+}

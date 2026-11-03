@@ -1,0 +1,180 @@
+# Every dataset the Zagreb build uses (contract C6 of the husforhus engine). Checked by pipeline/sources.py and s99.
+# The Stockholm register is kept as sources_stockholm.yml.orig.
+
+- id: zg3d_donji
+  url: https://data.zagreb.hr/dataset/zg3d-2022-3d-model-gz
+  publisher: Grad Zagreb
+  product: ZG3D 2022 (3D model Grada Zagreba)
+  dataset: ZG3D 2022
+  credit_as: {en: "© Grad Zagreb (data.zagreb.hr)", sv: "© Grad Zagreb (data.zagreb.hr)"}
+  licence: LicenseRef-OD-HR
+  licence_url: http://data.gov.hr/otvorena-dozvola
+  attribution: ZG3D 2022, © Grad Zagreb, Otvorena dozvola (modified, parts merged into buildings)
+  modified: true
+  corner: {en: "© Grad Zagreb", sv: "© Grad Zagreb"}
+  status: pending-O1   # the dataset page names the Croatian Open Licence (Otvorena dozvola); re-check before a release
+
+- id: zbsm
+  url: https://doi.org/10.5281/zenodo.13602015
+  publisher: Gojak, Antonio; Humski, Josipa (Zenodo)
+  product: Zagreb Building Stock Model
+  dataset: Zagreb Building Stock Model
+  licence: CC-BY-SA-4.0
+  licence_url: https://creativecommons.org/licenses/by-sa/4.0/
+  attribution: Zagreb Building Stock Model (Gojak, Humski 2024), CC BY-SA 4.0 (modified)
+  modified: true
+  corner: {en: "Zagreb Building Stock Model, CC BY-SA", sv: "Zagreb Building Stock Model, CC BY-SA"}
+  status: confirmed
+
+- id: osm
+  url: https://www.openstreetmap.org/copyright
+  publisher: OpenStreetMap contributors
+  product: OpenStreetMap (Geofabrik Croatia extract)
+  dataset: OpenStreetMap
+  licence: ODbL-1.0
+  licence_url: https://opendatacommons.org/licenses/odbl/1-0/
+  attribution: OpenStreetMap (Geofabrik Croatia extract), © OpenStreetMap contributors, ODbL (modified; footprints, start_date years, addresses, streets, water, boundaries, monuments and statues)
+  modified: true
+  corner: {en: "© OpenStreetMap contributors", sv: "© OpenStreetMap contributors"}
+  status: confirmed
+
+# Zagreb's trams (pipeline/s16_zagreb_trams.py): ZET's own GTFS, 19 lines, 105 shapes and 3,838 trips on 2026-11-03,
+# plus the live vehicle positions the page polls through scripts/serve.py. ZET's page
+# (preuzimanja/odredbe/datoteke-u-gtfs-formatu/669) states that both the static and the realtime feed, authored by
+# Zagrebački električni tramvaj d.o.o., are given under "Otvorenom dozvolom/Open Licence - The Republic of Croatia",
+# whose condition is naming the source. The rails drawn under the trams are OpenStreetMap's railway=tram ways, already
+# credited by the `osm` entry above: they get no second entry here.
+- id: zet_gtfs
+  url: https://zet.hr/gtfs-scheduled/latest
+  realtime_url: https://zet.hr/gtfs-rt-protobuf
+  publisher: Zagrebački električni tramvaj d.o.o. (ZET)
+  product: ZET GTFS static and realtime
+  dataset: ZET GTFS
+  licence: LicenseRef-OD-HR
+  licence_url: http://data.gov.hr/otvorena-dozvola
+  attribution: ZET GTFS static and realtime, Zagrebački električni tramvaj d.o.o. (ZET), Otvorena dozvola / Open Licence (Republika Hrvatska) (modified; tram routes only, trips, shapes and stops in the map's own coordinates)
+  modified: true
+  corner: {en: "ZET GTFS, Otvorena dozvola", sv: "ZET GTFS, Otvorena dozvola"}
+  status: confirmed
+
+- id: wikidata
+  url: https://www.wikidata.org/
+  publisher: Wikidata contributors
+  product: Wikidata
+  dataset: Wikidata
+  licence: CC0-1.0
+  licence_url: https://creativecommons.org/publicdomain/zero/1.0/
+  attribution: Wikidata (inception, opening and service-entry dates, labels, architects; dates, sculptors and materials of monuments), CC0
+  modified: false
+  status: confirmed
+
+- id: copernicus_dem
+  url: https://spacedata.copernicus.eu/collections/copernicus-digital-elevation-model
+  publisher: European Space Agency (Copernicus)
+  product: Copernicus DEM GLO-30
+  dataset: Copernicus DEM GLO-30
+  licence: LicenseRef-Copernicus
+  licence_url: https://spacedata.copernicus.eu/documents/20123/121286/CSCDA_ESA_Mission-specific+Annex_31_Oct_22.pdf
+  attribution: Produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved (terrain away from buildings)
+  modified: true
+  status: pending-O1   # check the GLO-30 licence's redistribution terms for derived terrain before a release
+
+# City of Zagreb layers (Gradski ured za digitalizaciju, email from Ivana Špendić, 21.10.2026): KULTURA_ZASTITA,
+# KD_pojedinacna, OBNOVA_PROCELJA and koristenje1986 may be used with the credit "Grad Zagreb" (koristenje1986 is not
+# used by the build yet). The City warns its working layers can be removed at any time: the copies downloaded on
+# 2026-10-20 under data/raw/year-sources are the source of truth (pipeline/zagreb_heritage.py).
+- id: gz_heritage
+  url: https://services8.arcgis.com/Usi0jGQwMmBUpFjr/arcgis/rest/services/KULTURA_ZASTITA/FeatureServer/0
+  layers:
+    - https://services8.arcgis.com/Usi0jGQwMmBUpFjr/arcgis/rest/services/KULTURA_ZASTITA/FeatureServer/0
+    - https://services8.arcgis.com/Usi0jGQwMmBUpFjr/arcgis/rest/services/KD_pojedinacna/FeatureServer/0
+    - https://services8.arcgis.com/Usi0jGQwMmBUpFjr/arcgis/rest/services/OBNOVA_PROCELJA/FeatureServer/0
+    - https://services8.arcgis.com/Usi0jGQwMmBUpFjr/arcgis/rest/services/koristenje1986_koristenje2020_view/FeatureServer/1
+  local_copy: data/raw/year-sources (kultura_zastita.geojson, kd_pojedinacna.geojson, obnova_procelja.geojson, k1986.geojson)
+  downloaded: 2026-10-20
+  publisher: Grad Zagreb
+  product: KULTURA_ZASTITA, KD_pojedinacna, OBNOVA_PROCELJA
+  dataset: City of Zagreb heritage layers (KULTURA_ZASTITA, KD_pojedinacna, OBNOVA_PROCELJA)
+  licence: LicenseRef-Permission
+  licence_url: https://services8.arcgis.com/Usi0jGQwMmBUpFjr/arcgis/rest/services/KULTURA_ZASTITA/FeatureServer/0
+  licence_note: {en: "email 21.10.2026", sv: "e-pošta 21.10.2026."}
+  terms: "Grad Zagreb, used with permission (email 21.10.2026, Gradski ured za digitalizaciju): KULTURA_ZASTITA, KD_pojedinacna, OBNOVA_PROCELJA and koristenje1986 may be used, credited 'Grad Zagreb'"
+  attribution: Grad Zagreb, used with permission (email 21.10.2026); construction years parsed from the layers' dating text (modified)
+  modified: true
+  status: confirmed
+
+# Tipologija_certifikat_02: the City allows it ONLY credited as 'radni materijal Grad Zagreb' (working data, not
+# verified). Its periods are area-level (yflag AREA, SRC_ZG_TIPO), below every heritage and ZBSM year.
+- id: gz_tipologija
+  url: https://services8.arcgis.com/Usi0jGQwMmBUpFjr/arcgis/rest/services/Tipologija_certifikat_02_View_/FeatureServer/0
+  local_copy: data/raw/year-sources/tipologija.geojson
+  downloaded: 2026-10-20
+  publisher: Grad Zagreb
+  credit_as: {en: "radni materijal Grad Zagreb (working data, not verified)", sv: "radni materijal Grad Zagreb (nije provjereno)"}
+  product: Tipologija_certifikat_02
+  dataset: Tipologija_certifikat_02
+  licence: LicenseRef-Permission
+  licence_url: https://services8.arcgis.com/Usi0jGQwMmBUpFjr/arcgis/rest/services/Tipologija_certifikat_02_View_/FeatureServer/0
+  licence_note: {en: "email 21.10.2026", sv: "e-pošta 21.10.2026."}
+  terms: "Grad Zagreb, used with permission (email 21.10.2026): only with the credit 'radni materijal Grad Zagreb' (not verified)"
+  attribution: radni materijal Grad Zagreb (not verified), used with permission (email 21.10.2026); construction-period classes (modified)
+  modified: true
+  status: confirmed
+
+# The City's orthophoto (Ortofoto2022 public WMS). Permission by email of 29.10.2026 (opendata@zagreb.hr) answering the
+# request sent the same morning: the service's imagery may be used as the texture of roofs and ground, credited
+# "Grad Zagreb"; local JPEG tiles may be kept; no other conditions. scripts/sample_ortho.py sampled roof and ground
+# colours for 297,013 of 298,675 buildings from it, and data/raw/ortho/ keeps the tiles that were read.
+- id: gz_orthofoto
+  url: https://geoportal.zagreb.hr/Public/Ortofoto2022_Public/MapServer/WMSServer
+  local_copy: data/raw/ortho
+  downloaded: 2026-10-29
+  publisher: Grad Zagreb
+  product: Ortofoto 2022 (CDOF 2022)
+  dataset: Grad Zagreb orthophoto 2022
+  licence: LicenseRef-Permission
+  licence_url: https://geoportal.zagreb.hr/Public/Ortofoto2022_Public/MapServer/WMSServer
+  licence_note: {en: "email 29.10.2026", sv: "e-pošta 29.10.2026."}
+  credit_as: {en: "Grad Zagreb", sv: "Grad Zagreb"}
+  terms: "Grad Zagreb, used with permission (email 29.10.2026, opendata@zagreb.hr): the public Ortofoto2022 WMS imagery may be used as the texture of roofs and ground, credited 'Grad Zagreb'; local JPEG tiles are allowed; no other conditions"
+  attribution: "Grad Zagreb orthophoto 2022, © Grad Zagreb, used with permission (email 29.10.2026); roof and ground colours sampled from the imagery (modified)"
+  modified: true
+  status: confirmed
+
+# The national Registar kulturnih dobara (Ministry of Culture and Media) on data.gov.hr: fills KD_pojedinacna's
+# empty dating by registration number (Oznaka_dobra = registarski_broj).
+- id: rkd
+  url: https://data.gov.hr/ckan/dataset/kulturna-dobra
+  local_copy: data/raw/year-sources/rkd.csv
+  downloaded: 2026-10-20
+  publisher: Ministarstvo kulture i medija RH
+  product: Registar kulturnih dobara Republike Hrvatske
+  dataset: Registar kulturnih dobara RH
+  licence: LicenseRef-OD-HR
+  licence_url: http://data.gov.hr/otvorena-dozvola
+  attribution: Registar kulturnih dobara Republike Hrvatske, Ministarstvo kulture i medija, Otvorena dozvola (modified)
+  modified: true
+  status: confirmed
+
+# The card's satellite line ("land still empty in 1990/2000"): text only, never a year (pipeline/zagreb_sat.py)
+- id: ghsl
+  url: https://human-settlement.emergency.copernicus.eu/download.php?ds=bu
+  publisher: European Commission, Joint Research Centre
+  product: GHS-BUILT-S R2023A
+  dataset: GHS-BUILT-S R2023A
+  licence: CC-BY-4.0
+  licence_url: https://creativecommons.org/licenses/by/4.0/
+  attribution: GHS-BUILT-S R2023A, European Commission JRC, CC BY 4.0 (modified; built-up epochs sampled per building)
+  modified: true
+  status: confirmed
+
+- id: wsf_evolution
+  url: https://geoservice.dlr.de/web/maps/eoc:wsfevolution
+  publisher: DLR (German Aerospace Center)
+  product: World Settlement Footprint Evolution
+  dataset: WSF Evolution
+  licence: CC-BY-4.0
+  licence_url: https://creativecommons.org/licenses/by/4.0/
+  attribution: World Settlement Footprint Evolution, DLR, CC BY 4.0 (modified; settlement years sampled per building)
+  modified: true
+  status: confirmed
