@@ -28,6 +28,10 @@ jobs:
             [ "$(basename "$d")" = "$current" ] || rm -rf "$d"
           done
           du -sh web
+      # Which commit the site is: the page shows it in the console and via __dbg.__build, so a stale tab stops
+      # impersonating the latest deploy and "is it live?" stops needing a human answer.
+      - name: Stamp the build
+        run: printf '{"sha":"%s","date":"%s"}\n' "${GITHUB_SHA}" "$(date -u +%FT%TZ)" > web/build.json
       - uses: actions/upload-pages-artifact@v3
         with:
           path: web

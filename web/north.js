@@ -32,3 +32,54 @@ export function turnAt(turn, now) {
 // The needle's CSS rotation in degrees, clockwise: at azimuth π/2 the camera stands east of the place and looks west,
 // so north is to the right of the screen. A tenth of a degree, so a still map writes no new style.
 export const needleDeg = theta => Math.round(wrapAngle(theta) * 1800 / Math.PI) / 10 || 0;
+
+// The compass, all its surfaces in one place. A press — pointer, tap on a phone, or the N key — snaps the camera
+// north on the frame it landed, wherever the camera was: first click works, fiftieth click works, because there is
+// no turn to state-misremember. The earlier lives of this bug were (a) an eased turn whose state guard could stick
+// and (b) a handler bound to a button node the header's redraw then replaced. Neither state nor node binding here:
+// the snap is immediate, the wiring hangs off the document, and the needle is drawn on every frame from the bearing
+// the camera actually has, so a dropped press would show as a wrong needle, not a stuck button.
+//
+// `endHolds` runs before the snap: a ride or a flight owns the camera, and a press asks for it back.
+export function makeNorth({ camera, controls, endHolds = () => {}, typingIn = () => false, doc = document,
+  buttonSel = '.north-open' } = {}) {
+  let at = null;
+  const btn = () => doc.querySelector(buttonSel);
+  const draw = rad => {
+    const d = needleDeg(rad);
+    if (d === at) return;
+    at = d;
+    const svg = btn()?.querySelector('svg');
+    if (svg) svg.style.transform = `rotate(${d}deg)`;
+  };
+  const snap = () => {
+    endHolds();
+    const p = camera.position, c = controls.target, h = Math.hypot(p.x - c.x, p.z - c.z);
+    if (h > 1e-3) p.set(c.x, p.y, c.z + h);      // due south of the place is azimuth 0: the map faces north
+    controls._sphericalDelta.set(0, 0, 0);       // the vendored OrbitControls (r186) inertia must not carry on
+    controls._panOffset.set(0, 0, 0);
+    controls.update();
+    at = null;
+    draw(0);
+  };
+  let pressedAt = -1e9;
+  const onPointer = e => {
+    if (!e.target?.closest?.(buttonSel)) return;
+    pressedAt = performance.now();
+    snap();
+  };
+  const onClick = e => {
+    if (!e.target?.closest?.(buttonSel)) return;
+    if (performance.now() - pressedAt < 700) return;   // pointerdown already snapped: one press, one snap
+    snap();
+  };
+  const onKey = e => {
+    if (e.key !== 'n' && e.key !== 'N') return;
+    if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || typingIn(e.target)) return;
+    snap();
+  };
+  doc.addEventListener('pointerdown', onPointer, true);
+  doc.addEventListener('click', onClick, true);
+  doc.addEventListener('keydown', onKey);
+  return { snap, draw, press: onPointer };
+}

@@ -38,7 +38,7 @@ import { makeGround, cutFactor, levelAt, LOD_TOL, parsePolygons, fadeWidth, fade
   FETCH_TIMEOUT_MS } from './terrain.js';
 import { RELIEF_KEY, RELIEF_MAX, RELIEF_STEP, initialRelief, reliefNote, reliefValue, ease } from './relief.js';
 import { howto } from './howto.js';
-import { needleDeg } from './north.js';
+import { makeNorth } from './north.js';
 import { mountSearch } from './searchbox.js';
 import { makeHighlight } from './highlight.js';
 import { aboutHtml, aboutTarget } from './about.js';
@@ -156,6 +156,12 @@ const switcher = mountSwitcher({ button: document.querySelector('.look-open'), p
   relief: reliefUi, layers: layerUi, extras: extraUi });
 const pageLookOnly = looks.subscribe(applyPageLook);
 const { version } = await getJson('data/current.json', { cache: 'no-cache' }).catch(halt);
+// Which commit the page was built from (pages.yml stamps it). Console log and __dbg.__build, so "is it live?"
+// answers itself: a stale tab names its stale build instead of impersonating today's deploy.
+getJson('build.json', { cache: 'no-store' }).then(b => {
+  window.__build = b;
+  if (b?.sha) console.info(`build ${String(b.sha).slice(0, 7)} · ${b.date}`);
+}).catch(() => {});
 const DATA = `data/${version}/`;
 // Load order: config, then pack0 (see Tiles). The other packs follow the first tile; land, water and labels follow the
 // first frame with buildings. The hot attributes come last, once the map stands: nothing on the first screen reads them.
@@ -3531,46 +3537,16 @@ function flipUnknown() {
 // needle follows the azimuth on every frame it changes (stepNeedle); the hero view and flights move the camera as
 // before, and the needle simply follows.
 const northBtn = () => document.querySelector('.north-open');
-let needleAt = null;
-function faceNorth() {
-  // North on the frame the button is pressed: no eased turn, no state to get stuck in. An eased turn ended in the same
-  // place when it finished, but it needed frames, and a press made while a flight or a ride held the camera (or in a
-  // frame-starved tab) could finish in a camera nobody redrew. That read as a button that works once per session.
-  if (ride) endRide();            // the ride owns the camera: a press is the viewer asking for it back
-  flight = null;                  // and a flight gives way the same way
-  const p = camera.position, c = controls.target, h = Math.hypot(p.x - c.x, p.z - c.z);
-  // Straight above the target the azimuth means nothing; otherwise put the camera due south of it, which is azimuth 0.
-  if (h > 1e-3) p.set(c.x, p.y, c.z + h);
-  // The vendored OrbitControls' (r186) own inertia: a fling just before must not carry on (web/test/north.test.mjs).
-  controls._sphericalDelta.set(0, 0, 0);
-  controls._panOffset.set(0, 0, 0);
-  controls.update();
-  needleAt = null;                // stepNeedle only writes a changed bearing, and this one must be written
-}
-function stepNeedle() {
-  const deg = needleDeg(controls.getAzimuthalAngle());
-  if (deg === needleAt) return;
-  needleAt = deg;
-  const svg = northBtn()?.querySelector('svg');
-  if (svg) svg.style.transform = `rotate(${deg}deg)`;
-}
-// The press is taken on the document, not on the button: the header is redrawn (the period's name, the count, the
-// language), and a handler bound to the first button stops arriving after that redraw. A touch that is answered on
-// the way down answers the click it would send too, so it is not counted twice.
-let northPressedAt = -1e9;
-addEventListener('pointerdown', e => {
-  if (!e.target?.closest?.('.north-open')) return;
-  northPressedAt = performance.now();
-  faceNorth();
-}, true);
-addEventListener('click', e => {
-  if (!e.target?.closest?.('.north-open')) return;
-  if (performance.now() - northPressedAt < 700) return;
-  faceNorth();
-}, true);
-addEventListener('keydown', e => {
-  if ((e.key === 'n' || e.key === 'N') && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat && !typingIn(e.target)) faceNorth();
+// The compass is one module (web/north.js): bind once, snap on the press, needle follows the real bearing. Rebuilt
+// so it works on the first click and the fiftieth — the earlier lives were a turn-state machine that could stick
+// and a handler bound to a button the header redraw ate; both are gone, and the boot smoke clicks the button 3x
+// with real input on every push so the behaviour is contracted, not hoped for.
+const north = makeNorth({
+  camera, controls,
+  endHolds: () => { if (ride) endRide(); flight = null; },   // the ride/flight owns the camera; a press asks for it
+  typingIn: t => typingIn(t),
 });
+const faceNorth = north.snap;
 // + and - zoom (= and _ too, the same keys unshifted), as the arrows pan and Shift + arrows turn (the audit's finding 9).
 function zoomBy(k) {
   if (ride) return;   // the ride keeps its own distance behind the tram
@@ -4221,7 +4197,7 @@ renderer.setAnimationLoop(now => {
   uniforms.uMask.value = maskTarget;
   stepUnknown(dt);
   if (!ride) controls.update();   // a ride (stepRide) sets the camera itself; the controls would pull it back
-  stepNeedle();
+  north.draw(controls.getAzimuthalAngle());
   const dist = camera.position.distanceTo(controls.target);
   followGround(dist, dt);
   updateLods();
