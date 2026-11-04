@@ -176,12 +176,6 @@ let attrs = null, attrTally = null;
 // config.features (pipeline/city.py FEATURES); their buttons are hidden, never removed.
 // ?try=stories,plaques (web/features.js) switches one on for this visit only, to try it on the live site.
 const FEATURES = withTry(config.features || {}, location.search);
-// index.html starts the count at 0 and the reveal walks it up; on slow machines a visitor reads "0 zgrada" for a
-// while, an empty city. Seed it with the known total for the day view — the reveal and the timeline still own it
-// after this (the same span is rewritten whenever the visible set changes). fmt() below is a const in the temporal
-// dead zone here, so format inline with the browser's own locale pick, which is how the page chooses too.
-document.getElementById('count').textContent = (config.stats?.buildings ?? 0)
-  .toLocaleString((navigator.language || '').toLowerCase().startsWith('hr') ? 'hr-HR' : 'en');
 // Quests and walks: on for everyone since 2026-10-18; the Look panel's switch hides their buttons, remembered per
 // device (web/panel.js questsOnFrom).
 let questsWalksOn = questsOnFrom((() => { try { return localStorage.getItem(QUESTS_KEY); } catch { return null; } })());
@@ -3248,7 +3242,10 @@ function visibleCount() {
   const Y = uniforms.uYear.value, Yf = uniforms.uYearFrom.value;
   const shown = layerGroupsShown();
   if (shown.length) return layerCount(shown, Yf, Y);
-  if (!attrTally) return 0;   // the attributes arrive with the map; the count follows them
+  // The attributes arrive with the map; until they land, any count we'd compute would read 0 — an empty city on
+  // slow machines, where that window lasts minutes. The default view shows every building in every year, and for
+  // exactly that view the config already knows the answer, so show the true total in the meantime.
+  if (!attrTally) return config.stats?.buildings ?? 0;
   return cityCount(attrTally, Yf, Y, i => uniforms.uMode.value !== MODE.period || maskTarget[i], unknownPref,
     { est: estShown() });
 }
