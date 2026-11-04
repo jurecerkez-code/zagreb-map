@@ -70,3 +70,8 @@ jobs:
           python3 -m http.server 8643 --directory web &
           sleep 2
           node scripts/boot_smoke.mjs
+
+      # Live trams die softly: the map falls back to the timetable and nothing says so. Read the published
+      # snapshot the page reads, and fail if it is stale, empty or tram-less.
+      - name: Live trams snapshot probe
+        run: node scripts/trams_probe.mjs

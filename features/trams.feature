@@ -18,6 +18,17 @@ Feature: Trams are real vehicles on real rails
     Then it returns 200
     And the payload is larger than 50 KB
 
+  # The page cannot read ZET directly (no CORS), so it reads the published snapshot: rt.json on the `live` orphan
+  # branch, rewritten by .github/workflows/live.yml at best every five minutes, at worst whenever the runner wakes.
+  # If that file rots the map quietly shows the timetable and nobody notices; the probe fails before that.
+  @check:node scripts/trams_probe.mjs
+  Scenario: The published snapshot names real trams now
+    Given the live branch's rt.json
+    When I read it without credentials
+    Then it parses and carries vehicles
+    And at least one of them is a tram in the timetable
+    And the snapshot is under three hours old
+
   @pending:trams-probe-missing
   Scenario: Hovering a visible tram names it
     Given the map open at street level over a tram
