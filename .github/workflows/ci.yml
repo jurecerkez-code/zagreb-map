@@ -53,3 +53,20 @@ jobs:
       # (web/test/legacy_upstream.json), so this gate means what it says.
       - name: Web unit tests
         run: node scripts/web-tests.mjs
+
+      # The unit tests never open the page, so a boot crash and a missing data file both shipped live unnoticed.
+      # Two sentries for that: a static audit that every file a fetch names is tracked, and a headless boot.
+      - name: Fetched files committed
+        run: uv run python scripts/checks/site_fetches.py
+
+      - name: Install node dependencies
+        run: npm ci
+
+      - name: Chromium for the boot smoke
+        run: npx playwright install --with-deps chromium
+
+      - name: Boot smoke (page boots, data answers, header counts the city)
+        run: |
+          python3 -m http.server 8643 --directory web &
+          sleep 2
+          node scripts/boot_smoke.mjs

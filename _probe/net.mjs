@@ -1,0 +1,12 @@
+import { chromium } from '@playwright/test';
+const b = await chromium.launch();
+const pg = await (await b.newContext()).newPage();
+const bad = [];
+pg.on('response', r => { if (r.status() >= 400) bad.push(r.status() + ' ' + r.url()); });
+const reqs = [];
+pg.on('request', r => { if (r.url().includes('data') || r.url().endsWith('.gz') || r.url().endsWith('.json') || r.url().endsWith('.bin')) reqs.push(r.url().replace('https://jurecerkez-code.github.io', '')); });
+await pg.goto('https://jurecerkez-code.github.io/zagreb-map/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await pg.waitForTimeout(35000);
+const count = await pg.evaluate(() => (document.body.innerText.match(/\d[\d.\s]*?\s*zgrada/i) || ['?'])[0]);
+console.log(JSON.stringify({ count, bad, reqs: reqs.slice(0, 30) }, null, 1));
+await b.close();
