@@ -17,12 +17,16 @@ def scenarios(text):
     tags = []
     for line in text.splitlines():
         s = line.strip()
-        if s.startswith("@"):
+        if s.startswith("@check:"):
+            tags = [s]          # the rest of the line is the command: spaces and all, not a word list
+        elif s.startswith("@"):
             tags = s.split()
         elif s.startswith("Scenario:"):
             name = s.split(":", 1)[1].strip()
-            check = next((t.split(":", 1)[1] for t in tags if t.startswith("@check:")), None)
+            check = next((t[len("@check:"):].strip() for t in tags if t.startswith("@check:")), None)
             state = next((t[1:] for t in tags if t.startswith(("@pending", "@manual"))), None)
+            if check and check.startswith("manual"):
+                state, check = check, None       # @check:manual:<what> is a scenario a person proves, not a command
             yield name, check, state
             tags = []
 
