@@ -14,10 +14,16 @@ const browser = await chromium.launch({
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-let bytes = 0, bytesBeforeReveal = null, http404 = 0;
-const files = [];
+// Optional by design on a plain file server (and on Pages): the trams' live proxy and the deploy-stamped build
+// card. The page falls back for both. The 404 budget counts everything else, so a mistyped fetch path fails at 1.
+const OPTIONAL_404 = new Set(['rt', 'build.json']);
+let bytes = 0, bytesBeforeReveal = null, http404 = 0, optional404 = 0;
+const files = [], notFound = [];
 page.on('response', async r => {
-  if (r.status() === 404) http404++;
+  if (r.status() === 404) {
+    const path = r.url().replace(url, '');
+    if (OPTIONAL_404.has(path)) optional404++; else { http404++; notFound.push(path); }
+  }
   const len = Number((await r.allHeaders().catch(() => ({})))['content-length'] || 0);
   bytes += len;
   files.push([len, r.url().replace(url, '')]);
@@ -67,7 +73,7 @@ const at = async d => {
 const home = await at('home'), near = await at(400), far = await at(20000);
 const marks = await page.evaluate(() => Object.fromEntries(performance.getEntriesByType('measure').map(m => [m.name, Math.round(m.duration)])));
 const result = {
-  url, msReveal, bytesBeforeReveal, bytesTotal: bytes, requests: files.length, http404,
+  url, msReveal, bytesBeforeReveal, bytesTotal: bytes, requests: files.length, http404, optional404, notFound,
   heaviest: files.sort((a, b) => b[0] - a[0]).slice(0, 15).map(([n, f]) => `${(n / 1e6).toFixed(2)} MB ${f}`),
   home, near, far, builders: marks,
 };

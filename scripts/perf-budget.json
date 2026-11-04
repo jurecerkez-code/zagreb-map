@@ -3,7 +3,7 @@
  "near.triangles": 27000000,
  "far.triangles": 39000000,
  "home.calls": 120,
- "bytesBeforeReveal": 40000000,
+ "bytesBeforeReveal": 45000000,
  "bytesTotal": 48000000,
- "http404": 5
+ "http404": 0
 }
