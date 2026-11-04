@@ -15,8 +15,8 @@ function page(href = 'https://husforhus.se/', stored) {
 // localStorage throws in some private windows and with blocked site data.
 const broken = { getItem() { throw new Error('SecurityError'); }, setItem() { throw new Error('QuotaExceededError'); } };
 
-test('the default look is Ärg', () => {
-  assert.equal(DEFAULT_LOOK, 'arg');
+test('the default look is Foto', () => {
+  assert.equal(DEFAULT_LOOK, 'foto');
   assert.ok(THEMES[DEFAULT_LOOK]);
 });
 
@@ -30,25 +30,25 @@ test("city.py's PERIODS colours are the default look's period colours", () => {
   assert.deepEqual(colours, THEMES[DEFAULT_LOOK].periods);
 });
 
-test('the first look: ?theme= wins, then the remembered choice, then Ärg', () => {
+test('the first look: ?theme= wins, then the remembered choice, then the default', () => {
   assert.equal(initialLook('?theme=kalk', 'arg'), 'kalk');
   assert.equal(initialLook('?debug=1&theme=blatimme', null), 'blatimme');
   assert.equal(initialLook('', 'paper'), 'paper');
-  assert.equal(initialLook('?lang=sv', null), 'arg');
-  assert.equal(initialLook('', null), 'arg');
+  assert.equal(initialLook('?lang=sv', null), 'foto');
+  assert.equal(initialLook('', null), 'foto');
 });
 
 test('unknown names fall back: a dropped look in the URL or in storage is ignored', () => {
   assert.equal(initialLook('?theme=night', 'kalk'), 'kalk');
-  assert.equal(initialLook('?theme=__proto__', null), 'arg');
-  assert.equal(initialLook('?theme=', 'nordic'), 'arg');
-  assert.equal(initialLook('', 'toString'), 'arg');
+  assert.equal(initialLook('?theme=__proto__', null), 'foto');
+  assert.equal(initialLook('?theme=', 'nordic'), 'foto');
+  assert.equal(initialLook('', 'toString'), 'foto');
 });
 
 test('the manager starts on the look the page asks for', () => {
   assert.equal(createLooks(page('https://husforhus.se/?theme=kalk', 'paper')).current, 'kalk');
   assert.equal(createLooks(page('https://husforhus.se/', 'paper')).current, 'paper');
-  assert.equal(createLooks(page()).current, 'arg');
+  assert.equal(createLooks(page()).current, 'foto');
 });
 
 test('every look in web/themes.js, by its shown name; paper is "Classic"', () => {
@@ -64,12 +64,12 @@ test('switching notifies subscribers, remembers the choice and puts it in the UR
   looks.subscribe((id, was) => heard.push([id, was]));
   assert.equal(looks.set('blatimme'), true);
   assert.equal(looks.current, 'blatimme');
-  assert.deepEqual(heard, [['blatimme', 'arg']]);
+  assert.deepEqual(heard, [['blatimme', 'foto']]);
   assert.equal(p.data.get(LOOK_KEY), 'blatimme');
   assert.equal(p.location.href, 'https://husforhus.se/?debug=1&lang=sv&theme=blatimme');
   looks.set('paper');
   assert.equal(p.location.href, 'https://husforhus.se/?debug=1&lang=sv&theme=paper'); // replaced, not added twice
-  assert.deepEqual(heard, [['blatimme', 'arg'], ['paper', 'blatimme']]);
+  assert.deepEqual(heard, [['blatimme', 'foto'], ['paper', 'blatimme']]);
 });
 
 test('an unknown look or the current one changes nothing', () => {
@@ -103,8 +103,8 @@ test('storage that throws does not break the looks', () => {
   assert.equal(looks.set('kalk'), true);
   assert.equal(heard, 1);
   assert.equal(p.location.href, 'https://husforhus.se/?theme=kalk');
-  assert.equal(createLooks({ ...page(), storage: broken }).current, 'arg');
-  assert.equal(createLooks({ ...page(), storage: null }).current, 'arg');
+  assert.equal(createLooks({ ...page(), storage: broken }).current, 'foto');
+  assert.equal(createLooks({ ...page(), storage: null }).current, 'foto');
 });
 
 test('atmospheres: only "none" for now, and an effect is started and stopped as it is switched', () => {
@@ -122,5 +122,5 @@ test('atmospheres: only "none" for now, and an effect is started and stopped as 
   assert.equal(atmos.set('none'), true);
   assert.deepEqual(calls, [['start', 'the scene'], ['stop']]);
   assert.deepEqual(heard, ['snow', 'none']);
-  assert.equal(looks.current, 'arg'); // the look is a separate choice
+  assert.equal(looks.current, 'foto'); // the look is a separate choice
 });

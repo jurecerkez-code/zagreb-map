@@ -5,12 +5,13 @@ import { THEMES } from './themes.js';
 
 // localStorage key for the viewer's last choice.
 export const LOOK_KEY = 'hfh-look';
-// Ärg. styles.css's :root tokens and pipeline/city.py's PERIODS colours are this look's, so the
-// first paint, before this module runs, is already in it.
-export const DEFAULT_LOOK = 'arg';
+// Foto (the realistic look: photographed roofs and ground over the Ärg palette). styles.css's :root tokens and
+// pipeline/city.py's PERIODS colours are its base palette's (Foto spreads Ärg), so the first paint,
+// before this module runs, is already in it.
+export const DEFAULT_LOOK = 'foto';
 
 // The first look: ?theme= in the URL wins (a shared link shows what its sender saw), then the viewer's remembered
-// choice, then Ärg. A name that is not a look (a dropped variant, "__proto__") falls through.
+// choice, then the default. A name that is not a look (a dropped variant, "__proto__") falls through.
 export function initialLook(search, stored, ids = Object.keys(THEMES)) {
   const q = new URLSearchParams(search).get('theme');
   if (ids.includes(q)) return q;

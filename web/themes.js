@@ -89,7 +89,7 @@ export const THEMES = {
 // south-west that the buildings and the ground share (app.js uSun, normalised there).
 export const SHADING = { dark: 0.6, light: 0.3, wallMin: 0.66, wallLit: 0.34, sun: [-0.55, 0.55, 0.62] };
 // Foto: the Ärg palette with every roof in its real photographed colour (data/<version>/roof_rgb.bin, sampled by
-// scripts/sample_ortho.py from the City of Zagreb orthophoto, permission 29.10.2026). Walls keep the period colour, so
-// the age still reads. Photo roofs sit on the look's light ground; ?fotoground=1 also paints the ground from the
-// photograph (darker, livelier, but it competes with the period colours).
+// scripts/sample_ortho.py from the City of Zagreb orthophoto, permission 29.10.2026) and the ground painted from the
+// photograph. Walls keep the period colour, so the age still reads. Foto is the default look; ?fotoground=0 keeps
+// the look's light land for viewers who find the photo ground competing with the period colours.
 THEMES.foto = { ...THEMES.arg, name: 'Foto' };
