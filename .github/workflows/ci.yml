@@ -12,7 +12,7 @@ jobs:
     # Offline on every push: lint, pipeline unit tests (the network tests skip) and web unit tests.
     # network.yml runs the network tests and the e2e job weekly and on demand.
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45 # 20 fit the old suite; perf + picture gates measure a software-GL render (three views each), 25-30 min honest
     steps:
       - uses: actions/checkout@v7
 
