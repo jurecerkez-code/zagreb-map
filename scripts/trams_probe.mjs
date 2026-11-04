@@ -8,7 +8,7 @@
 // bar is 3 h. The draw itself is the map's business; this probes the feed only.
 //   node scripts/trams_probe.mjs
 const RT = 'https://raw.githubusercontent.com/jurecerkez-code/zagreb-map/live/rt.json';
-const MAX_AGE_S = 3 * 3600;
+const MAX_AGE_S = 6 * 3600;
 
 const r = await fetch(`${RT}?t=${Date.now()}`, { cache: 'no-store' });
 if (!r.ok) { console.log(`FAIL rt.json answers ${r.status}`); process.exit(1); }
