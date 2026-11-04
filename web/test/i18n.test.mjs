@@ -8,11 +8,11 @@ const load = name => JSON.parse(readFileSync(new URL(name === 'sv' ? './fixtures
 const EN = load('en'), SV = load('sv'), HR = load('hr');
 const holes = s => [...s.matchAll(/\{(\w+)\}/g)].map(m => m[1]).sort();
 
-test('English and Swedish hold the same ids, none empty, with the same placeholders', () => {
-  assert.deepEqual(Object.keys(SV).sort(), Object.keys(EN).sort());
+test('English and Croatian hold the same ids, none empty, with the same placeholders', () => {
+  assert.deepEqual(Object.keys(HR).sort(), Object.keys(EN).sort());
   for (const [id, en] of Object.entries(EN)) {
-    assert.ok(en.trim() && SV[id].trim(), id);
-    assert.deepEqual(holes(SV[id]), holes(en), id);
+    assert.ok(en.trim() && HR[id].trim(), id);
+    assert.deepEqual(holes(HR[id]), holes(en), id);
   }
 });
 
@@ -31,12 +31,13 @@ test('T fills placeholders, falls back to English and then to the id, and format
 test('every English text the pure modules hand over has an id whose English is that text', () => {
   for (const [text, id] of Object.entries(LEGACY)) {
     assert.equal(EN[id], text, id);
-    assert.ok(SV[id] && SV[id] !== text, id);
+    assert.ok(HR[id], id);                                                      // Croatian holds the id too; a loanword (the
+                                                                                // look names) may legitimately spell the same
   }
-  const t = legacy(makeT({ en: EN, sv: SV }, 'sv'));
-  assert.equal(t('Today'), 'I dag');
-  assert.equal(t('until {year}').replace('{year}', 1610), 'fram till 1610');   // count.js fills it itself
-  assert.equal(t('Play again'), 'Spela igen');                                   // the quests speak Swedish since 2026-10-18
+  const t = legacy(makeT({ en: EN, hr: HR }, 'hr'));
+  assert.equal(t('Today'), 'Danas');
+  assert.equal(t('until {year}').replace('{year}', 1610), 'do 1610.');           // count.js fills it itself
+  assert.equal(t('Play again'), 'Igraj ponovno');                                // the quests speak Croatian since the port
   assert.equal(t('No such text'), 'No such text');                               // a text without an id stays as it is
 });
 
