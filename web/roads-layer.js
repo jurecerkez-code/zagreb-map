@@ -63,7 +63,9 @@ function ribbon(tile, pts, o, n, w, colour, surfaceAt, lift = LIFT) {
   }
   for (let i = 0; i < n - 1; i++) {
     const a = base + i * 2;
-    tile.idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    // Wound so the face looks UP: three culls a clockwise face, and these were clockwise, which is why a street
+    // drew nothing from above and only ever showed as a sliver at a grazing angle.
+    tile.idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
   }
   tile.v += n * 2;
 }

@@ -455,7 +455,6 @@ def check_attrs(a: np.ndarray, periods: list[tuple[int, int]] | None = None) -> 
     rule(~finite | far, "with NaN or out-of-bounds coordinates")
     bad_period = period >= len(periods)
     rule(bad_period, f"with a period outside the {len(periods)} periods")
-    private = a["private"] != 0
     if periods:
         starts = np.array([p[0] for p in periods], dtype=np.int64)
         own = np.maximum(0, np.searchsorted(starts, year, side="right") - 1)

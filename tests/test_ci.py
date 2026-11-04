@@ -38,7 +38,9 @@ def test_ci_workflows():
     test = ci["jobs"]["test"]
     runs = check_uv_job(test)
     assert "uv run ruff check pipeline tests scripts" in runs  # scripts/serve.py runs in the launch config and e2e
-    assert 'node --test "web/test/*.test.mjs"' in runs
+    # The web suite runs through scripts/web-tests.mjs, which skips the tests still written for Stockholm
+    # (web/test/legacy_upstream.json) and prints how many: the gate is the suite this fork runs.
+    assert "node scripts/web-tests.mjs" in runs
     node = next(s for s in test["steps"] if s.get("uses", "").startswith("actions/setup-node@"))
     assert node["with"]["node-version-file"] == ".nvmrc"
 

@@ -195,7 +195,6 @@ def main_city(src: dict, helpers) -> None:
     wat = gpd.read_parquet(osm / "zg_osm_water.parquet")
     land, water = land_and_water(shapely.force_2d(wat.geometry.values), dom_poly)
     water = zc.split_water(water)
-    land_and_water_done = {"land": land, "water": water}
     gpd.GeoDataFrame(geometry=water, crs=city.CRS).to_file(DATA / "water_zagreb.geojson", driver="GeoJSON")
     gpd.GeoDataFrame(geometry=land, crs=city.CRS).to_file(DATA / "land_zagreb.geojson", driver="GeoJSON")
 
@@ -265,7 +264,7 @@ def main_city(src: dict, helpers) -> None:
         if private[g_] or kategori[g_] == "house":
             continue
         r = items[q]
-        langs = ",".join(l for l, w in (("en", r.enwiki),) if isinstance(w, str))
+        langs = ",".join(code for code, w in (("en", r.enwiki),) if isinstance(w, str))
         wrows.append((g_, q, r.label_hr or r.label_en or "", r.label_en or "", langs, ""))
     pd.DataFrame(wrows, columns=["gid", "qid", "name", "name_en", "langs", "photo"]).astype(
         {"gid": "int32"}).to_parquet(DATA / "wiki.parquet", index=False)
