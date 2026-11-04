@@ -41,7 +41,7 @@ export const VIGNETTE = { from: 0.45, alpha: 0.6, colour: [62, 40, 20] };
 // The file's name: the site and the local date, so a day's postcards sort together.
 export function fileName(date = new Date()) {
   const p = n => String(n).padStart(2, '0');
-  return `zagreb-${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}.png`;
+  return `${SITE}-${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}.png`;
 }
 
 export const validFilter = f => (FILTERS.includes(f) ? f : 'none');
@@ -119,7 +119,7 @@ export function stampFonts({ w, h, scale = 1, family = 'sans-serif' }) {
   return { base, px, site: `700 ${px(1.15)}px ${family}`, credit: `500 ${px(0.85)}px ${family}` };
 }
 
-// Where the stamp goes on a picture w × h whose CSS pixel is `scale` pixels: "husforhus.se" in a pill at the bottom
+// Where the stamp goes on a picture w × h whose CSS pixel is `scale` pixels: the site in a pill at the bottom
 // right, the credit in a pill at the bottom left (on more lines if it would reach the site's pill; above it, the
 // picture's full width, on a very narrow picture), in stampFonts' sizes. measure(text, font) gives a text's width in
 // pixels. Every box is { x, y, w, h } in the picture's pixels, with each text's own place (tx, ty: its left end and
@@ -132,11 +132,19 @@ export function stampLayout({ w, h, scale = 1, credit = [], measure, family = 's
   const siteBox = { x: w - pad - sw, y: h - pad - sh, w: sw, h: sh, font: siteFont, text: site };
   siteBox.tx = siteBox.x + padX; siteBox.ty = siteBox.y + sh / 2;
   if (!credit.length) return { base, pad, site: siteBox, credit: null };
-  // Beside the site's pill when the credit has at least a third of the picture there; else above it.
+  // Beside the site's pill when the credit has at least a third of the picture there; above it when a credit part
+  // would not fit beside at all (a part always gets a line of its own) —there the pills would overlap. Fit is judged
+  // with a whole character of slack: the width estimate runs on half-character averages (© OpenStreetMap is 28 of
+  // them), so a one-character count is the honest precision it has, and tighter bounds wrongly stack the credit
+  // above a place where beside would have printed.
   let room = siteBox.x - gap - pad, bottom = h - pad;
-  if (room < w / 3) { room = w - 2 * pad; bottom = siteBox.y - gap; }
+  const slack = Number((creditFont.match(/(\d+)px/) || [])[1] || 0);   // one character of the estimate's own font
+  if (room < w / 3 || credit.some(p => measure(p, creditFont) > room - 2 * padX + slack)) { room = w - 2 * pad; bottom = siteBox.y - gap; }
   const lines = wrapParts(credit, room - 2 * padX, t => measure(t, creditFont));
-  const cw = Math.ceil(Math.max(...lines.map(t => measure(t, creditFont)))) + 2 * padX;
+  // The widest credit line, never wider than the room the line was fitted into: a part with long tokens can measure
+  // a hair past the row average (ceil of half-char widths), and then the pill grew a pixel over the page's own pad
+  // at tight sizes (the 180x400 case the tests carry) — a postcard must never print outside its own picture.
+  const cw = Math.min(Math.ceil(Math.max(...lines.map(t => measure(t, creditFont)))) + 2 * padX, Math.floor(room));
   const ch = lines.length * creditLine + 2 * padY;
   const box = { x: pad, y: bottom - ch, w: cw, h: ch, font: creditFont };
   box.lines = lines.map((text, i) => ({ text, tx: box.x + padX, ty: box.y + padY + (i + 0.5) * creditLine }));

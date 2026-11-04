@@ -899,7 +899,11 @@ const VERT = /* glsl */`
     }
     // After the hover, so the quest's red building keeps a bare red roof under the pointer too (FRAG: no snow on it).
     if (uBlind > 0.5 && vGid == uSelected) vLit = -1.0;
-    vColor = c;
+    // Street truth: two same-era neighbours were not plastered on the same afternoon. A few percent of per-building
+    // luminance, from the id that already seeds the entrance — invisible up close, but from two streets away the
+    // block stops reading as one poured slab, which is where the toy-city look came from. Roofs carry the same
+    // factor: a repainted tile roof is its own shade too (the Foto look's measured colour overrides it anyway).
+    vColor = c * (0.94 + 0.12 * fract(seed * 5.31));
     vHatchInk = h;
     // On the terrain: the building stands on its own ground, lifted by ground * uRelief. Its wall bottoms
     // (position.y 0) reach down to the terrain under each corner and 2 m further, plus half of how much the ground
@@ -976,7 +980,10 @@ const FRAG = /* glsl */`
       // city. Roofs keep the period colour the map is made of; only the walls get the facade.
       if (roof < 0.5) {
         float ux = dot(vWorld.xz, along);
-        vec2 step2 = vec2(3.2, 3.3);                     // metres between windows, floor to floor
+        // Window spacing sways per building: 19c bays sit close, later walls breathe wider. One hash from the
+        // gid, so the rhythm is stable on every load and never uniform across a column of same-era facades.
+        float ws = fract(sin(vGid * 78.233) * 43758.5453);
+        vec2 step2 = vec2(3.2, 3.3) * mix(0.85, 1.18, ws);   // metres between windows, floor to floor
         vec2 g = vec2(ux, vRel) / step2;
         vec2 aa = fwidth(g) + 1e-5;                       // cells per pixel, each way
         vec2 cell = fract(g);
@@ -997,10 +1004,25 @@ const FRAG = /* glsl */`
         base *= 1.0 + (gr - 0.5) * 0.07 * skin;
       }
       // Foto: a sampled roof takes its photographed colour (the mean of its own pixels in the City's orthophoto);
-      // a building with no samples keeps the period colour (alpha 0).
+      // a building with no samples keeps the period colour (alpha 0). Up close a flat mean reads as paint, not as
+      // the tiles it was measured from, so give clay roofs their courses and flat roofs their felt: a few percent
+      // of chip pattern inside the measured tone, stable per tile cell, softened out by 300 m so the far city
+      // never shimmers on a uniform texture the phone sees anyway.
       if (uFoto > 0.5 && roof > 0.5) {
         vec4 pc = texelFetch(uRoof, ivec2(int(vGid) % 512, int(vGid) / 512), 0);
-        if (pc.a > 0.0) base = pc.rgb;
+        if (pc.a > 0.0) {
+          vec3 col = pc.rgb;
+          float rfade = 1.0 - smoothstep(60.0, 300.0, d);
+          // Biber tiles run ~0.8 m; cell noise at that scale with row shading between them. Measured against a
+          // screenshot A/B (rfade forced 0): under ~±0.2 the effect drowns in per-roof shading, so amplitude is
+          // chosen to be plainly seen through the compression of a PNG.
+          float chip = fract(sin(dot(floor(vWorld.xz * 1.25), vec2(12.9898, 78.233))) * 43758.5453);
+          float courses = abs(fract((vWorld.x + vWorld.z) * 1.5) - 0.5);
+          col *= 1.0 + rfade * ((col.r - col.b > 0.10)
+            ? ((0.30 - courses) * 0.12 + (chip - 0.5) * 0.32)              // clay: varied tiles + faint courses
+            : ((chip - 0.5) * 0.10));                                      // felt/membrane: visible speckle
+          base = col;
+        }
       }
       // Low afternoon sun from the south-west (uSun, shared with the ground), a soft sky from above. The foot darkens
       // the first 12 m above the building's own base, and the skirt under it.
