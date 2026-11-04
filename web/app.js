@@ -3248,7 +3248,11 @@ function visibleCount() {
   const Y = uniforms.uYear.value, Yf = uniforms.uYearFrom.value;
   const shown = layerGroupsShown();
   if (shown.length) return layerCount(shown, Yf, Y);
-  if (!attrTally) return 0;   // the attributes arrive with the map; the count follows them
+  // The count's seed paints the total, then every redraw rewrites the span from visibleCount(). While the
+  // attributes are still on the wire any count we'd compute reads 0 — an empty city, for minutes on a slow
+  // machine. The default view (every building, every year) is the one view the config can answer for, so hold
+  // its true total until real counting can start; year and period filters are untouched.
+  if (!attrTally) return config.stats?.buildings ?? 0;
   return cityCount(attrTally, Yf, Y, i => uniforms.uMode.value !== MODE.period || maskTarget[i], unknownPref,
     { est: estShown() });
 }

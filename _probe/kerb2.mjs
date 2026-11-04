@@ -1,0 +1,20 @@
+import { chromium } from '@playwright/test';
+const b = await chromium.launch();
+const pg = await (await b.newContext({ viewport: { width: 1600, height: 900 } })).newPage();
+const errs = [];
+pg.on('pageerror', e => errs.push(String(e).slice(0, 160)));
+await pg.goto('http://127.0.0.1:8643/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+await pg.waitForTimeout(40000);
+const count = await pg.evaluate(() => (document.body.innerText.match(/\d[\d.\s]*?\s*zgrada/i) || ['?'])[0]);
+await pg.screenshot({ path: '_probe/kerb_home.png' });
+const ok = await pg.evaluate(() => {
+  const T = window.__dbg; if (!T || !T.camera || !T.controls) return 'no dbg';
+  T.controls.target.set(706, 0, -1400);
+  T.camera.position.set(746, 8, -1394);
+  T.controls.update();
+  return 'moved';
+});
+await pg.waitForTimeout(4000);
+await pg.screenshot({ path: '_probe/kerb_street.png' });
+console.log(JSON.stringify({ count, ok, errs }));
+await b.close();
