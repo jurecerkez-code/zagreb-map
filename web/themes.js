@@ -26,7 +26,7 @@ export const THEMES = {
   // for the hatch's mean tone, which far buildings take); the hatch line (ΔE 9.4 from it in every vision) tells it
   // apart, and shows from the home view on. It is ΔE 10.4 from land, 7.3 from the maquette.
   arg: {
-    name: 'Ärg',
+    name: 'Patina',
     sky: '#d9dfe3', land: '#e9e8e5', water: '#0e2433', maquette: '#dfdedb', unknown: '#c9c6c0', unknownHatch: '#aca8a1',
     quay: '#c6c4bf', reliefShade: 0.5,
     labelInk: '#3a464d', labelHalo: 'rgba(233,232,229,0.85)', waterInk: '#b9d3e0',
@@ -40,7 +40,7 @@ export const THEMES = {
   // Kalkfärg (limewash): the pigments Stockholm put on its walls, in the order it used them (Cramér, Stadsmuseet):
   // earth colours until the 1910s, the first green houses in the 1920s, cooler modern colours after.
   kalk: {
-    name: 'Kalkfärg',
+    name: 'Limewash',
     sky: '#dbe5e9', land: '#f0eae1', water: '#97afb9', maquette: '#eae4d9', unknown: '#caced3',
     quay: '#d6c7a1', reliefShade: 0.25,
     labelInk: '#4b443d', labelHalo: 'rgba(240,234,225,0.85)', waterInk: '#26404c',
@@ -54,7 +54,7 @@ export const THEMES = {
   // Blå timmen (blue hour): a navy winter afternoon (21 December, 15:30). Warm for the old city, cold and pale for
   // the new, rising steadily in lightness; candle-amber accent.
   blatimme: {
-    name: 'Blå timmen',
+    name: 'Blue hour',
     sky: '#121d30', land: '#182233', water: '#1f3f61', maquette: '#283040', unknown: '#4c5666',
     quay: '#4c4a4b', reliefShade: 0.35,
     labelInk: '#c9d6e8', labelHalo: 'rgba(24,34,51,0.85)', waterInk: '#8fb4dc',

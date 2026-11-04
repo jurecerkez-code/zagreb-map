@@ -176,6 +176,10 @@ let attrs = null, attrTally = null;
 // config.features (pipeline/city.py FEATURES); their buttons are hidden, never removed.
 // ?try=stories,plaques (web/features.js) switches one on for this visit only, to try it on the live site.
 const FEATURES = withTry(config.features || {}, location.search);
+// index.html starts the count at 0 and the reveal walks it up; on slow machines a visitor reads "0 zgrada" for a
+// while, an empty city. Seed it with the known total for the day view — the reveal and the timeline still own it
+// after this (the same span is rewritten whenever the visible set changes).
+document.getElementById('count').textContent = fmt(config.stats?.buildings ?? 0);
 // Quests and walks: on for everyone since 2026-10-18; the Look panel's switch hides their buttons, remembered per
 // device (web/panel.js questsOnFrom).
 let questsWalksOn = questsOnFrom((() => { try { return localStorage.getItem(QUESTS_KEY); } catch { return null; } })());

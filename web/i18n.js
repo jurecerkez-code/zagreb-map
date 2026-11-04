@@ -23,6 +23,7 @@ export function makeT(tables, lang) {
 export const LEGACY = {
   'Today': 'ui.today', '{year}–Today': 'ui.fromToday', 'until {year}': 'ui.until',
   'Look': 'ui.look', 'Classic': 'ui.classic', 'None': 'ui.none', 'Close': 'ui.close',
+  'Patina': 'ui.patina', 'Limewash': 'ui.limewash', 'Blue hour': 'ui.bluehour',
   'Weather': 'ui.weather', 'Clear': 'ui.weather.clear', 'Snow': 'ui.weather.snow', 'Rain': 'ui.weather.rain', 'Fog': 'ui.weather.fog',
   'Ground': 'ui.relief.title', 'Hills': 'ui.hills',
   'Shown at “Today”, hidden in the past.': 'ui.unknown.auto', 'Your choice is remembered.': 'ui.unknown.chosen',
