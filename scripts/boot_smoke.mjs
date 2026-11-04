@@ -37,10 +37,10 @@ report(badData.length === 0, 'every fetched data asset answers < 400', badData.s
 if (bad.length) console.log(`  (${bad.length} non-data or non-critical bad response(s): ${bad.slice(0, 6).join(' | ')})`);
 report(Number.isFinite(count) && count > 100000, 'header counts the city', countText);
 
-// The compass is the project's own ghost: three generations of "works on the first press, never again" reached the
-// live site and kept coming back. Real clicks, a quarter-turn away from north between them, must land on azimuth 0
-// every time; document-level capture lets the handler outlive the header's redraws (the first era's bug), and the
-// instant-snap design has no turn state to stick (the second era's).
+// The compass, four-sided since 2026-11-04: a click must land the map on the nearest of N/E/S/W, and a drag of the
+// needle must be able to face anywhere. Both go through real pointer input; document-level capture lets the
+// handlers outlive the header's redraws (the first era's bug), and the snap design has no turn state to stick (the
+// second era's). A three-generation ghost ("works on the first press, never again") makes the press loop essential.
 const bb = await (await page.$('.north-open'))?.boundingBox();
 if (!bb) { report(false, 'compass button present'); await browser.close(); process.exit(1); }
 const cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
@@ -51,7 +51,13 @@ if (!bb || !(await page.evaluate(() => !!window.__dbg))) {
   console.log('boot smoke FAILED (page half-booted)');
   process.exit(1);
 }
-let northOk = true;
+// Distance of an azimuth to the nearest of the four cardinals (radians, wrapped).
+const toCardinal = a => {
+  const four = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+  const w = a => { const TAU = Math.PI * 2; let x = a % TAU; if (x > Math.PI) x -= TAU; if (x <= -Math.PI) x += TAU; return x; };
+  return Math.min(...four.map(c => Math.abs(w(w(a) - c))));
+};
+let ok = true;
 for (let i = 0; i < 3; i++) {
   if (i) {
     await page.evaluate(() => {
@@ -64,11 +70,21 @@ for (let i = 0; i < 3; i++) {
   }
   await page.mouse.click(cx, cy);
   await page.waitForTimeout(600);
-  const a = (await az() % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
-  const off = Math.min(a, Math.PI * 2 - a);
-  if (off > 0.03) { northOk = false; console.log(`  press ${i + 1}: azimuth ${off.toFixed(3)} from north`); }
+  const off = toCardinal(await az());
+  if (off > 0.03) { ok = false; console.log(`  press ${i + 1}: ${off.toFixed(3)} from the nearest cardinal`); }
 }
-report(northOk, 'compass: three presses, three norths, with real clicks');
+report(ok, 'compass: three presses, each landing a cardinal side, with real clicks');
+
+// A drag of the needle must turn the map under the pointer: from the compass centre to 60 px east of it is the
+// "east" heading (+π/2 azimuth). No movement-limit surprises: the press begins a drag past 5 px of travel.
+await page.mouse.move(cx, cy);
+await page.mouse.down();
+await page.mouse.move(cx + 60, cy, { steps: 6 });
+await page.mouse.up();
+await page.waitForTimeout(600);
+const offAfterDrag = toCardinal(((await az()) ?? 9) - Math.PI / 2);
+report(Number.isFinite(offAfterDrag) && offAfterDrag < 0.15, 'compass: needle dragged east, the map faces east',
+  `off by ${offAfterDrag.toFixed(3)}`);
 
 await browser.close();
 console.log(failed ? `boot smoke FAILED (${bad.length} bad responses, ${pageErrors.length} page errors)` : 'boot smoke passed');
