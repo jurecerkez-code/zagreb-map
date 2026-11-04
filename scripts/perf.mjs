@@ -31,27 +31,38 @@ await page.waitForFunction(() => { const s = window.__dbg?.stats(); return s && 
   null, { timeout: 300000 });
 await page.waitForTimeout(8000);
 
+const sample = () => page.evaluate(() => {
+  const { renderer, scene, camera } = window.__dbg;
+  renderer.info.autoReset = false; renderer.info.reset();
+  renderer.render(scene, camera);
+  const all = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
+  const groups = {};
+  const tops = scene.children, vis = tops.map(o => o.visible);
+  tops.forEach((o, i) => {
+    if (!vis[i]) return;
+    tops.forEach((p, j) => { p.visible = i === j; });
+    renderer.info.reset(); renderer.render(scene, camera);
+    const name = o.name || o.type;
+    groups[name] = (groups[name] || 0) + renderer.info.render.triangles;
+  });
+  tops.forEach((o, i) => { o.visible = vis[i]; });
+  renderer.info.autoReset = true;
+  return { ...all, groups };
+});
 const at = async d => {
   await page.evaluate(d => { d === 'home' ? window.__dbg.goHome() : window.__dbg.viewAt(d); window.__dbg.invalidate?.(2000); }, d);
   await page.waitForTimeout(3000);
-  return page.evaluate(() => {
-    const { renderer, scene, camera } = window.__dbg;
-    renderer.info.autoReset = false; renderer.info.reset();
-    renderer.render(scene, camera);
-    const all = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
-    const groups = {};
-    const tops = scene.children, vis = tops.map(o => o.visible);
-    tops.forEach((o, i) => {
-      if (!vis[i]) return;
-      tops.forEach((p, j) => { p.visible = i === j; });
-      renderer.info.reset(); renderer.render(scene, camera);
-      const name = o.name || o.type;
-      groups[name] = (groups[name] || 0) + renderer.info.render.triangles;
-    });
-    tops.forEach((o, i) => { o.visible = vis[i]; });
-    renderer.info.autoReset = true;
-    return { ...all, groups };
-  });
+  // A view change streams new packs, and slow machines measure the map half-loaded while fast ones measure it whole
+  // (first run: 25.0 M vs 35.5 M triangles at 20 km, laptop vs CI). Measure steady state: re-sample while the count
+  // still moves by more than 1%, at most 6 samples.
+  let a = await sample();
+  for (let k = 0; k < 5; k++) {
+    await page.waitForTimeout(4000);
+    const b = await sample();
+    if (Math.abs(b.triangles - a.triangles) <= a.triangles * 0.01) return b;
+    a = b;
+  }
+  return a;
 };
 const home = await at('home'), near = await at(400), far = await at(20000);
 const marks = await page.evaluate(() => Object.fromEntries(performance.getEntriesByType('measure').map(m => [m.name, Math.round(m.duration)])));
