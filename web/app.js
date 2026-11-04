@@ -1099,6 +1099,7 @@ function setRoofYears(v) {
 // The attributes, at last (2.85 MB): behind mapRevealed, so the loader does not wait for them. Then their three
 // readers: a picked building's card, the years on the roofs, the timeline's count.
 async function loadAttrs() {
+  performance.mark('attrs-start');
   attrs = new DataView(await fetchGz(`${DATA}attrs.bin.gz`));
   attrTally = tallyFromAttrs(attrs, config.stats.buildings, config.attrStride,
     { periods: config.periods, yearMin: config.yearMin, yearMax: config.yearMax });
@@ -1106,6 +1107,7 @@ async function loadAttrs() {
   for (const s of plaqueGroup.children) s.userData.h = readAttrs(attrs, s.userData.gid, config.attrStride).height || 0;
   drawHist();
   syncLegendCounts();
+  performance.measure('attrs', 'attrs-start');
 }
 // ---------- Monuments ----------
 // The statues and memorials the city model lacks (web/monuments.js), from the build's monuments.json: optional, so a
@@ -1714,6 +1716,7 @@ async function loadPhotoColours() {
 }
 
 async function loadTerrain(base) {
+  performance.mark('terrain-start');
   if (!TERRAIN) return;
   terrainState = 'loading';
   // a download that stalls (no answer, or no chunk of it, for FETCH_TIMEOUT_MS) is stopped, and the caller then loads
@@ -1805,6 +1808,7 @@ async function loadTerrain(base) {
   waterAt = (x, z) => levelAt(waterPolys, m.levels, x, z);
   for (const l of labels) if (l.mesh && l.L.water) l.mesh.material.userData.level.value = waterAt(l.x, l.z);
   terrainState = 'ready';
+  performance.measure('terrain', 'terrain-start');
   setRelief(relief, true);          // the city rises (at once for a visitor who asked for less motion)
 }
 
@@ -4091,8 +4095,10 @@ const vegDebug = new URLSearchParams(location.search).get('vegdebug') === '1'
       + 'font:12px/1.4 monospace;padding:5px 7px;border-radius:4px;pointer-events:none', textContent: 'veg: loading…' })
   : null;
 if (vegDebug) document.body.appendChild(vegDebug);
+performance.mark('veg-start');
 makeVeg({ THREE, base: DATA, scene, uniforms, on: new URLSearchParams(location.search).get('veg') !== '0' })
   .then(v => {
+    performance.measure('veg', 'veg-start');
     veg = v; v.retheme(looks.current); syncVegNight();   // Night, if that is the mode the visitor arrived in
     if (vegDebug) vegDebug.textContent = `veg: ${v.trees.toLocaleString()} trees, ${v.triangles.toLocaleString()} green tris, ${v.on ? 'ON' : 'OFF'}`;
   })
@@ -4115,8 +4121,10 @@ makeTrams({ THREE, base: DATA, scene, camera, surfaceAt, on: tramsOn })
 // The streets (pipeline/s17_zagreb_roads.py): 95,754 ways and 5,821 lamps, laid under the buildings, and lit in the
 // Night mode. Behind the trams' own fetch, so a ride has its road by the time a tram can be ridden; a map without them
 // is still a map, so a failure here is a warning and nothing more.
+performance.mark('roads-start');
 makeRoads({ THREE, base: DATA, scene, surfaceAt, uniforms })
   .then(r => {
+    performance.measure('roads', 'roads-start');
     roads = r;
     window.__roads = () => r;          // a dev hook: what was drawn, for probes
     roads.setNight(sunMode === 'night');
@@ -4327,4 +4335,7 @@ window.__dbg = { get veg() { return veg; }, get facts() { return facts; }, pinFa
   get timelineLabels() { return placedLabels; }, get pinned() { return pinnedGid; }, districtOf,
   get forced() { return forcedGid; }, force, scene, highlight: () => highlight.state(),
   get weather() { return weather.state(); }, pauseEffects: on => weather.pause(on), skyNow, postcard,
-  posterPass: () => posterPass.state(), placeNow, roofYears, setRoofYears };
+  posterPass: () => posterPass.state(), placeNow, roofYears, setRoofYears,
+  invalidate: () => {},   // a no-op until #23: scripts/perf.mjs already asks for a redraw under this name
+  northAzimuth: () => controls.getAzimuthalAngle(),
+  playState: () => ({ playing, year: uniforms.uYear.value }) };

@@ -71,6 +71,27 @@ jobs:
           sleep 2
           node scripts/boot_smoke.mjs
 
+      - name: Perf budget
+        run: |
+          python3 -m http.server 8644 --directory web &
+          sleep 2
+          node scripts/perf.mjs http://127.0.0.1:8644/ --budget scripts/perf-budget.json --out perf.json
+
+      - name: Picture gate (contrast and brightness)
+        run: |
+          python3 -m http.server 8644 --directory web &
+          sleep 2
+          node scripts/shots.mjs http://127.0.0.1:8644/ --out shots.json && node scripts/shots-compare.mjs shots.json e2e/__screenshots__/baseline.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: measurements
+          path: |
+            perf.json
+            shots.json
+            shots/*.png
+
       # Live trams die softly: the map falls back to the timetable and nothing says so. Read the published
       # snapshot the page reads, and fail if it is stale, empty or tram-less.
       - name: Live trams snapshot probe
