@@ -2,7 +2,7 @@ Feature: Trams are real vehicles on real rails
   Source: ZET GTFS static and realtime, Croatian Open Licence. Rails: OpenStreetMap
   railway=tram. A tram is a TMK 2200, 32 m by 2.3 m by 3.4 m, 140 of them in Zagreb.
 
-  @check:node scripts/trams_check.mjs
+  @check:env -u PLAYWRIGHT_BROWSERS_PATH node scripts/trams_check.mjs
   Scenario: Every scheduled tram sits on its own shape
     Given the build for today
     When I place every running trip at 08:00, 12:00, 15:30 and 22:00
@@ -17,7 +17,7 @@ Feature: Trams are real vehicles on real rails
     Then it returns 200
     And the payload is larger than 50 KB
 
-  @check:node scripts/trams_probe.mjs
+  @check:env -u PLAYWRIGHT_BROWSERS_PATH node scripts/trams_probe.mjs
   Scenario: Hovering a visible tram names it
     Given the map open at street level over a tram
     And the tram is not behind a building

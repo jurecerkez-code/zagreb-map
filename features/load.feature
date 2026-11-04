@@ -2,7 +2,7 @@ Feature: The map loads fast enough to use on a phone
   Measured on the dev server against the live version. These are budgets, not hopes:
   a scenario fails when the number goes above the line.
 
-  @check:node scripts/load_probe.mjs
+  @pending:load-probe-missing
   Scenario: First load stays under the byte budget
     When the page loads with a cold cache
     Then the total transferred bytes are under 20 MB
