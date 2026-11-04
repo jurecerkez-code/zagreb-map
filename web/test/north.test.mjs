@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { wrapAngle, shortestTurn, northTurn, turnAt, needleDeg, TURN_MS } from '../north.js';
+import { wrapAngle, shortestTurn, northTurn, turnAt, needleDeg, TURN_MS, nearestCardinal, CARDINALS, CARDINAL_KEYS,
+  makeNorth } from '../north.js';
 
 // The north button (brief 2026-10-15, approved by the owner): the map turns to face north, azimuth 0 in the local frame
 // (x east, z south: OrbitControls' theta is atan2(x, z) of the camera's offset from the target, so 0 is the camera
@@ -104,18 +105,19 @@ test('the needle turns with the map: clockwise by the azimuth, in degrees', () =
   assert.ok(!Object.is(needleDeg(-1e-9), -0), 'no -0');
 });
 
-test('the page has the button, labelled by its id (ui.north) in English and Swedish, and the N key', () => {
+test('the page has the button, labelled by its id (ui.north), with the four cardinal keys', () => {
   const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  // The tooltip names the key; the label does not (a screen reader reads aria-keyshortcuts for that).
-  assert.match(html, /<button class="north-open" aria-label="Face north" title="Face north \(N\)" aria-keyshortcuts="N">/);
+  // The tooltip names the keys; the label does not (a screen reader reads aria-keyshortcuts for that). Since
+  // 2026-11-04 the compass is four-sided: drag the needle anywhere, a click snaps to the nearest of N/E/S/W.
+  assert.match(html, /<button class="north-open" aria-label="Heading: drag the needle or tap N\/E\/S\/W" title="Heading: drag the needle or tap N\/E\/S\/W" aria-keyshortcuts="N E S W">/);
   // App.js's SV_UI table moved to web/i18n by id
   const en = JSON.parse(readFileSync(new URL('../i18n/en.json', import.meta.url), 'utf8'));
   const sv = JSON.parse(readFileSync(new URL('./fixtures/sv.json', import.meta.url), 'utf8'));
-  assert.equal(en['ui.north'], 'Face north');
+  assert.equal(en['ui.north'], 'Heading: drag the needle or tap N/E/S/W');
   assert.equal(sv['ui.north'], 'Vänd mot norr');
-  assert.match(app, /northBtn\.setAttribute\('aria-label', T\('ui\.north'\)\)/);
-  assert.match(app, /northBtn\.title = `\$\{T\('ui\.north'\)\} \(N\)`/);
+  assert.match(app, /nb\.setAttribute\('aria-label', T\('ui\.north'\)\)/);
+  assert.match(app, /nb\.title = T\('ui\.north'\)/);
   // The needle's halves are needle-n and needle-s: .n is the legend's numbers.
   assert.match(html, /<path class="needle-n" [^>]*\/><path class="needle-s" [^>]*\/>/);
   const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
@@ -131,7 +133,95 @@ test("the vendored OrbitControls still keeps its inertia where faceNorth stops i
   assert.match(orbit, /this\._sphericalDelta = new Spherical\(\);/);
   assert.match(orbit, /this\._panOffset = new Vector3\(\);/);
   assert.match(orbit, /this\._spherical\.theta \+= this\._sphericalDelta\.theta \* this\.dampingFactor;/);
-  const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
-  assert.match(app, /controls\._sphericalDelta\.set\(0, 0, 0\);/);
-  assert.match(app, /controls\._panOffset\.set\(0, 0, 0\);/);
+  const north = readFileSync(new URL('../north.js', import.meta.url), 'utf8');
+  assert.match(north, /controls\._sphericalDelta\.set\(0, 0, 0\);/);
+  assert.match(north, /controls\._panOffset\.set\(0, 0, 0\);/);
+});
+
+// — Four sides: the math and the wiring —
+
+test('the nearest cardinal is exactly the next of N/E/S/W, north winning the seam', () => {
+  const E = Math.PI / 2, S = Math.PI, W = -Math.PI / 2;
+  assert.equal(nearestCardinal(0.4), 0);
+  assert.equal(nearestCardinal(-0.4), 0);
+  assert.equal(nearestCardinal(1.2), E);           // 69°: closer to east than north
+  assert.equal(nearestCardinal(-1.2), W);
+  assert.equal(nearestCardinal(2.4), S);           // 137°: south
+  assert.equal(nearestCardinal(-2.4), S);
+  assert.equal(nearestCardinal(Math.PI), S);
+  assert.equal(nearestCardinal(-Math.PI), S);
+  // Wrap sanity: azimuths can come back huge from a long damped spin.
+  assert.equal(nearestCardinal(0.4 + 40 * Math.PI), 0);
+  assert.equal(nearestCardinal(-1.2 - 40 * Math.PI), W);
+  // The seam: exactly 45° off north, either side, lands on N by the documented tie order.
+  assert.equal(nearestCardinal(Math.PI / 4), 0);
+  assert.equal(nearestCardinal(-Math.PI / 4), 0);
+  assert.deepEqual([...CARDINALS], [0, E, S, W]);
+  assert.deepEqual({ ...CARDINAL_KEYS }, { n: 0, e: E, s: S, w: W });
+});
+
+// Minimal controls mock: position/vector methods as in the real module; update() records the call.
+function makeRig() {
+  const camera = { position: { x: 0, y: 120, z: 90, set(x, y, z) { this.x = x; this.y = y; this.z = z; } } };
+  const controls = {
+    target: { x: 0, z: 0 },
+    updates: 0,
+    _sphericalDelta: { set(...a) { this.v = a; } },
+    _panOffset: { set(...a) { this.v = a; } },
+    getAzimuthalAngle() { return Math.atan2(camera.position.x - this.target.x, camera.position.z - this.target.z); },
+    update() { this.updates++; },
+  };
+  return { camera, controls };
+}
+
+// The doc mock catches the captured bubble the module listens on: pointerdown/move/up by (type, capture).
+function makeGestureDoc() {
+  const handlers = {};
+  const svg = { style: {} };
+  const button = {
+    querySelector: () => svg,
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 50, height: 50 }),
+  };
+  const doc = {
+    querySelector: () => button,
+    addEventListener: (t, f, cap) => { handlers[t + (cap ? '1' : '0')] = f; },
+    handlers,
+  };
+  const evt = (x, y, id = 1) => ({ clientX: x, clientY: y, pointerId: id,
+    target: { closest: s => (s === '.north-open' ? button : null), ownerDocument: doc } });
+  const fire = (t, cap, e) => handlers[t + (cap ? '1' : '0')]?.(e);
+  return { doc, evt, fire, svg };
+}
+
+test('a click on the compass snaps to the nearest cardinal, inertia dead', () => {
+  const { camera, controls } = makeRig();
+  camera.position.set(120, 120, 60);             // east of the centre: azimuth ~+63°, nearer east than north
+  const { doc, evt, fire } = makeGestureDoc();
+  makeNorth({ camera, controls, doc });
+  fire('pointerdown', true, evt(25, 25));
+  fire('pointerup', true, evt(25, 25));          // no travel: the click
+  assert.ok(controls.updates >= 1);
+  near(controls.getAzimuthalAngle(), Math.PI / 2, 'snapped exactly to the nearest side (east)');
+  assert.deepEqual(controls._sphericalDelta.v, [0, 0, 0]);
+  assert.deepEqual(controls._panOffset.v, [0, 0, 0]);
+});
+
+test('a drag of the needle turns the map under the pointer, release does not double-fire', () => {
+  const { camera, controls } = makeRig();
+  camera.position.set(0, 120, 90);               // south of the centre: north-up
+  const { doc, evt, fire, svg } = makeGestureDoc();
+  const north = makeNorth({ camera, controls, doc });
+  fire('pointerdown', true, evt(25, 25));
+  fire('pointermove', true, evt(75, 25));        // 50 px east of centre: heading east
+  near(controls.getAzimuthalAngle(), Math.PI / 2, 'camera followed the dragged needle to east');
+  const after = controls.updates;
+  fire('pointerup', true, evt(75, 25));
+  assert.equal(controls.updates, after, 'release of a drag adds no snap');
+  // A tiny wobble under the threshold stays a click.
+  fire('pointerdown', true, evt(25, 25));
+  fire('pointermove', true, evt(28, 26));        // 3.2 px: wobble
+  fire('pointerup', true, evt(28, 26));
+  near(controls.getAzimuthalAngle(), Math.PI / 2, 'wobble-click still snapped (stays east)');
+  north.draw(Math.PI / 2);
+  assert.ok(String(svg.style.transform || '').length > 0, 'the needle was drawn');
 });

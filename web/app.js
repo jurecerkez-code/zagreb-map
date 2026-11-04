@@ -39,6 +39,7 @@ import { makeGround, cutFactor, levelAt, LOD_TOL, parsePolygons, fadeWidth, fade
 import { RELIEF_KEY, RELIEF_MAX, RELIEF_STEP, initialRelief, reliefNote, reliefValue, ease } from './relief.js';
 import { howto } from './howto.js';
 import { makeNorth } from './north.js';
+import { makeQuality } from './quality.js';
 import { mountSearch } from './searchbox.js';
 import { makeHighlight } from './highlight.js';
 import { aboutHtml, aboutTarget } from './about.js';
@@ -272,6 +273,10 @@ const canvas = document.getElementById('scene');
 let renderer;
 // No WebGL: say so in the page's language, not that the data failed.
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); } catch (e) { await halt(e, 'ui.nowebgl'); }
+// The fill-heavy window on an integrated GPU: web/quality.js drops the internal render scale a notch when the
+// median frame overshoots the budget, and brings it back when the ground is clear. Nothing touchy: the stack below
+// still renders 1:1 for posters, postcards and the pick pass whenever it matters.
+const quality = makeQuality({ renderer });
 // A lost context (a GPU reset, a phone short of memory) leaves a blank map: say so, and that a reload draws it again.
 canvas.addEventListener('webglcontextlost', e => loadFailed(e, 'ui.contextlost'));
 // ... and when the browser gives it back (three.js asks it to), the map draws again and the message goes.
@@ -3852,7 +3857,7 @@ function applyStaticText() {
   const nb = northBtn();
   if (nb) {
     nb.setAttribute('aria-label', T('ui.north'));
-    nb.title = `${T('ui.north')} (N)`;
+    nb.title = T('ui.north');
   }
   postcardBtn.title = `${T('postcard.open')} (P)`;
   renderAbout();
@@ -4211,6 +4216,7 @@ let frame = 0, deferredRequested = false;
 let pickKey = '', pickGid = -1;   // the pixel and camera the last pick answered for (see the hover block)
 renderer.setAnimationLoop(now => {
   frame++;
+  quality.frame(now);
   const dt = lastFrameAt ? (now - lastFrameAt) / 1000 : 0;
   if (lastFrameAt) { frameMs.push(now - lastFrameAt); if (frameMs.length > 60) frameMs.shift(); }
   lastFrameAt = now;

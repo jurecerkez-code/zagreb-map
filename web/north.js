@@ -33,14 +33,37 @@ export function turnAt(turn, now) {
 // so north is to the right of the screen. A tenth of a degree, so a still map writes no new style.
 export const needleDeg = theta => Math.round(wrapAngle(theta) * 1800 / Math.PI) / 10 || 0;
 
-// The compass, all its surfaces in one place. A press — pointer, tap on a phone, or the N key — snaps the camera
-// north on the frame it landed, wherever the camera was: first click works, fiftieth click works, because there is
-// no turn to state-misremember. The earlier lives of this bug were (a) an eased turn whose state guard could stick
-// and (b) a handler bound to a button node the header's redraw then replaced. Neither state nor node binding here:
-// the snap is immediate, the wiring hangs off the document, and the needle is drawn on every frame from the bearing
-// the camera actually has, so a dropped press would show as a wrong needle, not a stuck button.
+// The four cardinal headings the compass snaps to, clockwise from north, as camera azimuth: in the local frame
+// (x east, z south) the camera's offset angle is atan2(x, z), so E is +π/2 — the camera stands east of the place
+// looking west. Export for tests and for the key table below.
+export const CARDINALS = Object.freeze([0, Math.PI / 2, Math.PI, -Math.PI / 2]);              // N E S W
+export const CARDINAL_KEYS = Object.freeze({ n: 0, e: Math.PI / 2, s: Math.PI, w: -Math.PI / 2 });
+
+// The nearest of the four cardinals to an azimuth — the press-to-snap target: whatever side of the world you level
+// the map at, one click puts it exactly there. Ties (exactly between two) fall to the side at the smaller index:
+// north, then east, then south, then west — any deterministic order would do, but "north wins the seam" matches
+// what a user who mostly pressed N expects.
+export function nearestCardinal(a) {
+  a = wrapAngle(a);
+  let best = 0, dist = Infinity;
+  CARDINALS.forEach((c, i) => {
+    const d = Math.abs(wrapAngle(a - c));
+    if (d < dist - 1e-12) { dist = d; best = i; }
+  });
+  return CARDINALS[best];
+}
+
+// Where the camera stands for a heading: due south of the ground north stays north-up; parameterised in azimuth
+// (x/z of the offset in the plane), so any heading works, cardinal or dragged. y is untouched: the tilt is the
+// user's, not the compass's.
+export function bearingOffset(h, rad) { return { x: h * Math.sin(rad), z: h * Math.cos(rad) }; }
+
+// The compass, all its surfaces in one place. Three ways in, all free of state that could latch: a drag of the
+// needle turns the camera under the pointer, a click snaps to the nearest cardinal, and the N/E/S/W keys snap to
+// their side. The needle is drawn on every frame from the bearing the camera actually has, so a dropped press
+// shows as a wrong needle, not a stuck button.
 //
-// `endHolds` runs before the snap: a ride or a flight owns the camera, and a press asks for it back.
+// `endHolds` runs before any change of heading: a ride or a flight owns the camera, and a press asks for it back.
 export function makeNorth({ camera, controls, endHolds = () => {}, typingIn = () => false, doc = document,
   buttonSel = '.north-open' } = {}) {
   let at = null;
@@ -52,34 +75,55 @@ export function makeNorth({ camera, controls, endHolds = () => {}, typingIn = ()
     const svg = btn()?.querySelector('svg');
     if (svg) svg.style.transform = `rotate(${d}deg)`;
   };
-  const snap = () => {
+  const face = rad => {
     endHolds();
     const p = camera.position, c = controls.target, h = Math.hypot(p.x - c.x, p.z - c.z);
-    if (h > 1e-3) p.set(c.x, p.y, c.z + h);      // due south of the place is azimuth 0: the map faces north
+    if (h > 1e-3) p.set(c.x + h * Math.sin(rad), p.y, c.z + h * Math.cos(rad));
     controls._sphericalDelta.set(0, 0, 0);       // the vendored OrbitControls (r186) inertia must not carry on
     controls._panOffset.set(0, 0, 0);
     controls.update();
     at = null;
-    draw(0);
+    draw(rad);
   };
-  let pressedAt = -1e9;
+  const snap = () => face(0);
+  const snapNearest = () => face(nearestCardinal(controls.getAzimuthalAngle()));
+
+  // The gesture. A press starts on the compass; moving more than DRAG_PX px is a drag of the needle, and the
+  // camera follows the pointer's bearing live. A release without travel is the click: snap to nearest cardinal.
+  let drag = null;
+  const DRAG_PX = 5;
+  const headingOf = e => {
+    const r = btn()?.getBoundingClientRect();
+    if (!r) return null;
+    return Math.atan2(e.clientX - (r.left + r.width / 2), -(e.clientY - (r.top + r.height / 2)));
+  };
   const onPointer = e => {
     if (!e.target?.closest?.(buttonSel)) return;
-    pressedAt = performance.now();
-    snap();
+    drag = { x0: e.clientX, y0: e.clientY, moved: false, id: e.pointerId };
   };
-  const onClick = e => {
-    if (!e.target?.closest?.(buttonSel)) return;
-    if (performance.now() - pressedAt < 700) return;   // pointerdown already snapped: one press, one snap
-    snap();
+  const onMove = e => {
+    if (!drag || drag.id !== e.pointerId) return;
+    if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > DRAG_PX) drag.moved = true;
+    if (!drag.moved) return;
+    const rad = headingOf(e);
+    if (rad != null) face(rad);
+  };
+  const onUp = e => {
+    if (!drag || drag.id !== e.pointerId) return;
+    const wasDrag = drag.moved;
+    drag = null;
+    if (!wasDrag) snapNearest();
   };
   const onKey = e => {
-    if (e.key !== 'n' && e.key !== 'N') return;
+    const k = e.key && e.key.toLowerCase();
+    if (!(k in CARDINAL_KEYS)) return;
     if (e.ctrlKey || e.metaKey || e.altKey || e.repeat || typingIn(e.target)) return;
-    snap();
+    face(CARDINAL_KEYS[k]);
   };
   doc.addEventListener('pointerdown', onPointer, true);
-  doc.addEventListener('click', onClick, true);
+  doc.addEventListener('pointermove', onMove, true);
+  doc.addEventListener('pointerup', onUp, true);
+  doc.addEventListener('pointercancel', () => { drag = null; }, true);
   doc.addEventListener('keydown', onKey);
-  return { snap, draw, press: onPointer };
+  return { snap, face, snapNearest, draw, press: onPointer };
 }
