@@ -1650,8 +1650,9 @@ function terrainMaterial(vert, colour, kind, pick, side = THREE.FrontSide) {
 
 // The Foto look's real colours. Each file starts with two little-endian uint32 (width, height), then RGBA8 rows.
 // Loaded once, on first use; a missing file leaves the look on the period colours (uFoto stays 0).
-// Foto keeps the look's light ground; ?fotoground=1 paints the ground from the photograph too.
-const fotoGroundOn = () => new URLSearchParams(location.search).get('fotoground') === '1';
+// Foto paints the ground from the photograph; ?fotoground=0 keeps the look's own light land when a viewer
+// finds the photo ground competing with the period colours.
+const fotoGroundOn = () => new URLSearchParams(location.search).get('fotoground') !== '0';
 let photoTried = false;
 async function loadPhotoColours() {
   if (photoTried) return;
