@@ -14,6 +14,8 @@ const TILE = 1200;          // metres: the buildings' own tile size
 const LIFT = 0.18;          // metres above the ground: over the terrain, under nothing else
 const KERB_LIFT = 0.10;     // the pavement band, just under the asphalt: one polygon each, no z-fighting between them
 const KERB = 3.4;           // metres of pavement each side of a carriageway
+const EDGE_LIFT = 0.14;     // the kerb line: between the pavement and the asphalt, so one flank stays visible
+const EDGE_W = 0.6;         // metres of kerbstone showing on each side of a carriageway
 const POOL_R = 12;          // metres of the light pool a lamp throws on the pavement
 const POOL_Y = 0.14;        // metres above the ground, under the road at LIFT? no: pools lie on the pavement
 const LAMP_H = 7.0;         // metres: the head of a Zagreb street lamp
@@ -31,6 +33,7 @@ const COLOUR = {
 };
 const PAVEMENT = new Set(['footway', 'path', 'steps', 'cycleway', 'pedestrian']);
 const SIDEWALK = '#8d908e';   // the band a carriageway sits in: the pavements on both sides, at a glance
+const EDGE = '#c9ccc9';       // kerbstone: the dressed granite between a Zagreb pavement and its asphalt reads near-white
 
 // The ground the streets are laid on. surfaceAt is the exact surface, but the terrain draws each chunk as flat
 // quads on a coarse grid, so on a slope the drawn ground stands metres above it and the street sinks into the hill.
@@ -117,7 +120,16 @@ export async function makeRoads({ THREE, base, scene, surfaceAt, uniforms, on = 
         const c = new THREE.Color(SIDEWALK).convertSRGBToLinear();
         colourCache.set('__kerb', kerb = [c.r, c.g, c.b]);
       }
+      let edge = colourCache.get('__edge');
+      if (!edge) {
+        const c = new THREE.Color(EDGE).convertSRGBToLinear();
+        colourCache.set('__edge', edge = [c.r, c.g, c.b]);
+      }
       ribbon(tile, pts, way.o, n, way.w + 2 * KERB, kerb, surfaceAt, KERB_LIFT);
+      // Between pavement and asphalt stands the kerb line: a thin bright band drawn under the asphalt's flanks, so
+      // the pavement ends against dressed stone, not against more grey. One ribbon per way; the asphalt covers its
+      // middle and 0.6 m of kerbstone stays showing on each side.
+      ribbon(tile, pts, way.o, n, way.w + 2 * EDGE_W, edge, surfaceAt, EDGE_LIFT);
     }
     ribbon(tile, pts, way.o, n, PAVEMENT.has(way.cls) ? Math.max(way.w, 1.6) : way.w, colour, surfaceAt);
   }
