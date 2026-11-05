@@ -39,7 +39,7 @@ import { makeGround, cutFactor, levelAt, LOD_TOL, parsePolygons, fadeWidth, fade
 import { RELIEF_KEY, RELIEF_MAX, RELIEF_STEP, initialRelief, reliefNote, reliefValue, ease } from './relief.js';
 import { howto } from './howto.js';
 import { makeNorth } from './north.js';
-import { makeQuality } from './quality.js';
+import { makeQuality, STEPS } from './quality.js';
 import { mountSearch } from './searchbox.js';
 import { makeHighlight } from './highlight.js';
 import { aboutHtml, aboutTarget } from './about.js';
@@ -272,11 +272,23 @@ let waterAt = () => 0;
 const canvas = document.getElementById('scene');
 let renderer;
 // No WebGL: say so in the page's language, not that the data failed.
-try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); } catch (e) { await halt(e, 'ui.nowebgl'); }
+// #23: start at min(dpr, 1.5) with MSAA stepping in below it (antialias only pays where the ratio is low).
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias: devicePixelRatio < 1.5 }); } catch (e) { await halt(e, 'ui.nowebgl'); }
+// The GPU's own name, read once: integrated chips (Intel, Mali, Adreno, Apple, ...) open the quality ladder one
+// notch down instead of learning the lesson at 13 fps.
+let gpuName = '';
+try {
+  const gl = renderer.getContext();
+  const info = gl.getExtension('WEBGL_debug_renderer_info');
+  gpuName = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : '';
+} catch (_) { /* a redacted name is fine — the ladder starts at full and adapts on evidence */ }
+const gpuLow = /Intel|AMD Radeon\(TM\) Graphics|Mali|Adreno|PowerVR|Apple GPU/i.test(gpuName);
+if (gpuLow) console.info(`[quality] integrated GPU (${gpuName.slice(0, 48)}) — ladder starts one notch down`);
 // The fill-heavy window on an integrated GPU: web/quality.js drops the internal render scale a notch when the
 // median frame overshoots the budget, and brings it back when the ground is clear. Nothing touchy: the stack below
-// still renders 1:1 for posters, postcards and the pick pass whenever it matters.
-const quality = makeQuality({ renderer });
+// still renders 1:1 for posters, postcards and the pick pass whenever it matters. Full dpr (the `boost`) is earned,
+// not default: four seconds of median frames under 8 ms at the top step.
+const quality = makeQuality({ renderer, startStep: gpuLow ? 1 : 0 });
 // A lost context (a GPU reset, a phone short of memory) leaves a blank map: say so, and that a reload draws it again.
 canvas.addEventListener('webglcontextlost', e => loadFailed(e, 'ui.contextlost'));
 // ... and when the browser gives it back (three.js asks it to), the map draws again and the message goes.
@@ -289,12 +301,24 @@ canvas.addEventListener('webglcontextrestored', () => {
   el.hidden = true;
 });
 renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+// dpr 1.5 at the top ladder step (0.85 of it on an integrated chip): the boost to full dpr is quality.js's to grant.
+const pxStart = Math.min(devicePixelRatio || 1, 1.5) * STEPS[gpuLow ? 1 : 0];
+renderer.setPixelRatio(pxStart);
 renderer.setClearColor(THEME.sky);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(35, 1, 5, 60000);
+camera.layers.enableAll();   // the pick pass narrows to layer 1 (tiles and terrain); the view wants 0 and 1
 const controls = new MapControls(camera, canvas);
 controls.enableDamping = true;
+// The invalidation clock (#23): what changes what is drawn asks for frames through __dbg.invalidate; the loop's
+// restart note is in doWhatLetsItIdle below. A controls change (a drag, a key) also clears the pick's rest cache,
+// since a moved camera answers a different building for the same resting pointer.
+let dirtyUntil = 0;
+let pickKey = '';   // the resting pointer + tile count the last hover pick answered (see the pick block)
+let pickGid = -1, pickRestAt = 0, pickBusy = false, pickReq = 0;   // rest state for the async hover pick (#23)
+const invalidate = (ms = 0) => { dirtyUntil = Math.max(dirtyUntil, performance.now() + ms); };
+controls.addEventListener('change', () => { invalidate(150); pickKey = ''; pickReq++; });
+addEventListener('resize', () => invalidate(200));
 // Like a web map: drag moves the city; Ctrl/Cmd with the left button, or the right button, turns and tilts it.
 // (OrbitControls swaps PAN for ROTATE itself while Ctrl, Cmd or Shift is held.) Shift works too but is not advertised
 // (web/howto.js): a real Shift-drag is unreliable, since the browser takes a Shift-press for selection-extend and some
@@ -483,6 +507,7 @@ function loadLabelFont() {
 }
 // A switch disposes every name's mesh material and texture; updateLabels makes new ones once the font is in.
 function redrawLabels() {
+  invalidate(700);   // names are re-laid over the next update ticks (#23)
   for (const l of labels) if (l.mesh) { labelGroup.remove(l.mesh); l.mesh.material.dispose(); l.mesh = null; }
   for (const tex of labelTex.values()) tex.dispose();
   labelTex.clear();
@@ -1071,6 +1096,7 @@ function makeMaterial(tex, pick, born, faint = null) {
 const faints = [];
 let faintOn = false;
 function setFaint(on) {
+  invalidate();   // one frame: the faints swap visibility (#23)
   faintOn = on;
   for (const f of faints) f.visible = on;
 }
@@ -1175,6 +1201,7 @@ loadCityHeight().catch(optional("The shadows"));
 // night (the sun down, the city lit only by its own colours, cooled towards blue). Live is the default.
 let sunMode = ['live', 'day', 'night'].includes(QUERY.get('sunmode')) ? QUERY.get('sunmode') : 'live';
 function applySunMode(mode = sunMode) {
+  invalidate(600);   // the day's light (or the Night) lands on walls, roofs, sky (#23)
   sunMode = mode;
   const night = mode === 'night';
   uniforms.uNight.value = night ? 1 : 0;
@@ -1401,6 +1428,8 @@ function addTile(m) {
   const born = { value: performance.now() / 1000 };
   const mesh = new THREE.Mesh(g, makeMaterial(tex, false, born));
   mesh.userData = { draw: mesh.material, pick: makeMaterial(tex, true, born), attr: m.attr, nB: m.nB };   // attr, nB: the pick's outline
+  mesh.layers.set(1);   // the pick pass renders layer 1 only (#23); the story's faints stay on 0 with everyone else
+  invalidate(1300);     // the tile's drop-in weighs in at about a second: frames until the dust settles (#23)
   mesh.scale.setScalar(0.1);
   mesh.position.set(m.origin[0], 0, m.origin[1]);
   for (const [k, pass] of ['depth', 'colour'].entries()) {
@@ -1481,7 +1510,12 @@ function fetchRestPacks() {
   // Two at a time, centre-out: the line stays busy without a burst of parallel requests.
   const names = config.packs.map(packName);
   for (let lane = 0; lane < 2; lane++) {
-    (async () => { while (names.length) await fetchPack(names.shift()).catch(() => {}); })();
+    (async () => {
+      // A lane that dies on a fetch would freeze the stream with no signal: name the pack that stopped it.
+      let current = '?';
+      try { while (names.length) { current = names.shift(); await fetchPack(current); } }
+      catch (e) { console.warn(`[stream] pack lane ${lane} died on ${current}`, e); }
+    })();
   }
 }
 fetchPack(packName(config.packs[0]));
@@ -1742,6 +1776,7 @@ async function loadTerrain(base) {
   const add = (mesh, draw, pick, order) => {
     mesh.userData = { ...mesh.userData, draw, pick };
     mesh.renderOrder = order;   // after the buildings, so early depth rejects the ground they cover
+    mesh.layers.set(1);         // #23: the pick pass renders layer 1 only (tiles and terrain)
     terrainGroup.add(mesh);
     terrainMeshes.push(mesh);
   };
@@ -1822,6 +1857,7 @@ function applyRelief(R) {
 }
 function setRelief(value, animate = true) {
   relief = Math.min(reliefMax, Math.max(0, Number(value) || 0));
+  invalidate(1400);   // the rise tween runs 600 or 1200 ms (#23)
   const to = terrainState === 'ready' ? relief : 0, from = uRelief.value;
   const dur = reliefRisen ? 600 : 1200;
   if (terrainState === 'ready') reliefRisen = true;
@@ -1899,55 +1935,49 @@ const pickTarget = new THREE.WebGLRenderTarget(1, 1);
 const storyGroup = new THREE.Group();
 scene.add(storyGroup);
 const pickPixel = new Uint8Array(4);
-function pick(x, y) {
+// Issue #23: the pass renders only layer 1 (tile meshes and terrain pieces): a camera layer mask replaces the old
+// twelve-group hide-and-restore dance. The trees (web/veg.js) are drawn with their own colours, so the pick would
+// read a tree as a building; falling snow or rain would cover the building under the pointer; none of them is on
+// layer 1, so they simply do not exist here (only what survived the pick's own masks ever moved to the mask list:
+// veg, labels, monuments, stories, faints, plaques, the metro, the weather, boats, trams and the highlight).
+let pickMask = -1;
+function pickSetup(x, y) {
   const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
   camera.setViewOffset(w, h, x, y, 1, 1);
   for (const m of meshes) m.material = m.userData.pick;
   for (const m of terrainMeshes) m.material = m.userData.pick;
-  flat.visible = false;
-  labelGroup.visible = false;
-  const roofShown = roofYears?.group.visible;
-  if (roofYears) roofYears.group.visible = false;
-  const monShown = monuments?.group.visible;
-  if (monuments) monuments.group.visible = false;
-  storyGroup.visible = false;
-  for (const f of faints) f.visible = false;
-  plaqueGroup.visible = false;
-  if (metroLayer) metroLayer.group.visible = false;
-  weather.group.visible = false;   // falling snow or rain would cover the building under the pointer
-  const boatsVisible = ferries?.group.visible;
-  if (ferries) ferries.group.visible = false;
-  const tramsVisible = trams?.group.visible;
-  if (trams) trams.group.visible = false;
-  // The trees (web/veg.js) are drawn with their own colours, so the pick would read a tree as a building: hovering one
-  // opened a card for a gid the attributes do not have, and a tram behind one counted as hidden.
-  const vegVisible = veg?.group.visible;
-  if (veg) veg.group.visible = false;
-  const outlined = highlight.mesh.visible;
-  highlight.mesh.visible = false;
+  pickMask = camera.layers.mask;
+  camera.layers.set(1);
   renderer.setRenderTarget(pickTarget);
   renderer.setClearColor(0x000000, 0);
   renderer.clear();
   renderer.render(scene, camera);
-  renderer.readRenderTargetPixels(pickTarget, 0, 0, 1, 1, pickPixel);
+}
+function pickRestore() {
   renderer.setRenderTarget(null);
   renderer.setClearColor(skyNow(), 1);
-  flat.visible = true;
-  labelGroup.visible = true;
-  if (roofYears) roofYears.group.visible = roofShown;
-  if (monuments) monuments.group.visible = monShown;
-  storyGroup.visible = true;
-  for (const f of faints) f.visible = faintOn;
-  plaqueGroup.visible = plaquesOn;
-  if (metroLayer) metroLayer.group.visible = metroShown();
-  weather.group.visible = true;
-  if (ferries) ferries.group.visible = boatsVisible;
-  if (trams) trams.group.visible = tramsVisible;
-  if (veg) veg.group.visible = vegVisible;
-  highlight.mesh.visible = outlined;
   for (const m of meshes) m.material = m.userData.draw;
   for (const m of terrainMeshes) m.material = m.userData.draw;
+  camera.layers.mask = pickMask;
   camera.clearViewOffset();
+}
+function pick(x, y) {
+  if (x === undefined) return -1;
+  const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
+  if (x < 0 || y < 0 || x >= w || y >= h) return -1;
+  pickSetup(x, y);
+  renderer.readRenderTargetPixels(pickTarget, 0, 0, 1, 1, pickPixel);
+  pickRestore();
+  return pickPixel[0] + pickPixel[1] * 256 + pickPixel[2] * 65536 - 1;
+}
+// The hover's pick: same one-pixel pass, and the read carries three's fence — the CPU schedules the frame and asks
+// for its pixel when the GPU says it is drawn, instead of parking every other frame on a full pipeline flush.
+async function pickAsync(x, y) {
+  const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
+  if (x < 0 || y < 0 || x >= w || y >= h) return -1;
+  pickSetup(x, y);
+  await renderer.readRenderTargetPixelsAsync(pickTarget, 0, 0, 1, 1, pickPixel);
+  pickRestore();
   return pickPixel[0] + pickPixel[1] * 256 + pickPixel[2] * 65536 - 1;
 }
 
@@ -2132,6 +2162,7 @@ function placeCard(x, y) {
 }
 let hoverGid = -1;
 function showCard(gid, x, y) {
+  invalidate();   // a hover tint (or its absence) is a drawn change (#23)
   if (pinnedGid >= 0 || pinnedStation || phone.matches) return;
   if (cardsLocked()) { card.hidden = true; return; }
   if (gid < 0) { card.hidden = true; hoverGid = -1; return; }
@@ -2149,6 +2180,7 @@ function showCard(gid, x, y) {
 // A pinned card is a non-modal dialog: it takes the keyboard focus (its close button) when it opens, and gives it
 // back when it closes, by its button or Escape.
 function pinCard(gid, x, y) {
+  invalidate();
   if (gid >= 0) boatTip.hide();
   if (gid >= 0 && gid !== pinnedGid) { pickSeq++; slideAt = 0; }   // a new pin (not a redraw): a street's numbers
                                                          // still coming no longer move the camera; today's photo first
@@ -2359,6 +2391,7 @@ addEventListener('keydown', e => {
 let pointer = null, pointerType = '', dragging = false, downAt = null;
 canvas.addEventListener('pointermove', e => {
   pointer = [e.clientX, e.clientY]; pointerType = e.pointerType;
+  pickRestAt = performance.now();   // the hover pick asks only after 60 resting ms (#23)
   // a drag moves the map from under a hovered boat's tooltip (a click on the boat keeps it)
   if (dragging && downAt && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5) {
     boatTip.hide('hover'); monTipHide();
@@ -2443,6 +2476,7 @@ const highlight = makeHighlight(THREE, { uRelief, attrFloats: ATTR_FLOATS, rende
 function force(gid) {
   forcedGid = gid; uniforms.uForce.value = gid;
   highlight.show(gid, meshes);
+  invalidate();
 }
 // The card's "Picked from search" note follows the map's settings: shown exactly while they would hide the building.
 // (The outline follows the ground itself: the terrain may arrive, or the Hills slider move, after the pick.)
@@ -2491,6 +2525,7 @@ async function pickResult(row, loadShard) {
       if (forcedGid !== row.gid) return;
       pinCard(row.gid, innerWidth, document.querySelector('.corner').getBoundingClientRect().bottom - 8);
       highlight.pulse(performance.now());
+      invalidate(1700);   // two pulses of the outline, PULSE_MS and a breath (#23)
     });
     return;
   }
@@ -3177,6 +3212,7 @@ function layerDetail(L) {
 // choice is remembered. Like the unknown-year switch it changes in place, not by rebuilding the legend, so it keeps the keyboard
 // focus. It stays live with a period shown alone: that period's estimates leave too.
 function setHideEst(v) {
+  invalidate();
   hideEst = !!v;
   uniforms.uHideEst.value = hideEst ? 1 : 0;
   try { localStorage.setItem(EST_KEY, hideEst ? 'hidden' : 'shown'); } catch {}
@@ -3186,6 +3222,7 @@ function setHideEst(v) {
 // The photo switch: the list loads once, then each tile's flags are written once (addTile marks later tiles); the
 // switch itself is one uniform. The choice goes into the URL.
 async function setPhotoOnly(v) {
+  invalidate();
   photoOnly = !!v;
   switcher.markLayers();
   history.replaceState(history.state, '', photoOnlyHref(location.href, photoOnly));
@@ -3236,6 +3273,7 @@ function setPlaques(v) {
 const estShown = () => !(hideEst && uniforms.uMode.value === MODE.period);
 
 function setLayer(L) {
+  invalidate(1600);   // an opening layer's buildings rise and overshoot for about a second (#23)
   if (L) uniforms.uLayerAt.value = performance.now() / 1000;
   activeLayer = L;
   const bits = Array(MAX_GROUPS).fill(-1);
@@ -3432,6 +3470,7 @@ hist.addEventListener('pointerup', e => {
 hist.addEventListener('pointercancel', () => { handle = null; labelDown = null; });
 // Dragged back to the timeline's left end, or anywhere before the oldest building, the from-handle rests again.
 function setHandle(which, y) {
+  invalidate(140);   // a scrub extends the draw window; the buildings change at once (#23)
   y = Math.max(T0, Math.min(config.yearMax, y));
   if (which === 'uYear') uniforms.uYear.value = Math.max(y, uniforms.uYearFrom.value + 1);
   else uniforms.uYearFrom.value = y <= Math.max(T0, FROM_REST) ? FROM_REST : Math.min(y, uniforms.uYear.value - 1);
@@ -3988,6 +4027,7 @@ document.querySelectorAll('.lang [data-lang]').forEach(b => b.onclick = () => se
 // the page, sky and fog, land and water, the buildings' palette, the street names (redrawn in the look's font), the
 // legend, the timeline and an open card. Called at startup and on every switch; nothing reloads.
 function applyLook(name) {
+  invalidate(400);   // everything drawn in the look's colours re-inks; the new sky eases for a breath (#23)
   applyPageLook(name);
   if (name === 'foto') loadPhotoColours();
   uniforms.uFoto.value = name === 'foto' && uniforms.uRoof.value ? 1 : 0;
@@ -4065,7 +4105,8 @@ const weather = makeWeather(THREE, { uniforms, camera, renderer, reduced: () => 
   fps: () => frameRate(frameMs) });
 scene.add(weather.group);
 for (const [id, name] of Object.entries(WEATHER_NAMES)) {
-  looks.atmospheres.add({ id, name, start: () => weather.set(id), stop: () => weather.set('none') });
+  // A switch eases over about a second, then the kind holds its 30 fps tier while it stays on (#23).
+  looks.atmospheres.add({ id, name, start: () => { weather.set(id); invalidate(1200); }, stop: () => { weather.set('none'); invalidate(1200); } });
 }
 {
   const first = initialWeather(location.search, (() => { try { return localStorage.getItem(WEATHER_KEY); } catch { return null; } })());
@@ -4221,13 +4262,14 @@ if (new URLSearchParams(location.search).has('debug')) {
 }
 
 let frame = 0, deferredRequested = false;
-let pickKey = '', pickGid = -1;   // the pixel and camera the last pick answered for (see the hover block)
+let frameDue = -1, weatherMoved = false, lastDueAt = 0;   // #23 scheduling: timestamps belong to drawn frames
 renderer.setAnimationLoop(now => {
   frame++;
-  quality.frame(now);
   const dt = lastFrameAt ? (now - lastFrameAt) / 1000 : 0;
   if (lastFrameAt) { frameMs.push(now - lastFrameAt); if (frameMs.length > 60) frameMs.shift(); }
   lastFrameAt = now;
+
+  // The cheap steps: they move the camera or the compass only, and cost a handful of microseconds.
   stepFlight(now);
   stepRelief(now);
   uniforms.uNow.value = now / 1000;
@@ -4237,22 +4279,58 @@ renderer.setAnimationLoop(now => {
   north.draw(controls.getAzimuthalAngle());
   const dist = camera.position.distanceTo(controls.target);
   followGround(dist, dt);
-  updateLods();
-  if (weather.step(dt, dist, controls.target)) applySky();   // the sky moves only while the weather eases
+  if (ride) stepRide(dt);         // sets this vr's own camera; drawn at full rate by the ride tier below
   const [fogNear, fogFar] = weather.fog();
   uniforms.uFog.value.set(dist * fogNear, dist * fogFar);
+  highlight.step(now, THEME.ui['--accent'], meshes);
+
+  // The hover pick: a 1x1 render with all twelve decorative groups turned off costs a frame each, so it asks only
+  // when the pointer has rested 60 ms after the last drawn change, caches on (x, y, tiles in), and reads through
+  // pickAsync's fence — the CPU never parks on the GPU for a tooltip (#23). A controls change clears the cache
+  // (the listener up in Scene), so a dragged map re-asks without the pointer moving.
+  if (pointer && !dragging && !postcard.on && !pickBusy) {
+    const [x, y] = pointer;
+    const key = `${x},${y},${meshes.length}`;
+    if (key !== pickKey && now - pickRestAt >= 60 && now >= dirtyUntil) {
+      pickKey = key;
+      pickBusy = true;
+      const rq = ++pickReq;
+      pickAsync(x, y).then(g => {
+        pickBusy = false;
+        if (rq !== pickReq) return;   // a controls change or a re-ask made this one stale on the way
+        pickGid = g;
+        applyHover(pointer[0], pointer[1], g);
+      });
+    }
+  }
+
+  // The rate decision (#23): how often what is drawn actually changes.
+  const fast = now < dirtyUntil || playing || (typeof flight !== 'undefined' && !!flight) ||
+    (typeof reliefTween !== 'undefined' && !!reliefTween) || !!ride || postcard.on;
+  let tier;
+  if (fast) tier = 0;
+  else if (weatherMoved) tier = 33;              // snow falls, rain runs, the water shimmers: 30 fps
+  else if (trams && tramsShown() && trams.inView(camera)) tier = 50;   // a tram in frame keeps 20 fps
+  else tier = Infinity;                          // a still map changes nothing: 0 fps, the GPU idles
+  if (now < frameDue) { stepHoverTips(); return; }   // a rest: nothing drawn changes until the next due frame
+  frameDue = now + tier;
+  quality.frame(now);   // drawn frames only: the ladder judges real cadence, not an idling vsync
+  const dueDt = lastDueAt ? (now - lastDueAt) / 1000 : dt;   // the dt a due-frame step actually spans
+  lastDueAt = now;
+
+  updateLods();
+  if (weather.step(dt, dist, controls.target)) applySky();   // the sky moves only while the weather eases
+  weatherMoved = weather.kind !== 'none';
   // A name is sized and placed from that same distance, so a ride (stepRide) borrows the app's closest zoom, which is
   // the street view the ride is.
   if (frame % 6 === 0) { updateLabels(ride ? controls.minDistance : dist); updatePlaqueMarkers(); updateMetro(dist); stepPick(); }
   if (frame % 6 === 3) roofYears?.update();
   if (monuments && frame % 20 === 9) { monuments.place(); monuments.group.visible = monumentsOn && !faintOn && !document.body.classList.contains('scene-on'); }
-  roofYears?.step(dt);
+  roofYears?.step(dueDt);
   ferries?.step(now / 1000, dist, boatsNow());
-  veg?.step(dt);          // the Sljeme cable car's cabins along the mapped line
+  veg?.step(dueDt);       // the Sljeme cable car's cabins along the mapped line
   trams?.step(tramsShown());   // the trams: the timetable now, or ZET's live position where the feed has one
-  if (ride) stepRide(dt);      // the camera behind the tram it is riding, once the layer has drawn it this frame
   facts?.setYear(uniforms.uYear.value);   // an event appears once the timeline reaches its year
-  highlight.step(now, THEME.ui['--accent'], meshes);
   if (playing) {
     const t = Math.min(1, playT0 + (now - playStart) / DURATION);
     uniforms.uYear.value = playYear(t);
@@ -4261,40 +4339,6 @@ renderer.setAnimationLoop(now => {
     if (t >= 1) stopPlay();
     drawHist();
   }
-  if (pointer && !dragging && frame % 3 === 0 && !postcard.on) {
-    // a tram or a boat under a mouse pointer (its tooltip), the tram first, unless the building there stands in
-    // front of it or a click there would open a station; else the building, as before
-    const [x, y] = pointer;
-    // The pick renders the whole city into a 1x1 target and reads it back: a frame's worth of draw calls for one
-    // pixel. A parked pointer over a still camera asks the same question, so it is asked once, until either moves or a
-    // tile arrives (a gid numbers a building within the tiles in).
-    const key = `${x},${y},${camera.position.x},${camera.position.y},${camera.position.z},${camera.zoom},${meshes.length}`;
-    if (key !== pickKey) { pickKey = key; pickGid = pick(x, y); }
-    const gid = pickGid;
-    // A tram is first on hover, station or not: a tram spends most of its life at or near a stop, so letting the
-    // station win made the tram's tooltip unreachable (measured: 335 hit points accepted, none shown, 2026-11-03).
-    // The station still opens on a click that lands on it with no tram under the pointer.
-    const takes = pointerType === 'mouse';
-    const tram = takes ? tramOver(x, y, gid) : null;
-    const boat = !tram && takes ? boatOver(x, y, gid) : null;
-    if (tram) {
-      uniforms.uHover.value = -1;
-      showCard(-1, x, y);
-      boatTip.hide('hover');
-      tramTip.hover(tram, x, y);
-    } else if (boat) {
-      uniforms.uHover.value = -1;
-      showCard(-1, x, y);
-      tramTip.hide('hover');
-      boatTip.hover(boat, x, y);
-    } else {
-      tramTip.hide('hover');
-      boatTip.hide('hover');
-      uniforms.uHover.value = gid;
-      showCard(gid, x, y);
-    }
-  }
-  if (frame % 3 === 0) { stepBoatTip(); stepTramTip(); }
   if (postcard.on) drawShot(); else renderer.render(scene, camera);
   // The poster's copy of the frame is as large as the screen's buffer: let go once the Poster is not on screen.
   if (!postcard.on || postcard.filter !== 'poster') posterPass.release();
@@ -4313,6 +4357,32 @@ renderer.setAnimationLoop(now => {
   }
 });
 
+// The tooltip steps that run frame-cheap even when the city idles.
+function stepHoverTips() { if (frame % 3 === 0) { stepBoatTip(); stepTramTip(); } }
+
+// What the hovered pick's pixel answers with (#23): the tram's or boat's tooltip first, else the building's card.
+function applyHover(x, y, gid) {
+  const takes = pointerType === 'mouse';
+  const tram = takes ? tramOver(x, y, gid) : null;
+  const boat = !tram && takes ? boatOver(x, y, gid) : null;
+  if (tram) {
+    uniforms.uHover.value = -1;
+    showCard(-1, x, y);
+    boatTip.hide('hover');
+    tramTip.hover(tram, x, y);
+  } else if (boat) {
+    uniforms.uHover.value = -1;
+    showCard(-1, x, y);
+    tramTip.hide('hover');
+    boatTip.hover(boat, x, y);
+  } else {
+    tramTip.hide('hover');
+    boatTip.hide('hover');
+    uniforms.uHover.value = gid;
+    showCard(gid, x, y);
+  }
+  invalidate();   // one frame: the hover tint lands on the building (or off the last one)
+}
 
 // History scenes (web/scene-player.js): the Stories button and ?scene=<id>, both only with FEATURES.scenes. The year goes through the timeline's own
 // setHandle, the from-handle first to rest so the to-handle can reach the scene's year.
@@ -4336,7 +4406,11 @@ window.__dbg = { get veg() { return veg; }, get facts() { return facts; }, pinFa
   get forced() { return forcedGid; }, force, scene, highlight: () => highlight.state(),
   get weather() { return weather.state(); }, pauseEffects: on => weather.pause(on), skyNow, postcard,
   posterPass: () => posterPass.state(), placeNow, roofYears, setRoofYears,
-  invalidate: () => {},   // a no-op until #23: scripts/perf.mjs already asks for a redraw under this name
+  invalidate,   // #23: scripts (perf, shots, the sleeper) draw a frame or more on drawless idle
+  rate: () => (performance.now() < dirtyUntil || playing || (typeof flight !== 'undefined' && !!flight) ||
+    (typeof reliefTween !== 'undefined' && !!reliefTween) || !!ride || postcard.on) ? 60
+    : weatherMoved ? 30 : (trams && tramsShown() && trams.inView(camera)) ? 20 : 0,
+  rendered: () => renderer.info.render.frame,
   northAzimuth: () => controls.getAzimuthalAngle(),
   treeCount: () => veg?.trees,   // the veg build's own count, not a scene walk
   playState: () => ({ playing, year: uniforms.uYear.value }) };

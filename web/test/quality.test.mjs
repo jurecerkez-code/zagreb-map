@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { medianFps, nextStep, makeQuality, STEPS, LOW, HIGH, WINDOW_MS, COOLDOWN_MS } from '../quality.js';
+import { medianFps, nextStep, shouldBoost, makeQuality, STEPS, BOOST_MS, LOW, HIGH, WINDOW_MS, COOLDOWN_MS } from '../quality.js';
 
 // Frames of constant gaps at `fps`, ending at `now`.
 function gapsAt(fps, n = 60, now = 100000) {
@@ -57,7 +57,7 @@ test('the page owner applies the ladder through setPixelRatio and says what it d
   for (let i = 0; i < 300; i++) q.frame(t += 83.333);                  // ~25 s
   assert.equal(q.step, STEPS.length - 1);
   assert.equal(q.step > 0 && said.length > 0, true);
-  assert.match(said[0], /render scale/);
+  assert.match(said[0], /pixel ratio/);
   assert.match(said[0], /fps/);
   assert.deepEqual([...new Set(scales)], STEPS.slice(1));
   // No spare cycles wasted between verdicts: a frame budget of one test guards an O(n) frame() against the days
@@ -68,4 +68,31 @@ test('the page owner applies the ladder through setPixelRatio and says what it d
   // And the ladder ends flat: pinned at fine speed, nothing else happens.
   for (let i = 0; i < 300; i++) q.frame(t += 83.333);
   assert.equal(q.step, STEPS.length - 1, 'sustained lag always descends again');
+});
+
+test('issue #23 boost: full dpr only after BOOST_MS of median frames under 8 ms', () => {
+  // shouldBoost, pure: 200 fps sustained over the whole window (1000 frames at 5 ms = 5 s) → boost; 60 fps → never.
+  assert.equal(shouldBoost(gapsAt(200, 1000), 100000), true);
+  assert.equal(shouldBoost(gapsAt(60, 60), 100000), false);
+  // Plenty fast but too fresh (no BOOST_MS of evidence): hold, exactly like the early-frames rule.
+  assert.equal(shouldBoost(gapsAt(200, 30), 100000), false);
+
+  const scales = [];
+  const renderer = { setPixelRatio: s => scales.push(s) };
+  const q = makeQuality({ renderer, base: 1.5, boost: 2, say: () => {} });
+  let t = 0;
+  for (let i = 0; i < 900; i++) q.frame(t += 5);                       // 200 fps for 4.5 s: the window is full
+  assert.equal(q.boosted, true);
+  assert.equal(scales.at(-1), 2);
+  // A slow spell after the boost hands the run back to the ladder, un-boosted.
+  for (let i = 0; i < 300; i++) q.frame(t += 83.333);
+  assert.equal(q.boosted, false);
+  assert.equal(scales.at(-1), 1.5 * STEPS[STEPS.length - 1]);
+});
+
+test('startStep opens the ladder one notch down (weak GPUs), never below the bottom', () => {
+  const renderer = { setPixelRatio: () => {} };
+  assert.equal(makeQuality({ renderer, base: 1.5, startStep: 1 }).step, 1);
+  assert.equal(makeQuality({ renderer, base: 1.5, startStep: 99 }).step, STEPS.length - 1);
+  assert.equal(makeQuality({ renderer, base: 1.5, startStep: -3 }).step, 0);
 });

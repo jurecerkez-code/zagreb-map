@@ -19,6 +19,8 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 const OPTIONAL_404 = new Set(['rt', 'build.json']);
 let bytes = 0, bytesBeforeReveal = null, http404 = 0, optional404 = 0;
 const files = [], notFound = [];
+// A page warning is as good as a log line here — a stalled pack lane was last seen silent (run 42011722454).
+page.on('console', m => { if (m.type() === 'warning' || m.type() === 'error') console.log(`[page] ${m.text()}`); });
 page.on('response', async r => {
   if (r.status() === 404) {
     const path = r.url().replace(url, '');
@@ -29,12 +31,19 @@ page.on('response', async r => {
   files.push([len, r.url().replace(url, '')]);
 });
 const t0 = Date.now();
-await page.goto(`${url}?debug=1`);
+// Measure the city, not its weather: ?weather=none keeps snowfall off the byte budget.
+await page.goto(`${url}?debug=1&weather=none`);
 await page.waitForFunction(() => document.getElementById('loading')?.hidden, null, { timeout: 180000 });
 bytesBeforeReveal = bytes;
 const msReveal = Date.now() - t0;
+// Throughput is capped by software-GL rendering: at the trams-in-view tier the map holds 20 fps while tiles stream,
+// so a full city on SwiftShader can need a quarter hour. Say so while waiting (the silence reads as a hang).
+const progress = setInterval(async () => {
+  try { const s = await page.evaluate(() => window.__dbg?.stats?.() ?? {}); console.log(`[perf] tiles ${s.tiles ?? '?'}/${s.tilesTotal ?? '?'} (terrain ${s.terrain ?? '?'})`); } catch { /* page mid-nav */ }
+}, 30_000);
 await page.waitForFunction(() => { const s = window.__dbg?.stats(); return s && s.tiles >= s.tilesTotal && s.terrain === 'ready'; },
-  null, { timeout: 480000 });
+  null, { timeout: 900000 });
+clearInterval(progress);
 await page.waitForTimeout(8000);
 
 const sample = () => page.evaluate(() => {

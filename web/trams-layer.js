@@ -172,8 +172,9 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
       // north, if it ever comes, becomes the engine's angle from +x towards +z.
       const heading = Number.isFinite(o.bearing) ? Math.atan2(-Math.cos(o.bearing * Math.PI / 180), Math.sin(o.bearing * Math.PI / 180))
         : o.heading;
-      put(live, drawnLive.length, o.x, surfaceAt(o.x, o.z), o.z, heading, lineColour[net.trips[o.trip * 5 + 3]] || '#1c3f94');
-      drawnLive.push({ k: `tram:${o.trip}`, trip: o.trip, live: true, x: o.x, z: o.z, heading, d: o.d, next: net.nextStopAt(o.trip, o.d) });
+      const y = surfaceAt(o.x, o.z);
+      put(live, drawnLive.length, o.x, y, o.z, heading, lineColour[net.trips[o.trip * 5 + 3]] || '#1c3f94');
+      drawnLive.push({ k: `tram:${o.trip}`, trip: o.trip, live: true, x: o.x, y, z: o.z, heading, d: o.d, next: net.nextStopAt(o.trip, o.d) });
     }
 
     drawnSched = [];
@@ -181,8 +182,9 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
       if (liveSeen.has(trip) || drawnSched.length >= sched.cap) continue;
       const p = net.positionAt(trip, sec);
       if (!p) continue;
-      put(sched, drawnSched.length, p.x, surfaceAt(p.x, p.z), p.z, p.heading, lineColour[net.trips[trip * 5 + 3]] || '#1c3f94');
-      drawnSched.push({ k: `tram:${trip}`, trip, live: false, x: p.x, z: p.z, heading: p.heading, d: p.d, next: net.nextStopAt(trip, p.d) });
+      const y = surfaceAt(p.x, p.z);
+      put(sched, drawnSched.length, p.x, y, p.z, p.heading, lineColour[net.trips[trip * 5 + 3]] || '#1c3f94');
+      drawnSched.push({ k: `tram:${trip}`, trip, live: false, x: p.x, y, z: p.z, heading: p.heading, d: p.d, next: net.nextStopAt(trip, p.d) });
     }
 
     for (const p of [sched, live]) {
@@ -230,10 +232,26 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
   scene.add(group);
   poll();
   setInterval(poll, LIVE_MS);
+  // Scratch for inView(): one frustum projection per ask, never an allocation in the frame loop.
+  const inViewFrustum = new THREE.Frustum();
+  const inViewProj = new THREE.Matrix4();
+  const inViewPoint = new THREE.Vector3();
+  const inViewSphere = new THREE.Sphere();
   return {
     group, net,
     step, hitAt, setNight,
     get on() { return show; },
+    // Issue #23: the render loop asks this before it grants trams their 20 fps idle tier — one drawn tram inside the
+    // camera's frustum keeps the cadence, an empty frustum drops the frame rate to zero.
+    inView(cam) {
+      if (!show) return false;
+      const probe = inViewSphere;
+      inViewProj.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+      inViewFrustum.setFromProjectionMatrix(inViewProj);
+      for (const d of drawnSched) if (inViewFrustum.intersectsSphere(probe.set(inViewPoint.set(d.x, d.y ?? 0, d.z), 15))) return true;
+      for (const d of drawnLive) if (inViewFrustum.intersectsSphere(probe.set(inViewPoint.set(d.x, d.y ?? 0, d.z), 15))) return true;
+      return false;
+    },
     get list() { return [...drawnSched, ...drawnLive]; },   // what is on the screen now (scripts/trams_check.mjs)
     get drawn() { return { schedule: drawnSched.length, live: drawnLive.length, total: drawnSched.length + drawnLive.length }; },
     get liveAt() { return liveAt; },

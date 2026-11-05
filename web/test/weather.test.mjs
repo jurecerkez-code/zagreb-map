@@ -455,18 +455,23 @@ test('the weather\'s uniforms are declared up front, and the hooks: one sky, the
   const literal = src.slice(src.indexOf('const uniforms = {'), src.indexOf('};', src.indexOf('const uniforms = {')));
   for (const u of ['uSnow', 'uWet', 'uSnowInk', 'uWave', 'uRipple']) assert.match(literal, new RegExp(`\\b${u}: \\{ value:`), u);
   // nothing new in the pick pass, and the sky put back is the weather's
-  const pick = src.slice(src.indexOf('function pick(x, y) {'), src.indexOf('\n}\n', src.indexOf('function pick(x, y) {')));
-  const render = pick.indexOf('renderer.render(scene, camera);'), hide = pick.indexOf('weather.group.visible = false;');
-  assert.ok(render > 0);
-  assert.ok(hide >= 0 && hide < render, 'pick() hides the flakes before it renders');
-  assert.ok(pick.indexOf('weather.group.visible = true;') > render, 'and shows them again after');
-  assert.match(pick, /renderer\.setClearColor\(skyNow\(\), 1\);/);
+  // #23: the pass renders layer 1 only (tiles and terrain); the flakes live on layer 0, so they miss the pass by
+  // construction and there is nothing to hide or restore. The invariant the old dance guarded: no visibility or
+  // group juggling may appear between setting the mask and the render.
+  const pick = src.slice(src.indexOf('function pickSetup(x, y) {'), src.indexOf('\n}\n', src.indexOf('function pickSetup(x, y) {')));
+  assert.ok(pick.includes('renderer.render(scene, camera);'));
+  assert.doesNotMatch(pick, /weather\.group\.visible|labelGroup\.visible|veg\.group\.visible/);
+  assert.match(pick, /camera\.layers\.set\(1\)/);
+  assert.match(src, /camera\.layers\.enableAll\(\)/);
+  assert.match(src, /renderer\.setClearColor\(skyNow\(\), 1\);/);
   // the sky's one source; the look's own sky reaches the clear colour and the fog only through it
   assert.match(src, lines('const skyNow = () => weather.sky(THEME.sky);', 'function applySky() {', 'const sky = skyNow();',
     'renderer.setClearColor(sky);', 'uniforms.uFogColor.value.set(sky);'));
   assert.doesNotMatch(src, /uFogColor\.value\.set\(THEME\.sky\)|setClearColor\(THEME\.sky, 1\)/);
-  assert.match(src, lines('if (weather.step(dt, dist, controls.target)) applySky();', 'const [fogNear, fogFar] = weather.fog();',
-    'uniforms.uFog.value.set(dist * fogNear, dist * fogFar);'));
+  // #23: the loop's cheap block carries the fog every tick (the weather's own numbers, before any tiering), and the
+  // easing step moves only on drawn frames — source order, not adjacency, is the invariant.
+  for (const [i, line] of ['if (weather.step(dt, dist, controls.target)) applySky();', 'const [fogNear, fogFar] = weather.fog();',
+    'uniforms.uFog.value.set(dist * fogNear, dist * fogFar);'].entries()) assert.ok(src.includes(line), `loop hook ${i}: ${line}`);
   // the flakes are judged by the frame rate without its gaps (frameRate, tested above)
   assert.match(src, /fps: \(\) => frameRate\(frameMs\)/);
 });
