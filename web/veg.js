@@ -228,7 +228,7 @@ export async function makeVeg({ THREE, base, scene, uniforms, on = true }) {
 
   scene.add(group);
   return {
-    group, trees: nTrees, maskCells: m.w * m.h, classes,
+    group, trees: nTrees, triangles: nTrees * 2, maskCells: m.w * m.h, classes,
     setOn(v) {
       show = !!v;
       group.visible = show;
