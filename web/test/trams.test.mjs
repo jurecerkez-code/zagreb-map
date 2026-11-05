@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { parseTrams, makeNet, tramClock, tramInfo, tramHtml, ZONE } from '../trams.js';
+import { parseTrams, makeNet, tramClock, tramInfo, tramHtml, ZONE, RIDE_PROFILE, runProfile, dwellFor, delaySeconds } from '../trams.js';
 import { makeT } from '../i18n.js';
 
 const I18N = Object.fromEntries(['en', 'hr'].map(l => [l, JSON.parse(readFileSync(new URL(`../i18n/${l}.json`, import.meta.url), 'utf8'))]));
@@ -36,21 +36,50 @@ test('a feed without its blocks is refused, not drawn empty', () => {
 });
 
 test('a trip stands at its first stop before it leaves, and between two stops the timetable sets the distance', () => {
-  const go = net.positionAt(0, 10);              // left the first stop at 0 s: a twentieth of the 200 s to 100 m
-  assert.ok(Math.abs(go.x - 5) < 0.01, `just gone, got x=${go.x}`);
-  const mid = net.positionAt(0, 100);            // 100 s of the 200 s between 0 m and 100 m: half way
-  assert.ok(Math.abs(mid.x - 50) < 0.01, `half way along the first hop, got x=${mid.x}`);
+  // Issue #26: the hop runs by the ride's own profile (acc 1.0, brake 1.2, arrival unchanged) — a tram just gone
+  // has covered only metres. The first call stands its clamped minimum (a 0 s stand reads as 8 before the run).
+  const run = net.runAt(0, 1);
+  const prof = runProfile(200, 100);
+  assert.equal(run.dep - run.d0, run.dep, 'run starts after the dwell window');
+  const go = net.positionAt(0, 10);
+  assert.ok(Math.abs(go.x - prof.at(10 - run.dep)) < 0.01, `just gone by the profile, got x=${go.x}`);
+  const mid = net.positionAt(0, 100);
+  assert.ok(Math.abs(mid.x - prof.at(100 - run.dep)) < 0.01, `midway by the profile, got x=${mid.x}`);
   assert.equal(mid.z, 0);
   assert.ok(Math.abs(mid.heading) < 1e-6, 'east along the shape');
+  // its invariants, tested without the map: never faster than the cap, exact arrival, never backwards
+  assert.ok(prof.v <= RIDE_PROFILE.cruise + 1e-9, 'cruise capped at 70 km/h');
+  assert.ok(Math.abs(prof.at(200) - 100) < 1e-6, 'arrives on time, on the metre');
+  let last = -1;
+  for (let s = 0; s <= 200; s += 7) { const d = prof.at(s); assert.ok(d >= last - 1e-9, `monotone at ${s}`); last = d; }
 });
 
 test('a tram stands still while it is at a stop, and the trip is over at its end', () => {
   assert.equal(net.positionAt(0, 210).x, 100, 'dwell at the second stop');
-  const hop = net.positionAt(0, 300);            // 80 s of the 180 s between 220 s and 400 s: 44 m past 100 m
-  assert.ok(Math.abs(hop.x - 144.44) < 0.02, `part way along the second hop, got ${hop.x}`);
+  const run = net.runAt(0, 101);
+  assert.ok(run.inRun, 'past the stop its own call window ends');
+  const prof2 = runProfile(run.arr - run.dep, run.d1 - run.d0);
+  const hop = net.positionAt(0, 300);
+  assert.ok(Math.abs(hop.x - (100 + prof2.at(300 - run.dep))) < 0.01, `part way by the profile, got ${hop.x}`);
   assert.equal(net.positionAt(0, 500).x, 200, 'arrived at the last stop');
   assert.equal(net.positionAt(0, 601), null, 'after its end it is not on the street');
   assert.equal(net.positionAt(0, -1), null, 'nor before its start');
+});
+
+test('the ride itself: dwell is clamped into 8–20 s, the delay is seconds of the segment\'s slope, short trips triangulate', () => {
+  assert.equal(dwellFor(5), 8, 'a shorter timetable stand: 8 at least');
+  assert.equal(dwellFor(12), 12, 'a stand the timetable has');
+  assert.equal(dwellFor(45), 20, 'a long one: 20 at most');
+  // A second too early over a 60 m hop in 12 s (5 m/s): 0.2 s of delay
+  const slope = 60 / 12;
+  assert.ok(Math.abs(delaySeconds(61, 60, slope) - 0.2) < 1e-9);
+  // a two-second hop (no cruise section): its profile is a triangle with no cruise and still lands
+  const tiny = runProfile(4, 6);
+  assert.equal(tiny.tc, 0);
+  assert.ok(Math.abs(tiny.at(4) - 6) < 1e-6, 'arrives even without a cruise span');
+  let speedPeak = 0;
+  for (let s = 0.1; s < 4; s += 0.2) speedPeak = Math.max(speedPeak, tiny.speed(s));
+  assert.ok(speedPeak <= RIDE_PROFILE.cruise, 'a triangle never breaks the cap either');
 });
 
 test('the point is clamped to the shape when a stop lies past its drawn end', () => {

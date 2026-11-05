@@ -921,6 +921,33 @@ h1 { margin: 0; font-size: clamp(34px, 4.4vw, 56px); font-weight: 800; letter-sp
   background: var(--ink); color: var(--panel); font: inherit; font-size: 13px; font-weight: 600;
   box-shadow: 0 4px 16px rgba(30, 40, 50, .24); }
 .ride-exit[hidden] { display: none; }
+
+/* The ride's own face (issue #26): the HUD reads fact-first (line, the sign, the next stop and its minute), the
+   thin frame draws the cab's window edges without ever covering the view. Plain, no tokens yet (#34). */
+.ride-hud { position: fixed; z-index: 13; left: 50%; top: calc(var(--gutter) + 8px); transform: translateX(-50%);
+  display: flex; gap: 10px; align-items: center; max-width: min(92vw, 560px); pointer-events: none;
+  background: color-mix(in srgb, var(--panel) 86%, transparent); color: var(--ink);
+  border-radius: 12px; padding: 7px 12px; font: 500 13px/1.25 inherit;
+  box-shadow: 0 4px 18px rgba(30, 40, 50, .22); backdrop-filter: blur(6px); }
+.ride-hud[hidden] { display: none !important; }
+.ride-hud .ride-line { display: inline-block; min-width: 22px; height: 22px; border-radius: 999px;
+  color: #fff; text-align: center; font-weight: 700; font-size: 12px; line-height: 22px; padding: 0 6px; }
+.ride-hud .ride-head { display: flex; flex-direction: column; min-width: 0; }
+.ride-hud .ride-dest { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ride-hud .ride-next { font-size: 12px; opacity: .78; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ride-hud .ride-speed { margin-left: auto; font-variant-numeric: tabular-nums; }
+.ride-hud .ride-live { font-size: 10.5px; font-weight: 800; letter-spacing: .04em; color: rgba(255,255,255,.92);
+  background: #1f7a36; border-radius: 6px; padding: 2px 6px; }
+.ride-hud .ride-live:not(.ride-live-on) { background: #b0861f; }   /* timetable gold */
+.ride-hud .ride-live-stale { background: #b03329; }
+.ride-frame { position: fixed; inset: 0; z-index: 12; pointer-events: none;
+  border: 14px solid color-mix(in srgb, #101418 38%, transparent);
+  border-radius: 3px; box-shadow: inset 0 0 80px rgba(0, 0, 0, .38); }
+.ride-frame[hidden] { display: none; }
+@media (max-width: 720px) {
+  .ride-hud { left: var(--gutter); right: var(--gutter); transform: none; max-width: none; }
+}
+
 .card.tram-tip.tapped { pointer-events: auto; }
 /* A tapped one takes taps (a tap on it closes it, boat-tip.js), so none reaches the modes, the timeline or the map
    under it; a hovered one lets the pointer through, as the hover card. */
