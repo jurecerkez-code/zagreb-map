@@ -1087,7 +1087,7 @@ function makeMaterial(tex, pick, born, faint = null) {
     vertexShader: VERT,
     fragmentShader: FRAG,
     defines: pick ? { PICK: 1 } : faint ? { FAINT: 1 } : {},
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,   // #27: the worker's rings are normalised, so the back faces of walls and roofs are noise
     ...(faint && { transparent: true, depthWrite: faint === 'depth', colorWrite: faint === 'colour' }),
   });
 }
@@ -1845,6 +1845,7 @@ async function loadTerrain(base) {
   terrainState = 'ready';
   performance.measure('terrain', 'terrain-start');
   setRelief(relief, true);          // the city rises (at once for a visitor who asked for less motion)
+  startRoads({ tex: m.tex, x0: g.x0, z0: g.z0, cell: g.cell, nx: g.nx, nz: g.nz });   // the streets' worker needs this grid
 }
 
 // The relief: uRelief eases to the slider's value, 1.2 s when the terrain first rises, 0.6 s on a move (from where it
@@ -1862,14 +1863,14 @@ function setRelief(value, animate = true) {
   const dur = reliefRisen ? 600 : 1200;
   if (terrainState === 'ready') reliefRisen = true;
   reliefTween = animate && !calm.matches && from !== to ? { from, to, t0: performance.now(), dur } : null;
-  if (!reliefTween) { applyRelief(to); roads?.rebuild?.(); }   // the streets follow the ground they lie on
+  if (!reliefTween) { applyRelief(to); roads?.relift?.(); }   // the streets ride uRelief; the lamps re-seat themselves
   switcher.markRelief();
 }
 function stepRelief(now) {
   if (!reliefTween) return;
   const k = (now - reliefTween.t0) / reliefTween.dur;
   applyRelief(ease(reliefTween.from, reliefTween.to, k));
-  if (k >= 1) { reliefTween = null; roads?.rebuild?.(); }
+  if (k >= 1) { reliefTween = null; roads?.relift?.(); }
 }
 // A move of the slider is the visitor's choice: remembered (the number), and ?relief= leaves the address (as look.js
 // keeps ?theme= current), so a reload keeps the move instead of the link it was made on.
@@ -4160,18 +4161,21 @@ makeTrams({ THREE, base: DATA, scene, camera, surfaceAt, on: tramsOn })
   })
   .catch(e => console.warn('The trams did not load.', e));
 // The streets (pipeline/s17_zagreb_roads.py): 95,754 ways and 5,821 lamps, laid under the buildings, and lit in the
-// Night mode. Behind the trams' own fetch, so a ride has its road by the time a tram can be ridden; a map without them
-// is still a map, so a failure here is a warning and nothing more.
-performance.mark('roads-start');
-makeRoads({ THREE, base: DATA, scene, surfaceAt, uniforms })
-  .then(r => {
-    performance.measure('roads', 'roads-start');
-    roads = r;
-    window.__roads = () => r;          // a dev hook: what was drawn, for probes
-    roads.setNight(sunMode === 'night');
-    console.log('streets', r.drawn);
-  })
-  .catch(e => console.warn('The streets did not load.', e));
+// Night mode. Their mesher is web/roads-worker.js (#27): it needs the terrain's (t, cut) texture to pin every
+// vertex's ground, so they start where the terrain lands (startRoads below), not at boot.
+let roadsStarted = false;
+function startRoads(baseGrid) {
+  if (roadsStarted) return;
+  roadsStarted = true;
+  makeRoads({ THREE, base: DATA, baseGrid, scene, surfaceAt, uniforms })
+    .then(r => {
+      roads = r;
+      window.__roads = () => r;          // a dev hook: what was drawn, for probes
+      roads.setNight(sunMode === 'night');
+      console.log('streets', r.drawn);
+    })
+    .catch(e => console.warn('The streets did not load.', e));
+}
 // ?at=x,z (engine local metres, +x east, -z north) and &dist=meters: open the map over a chosen place, e.g. a park.
 {
   const q = new URLSearchParams(location.search);
@@ -4319,6 +4323,7 @@ renderer.setAnimationLoop(now => {
   lastDueAt = now;
 
   updateLods();
+  roads?.update(camera);        // far tiles keep only their tertiary-and-up range
   if (weather.step(dt, dist, controls.target)) applySky();   // the sky moves only while the weather eases
   weatherMoved = weather.kind !== 'none';
   // A name is sized and placed from that same distance, so a ride (stepRide) borrows the app's closest zoom, which is
@@ -4344,6 +4349,7 @@ renderer.setAnimationLoop(now => {
   if (!postcard.on || postcard.filter !== 'poster') posterPass.release();
   if (!deferredRequested && meshes.length) {
     deferredRequested = true;
+    if (!TERRAIN) startRoads({ tex: new Float32Array(2), x0: 0, z0: 0, cell: 1, nx: 1, nz: 1 });   // a flat build
     const base = loadBase();
     base.catch(optional('The water (or the flat land)'));
     loadLabels().catch(optional('The street names'));
@@ -4353,6 +4359,8 @@ renderer.setAnimationLoop(now => {
       console.warn('The terrain did not load; the map stays flat.', e);
       showFlat().catch(optional('The land'));
       switcher.markRelief();   // the slider is disabled and its line says the heights did not load
+      // The streets keep their old flat fallback: ground at zero everywhere, drawn at their own lift.
+      startRoads({ tex: new Float32Array(2), x0: 0, z0: 0, cell: 1, nx: 1, nz: 1 });
     });
   }
 });

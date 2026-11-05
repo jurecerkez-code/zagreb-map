@@ -11,7 +11,7 @@ export async function settled(page) {
     if (!t.source) return true;                                   // a build without terrain
     if (t.state === 'failed') return true;
     return t.state === 'ready' && Math.abs(t.relief - window.__dbg.relief) < 1e-6;
-  }), { timeout: 30_000 }).toBe(true);
+  }), { timeout: 120_000 }).toBe(true);   // software GL + the tile stream can hold the relief up for a minute
   // #23: an idle map draws nothing until it is asked — the settle is the moment after the last change, so ask for
   // the frames any test's "before" count or screenshot waits on. Without this a measured idle page reads as 0 fps.
   await page.evaluate(() => window.__dbg.invalidate(2000));
