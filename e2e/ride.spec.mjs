@@ -83,13 +83,17 @@ test('the ride: on the track, at tram speed, and it really stops at stops', asyn
     await page.waitForTimeout(300);
   }
   const plan = await shapeOf(page, picked.trip);
-  const m = measures(rows, plan);
+  // Samples older than the entry-lens window: after the 0.35 s ease the camera has parked, and the meters that
+  // matter happen there (the home camera may sit hundreds of metres away when the ride starts — by design).
+  const steady = rows.filter(r => r[0] >= 4_000);
+  const m = measures(steady, plan);
   // The dwell of the model itself, on the tram entity's drawn place (camera measures would blur it): same window.
-  const stand = await page.evaluate(async tripId => {
+  const standMs = sampleSec * 1000;
+  const stand = await page.evaluate(async ({ tid, ms }) => {
     let last = null, dwellStart = -1, maxDwell = 0;
     const t0 = performance.now();
     for (;;) {
-      const e = window.__dbg.trams.list.find(x => x.trip === tripId);
+      const e = window.__dbg.trams.list.find(x => x.trip === tid);
       const now = performance.now();
       if (e) {
         const still = last && Math.hypot(e.x - last[0], e.z - last[1]) < 0.5;
@@ -97,12 +101,13 @@ test('the ride: on the track, at tram speed, and it really stops at stops', asyn
         else if (!still) { maxDwell = Math.max(maxDwell, dwellStart > 0 ? (now - dwellStart) / 1000 : 0); dwellStart = -1; }
         last = [e.x, e.z];
       }
-      if (now - t0 >= 20_000) break;
+      if (dwellStart > 0) maxDwell = Math.max(maxDwell, (now - dwellStart) / 1000);
+      if (now - t0 >= ms) break;
       await new Promise(r => setTimeout(r, 300));
       window.__dbg.invalidate(400);
     }
-    return Math.max(maxDwell, dwellStart > 0 ? 20 - (dwellStart - t0) / 1000 : 0);
-  }, picked.trip);
+    return maxDwell;
+  }, { tid: picked.trip, ms: Math.min(standMs, 300_000) });
   console.log(`[ride] samples=${m.n} maxOff=${m.maxOff.toFixed(2)} m maxKmh=${m.maxKmh.toFixed(1)} maxDwell=${m.maxDwell.toFixed(1)} s stand=${stand.toFixed(1)} s`);
   expect(m.maxOff, `furthest from the shape: ${m.maxOff.toFixed(2)} m`).toBeLessThanOrEqual(4);
   expect(m.maxKmh, `fastest sampled speed: ${m.maxKmh.toFixed(1)} km/h`).toBeLessThanOrEqual(70);
@@ -117,35 +122,41 @@ test('the ride: on the track, at tram speed, and it really stops at stops', asyn
 
 test('a live feed that jumps 150 m never steps the drawn position', async ({ page }) => {
   test.setTimeout(600_000);
+  // Every answer this page ever gets for its live feed is the fixture's: registered before the boot, so polls see
+  // only it. Its clock starts on the first fulfill (poll cadence is its own, and the swap is exactly one five-
+  // minute jump later).
+  let fixture = null;
+  const fulfill = route => {
+    const now = Math.floor(Date.now() / 1000);
+    if (!fixture) { route.fulfill({ json: { ts: now, vehicles: [] } }); return; }
+    fixture.t0 = fixture.t0 ?? now;
+    const swap = now - fixture.t0 > 20;
+    route.fulfill({ json: { ts: fixture.t0 + (swap ? 300 : 0), vehicles: [{ kind: 'tram', trip: fixture.id,
+      x: (swap ? fixture.p1.x : fixture.p0.x), z: (swap ? fixture.p1.z : fixture.p0.z), d: swap ? fixture.p1.d : fixture.p0.d, heading: 0 }] } });
+  };
+  await page.route(url => url.pathname === '/rt' || url.pathname.endsWith('/rt.json'), fulfill);
   await boot(page);
   await settled(page);
   await expect.poll(() => page.evaluate(() => (window.__dbg?.trams?.list?.length || 0) > 0), { timeout: 180_000 }).toBe(true);
 
   // The jump must stay on its own tracks: pick a scheduled draw whose own next stop lies ≥ 300 m ahead, so both
   // snapshot points are inside the trip's own running section and the timetable's expectation is never null.
-  const fixture = await page.evaluate(() => {
+    fixture = await page.evaluate(() => {
     const n = window.__dbg.trams.net;
     const run = window.__dbg.trams.list.find(e => !e.live && Number.isFinite(e.d) && e.next?.d && e.next.d - e.d > 300);
     // Something to fall back on when the city just ended its rush: trip 0, safely early in its shape.
     const t = run ? run.trip : 0;
-    const d0 = run ? run.d - 150 : 10, d1 = d0 + 150;
+    const d0 = run ? run.d - 150 : 10;
+    // p1 must land before the trip's own last call: the delay model renders through the timetable's expectations,
+    // and out-of-window readings are never eased.
+    const endsSec = run ? Math.min(run.d + 150, run.next.d - 30) : 160;
+    const d1 = run ? Math.max(d0 + 1, endsSec) : 160;
     const p0 = n.pointAt(n.trips[t * 5], d0, undefined);
     const p1 = n.pointAt(n.trips[t * 5], d1, undefined);
     return { trip: t, id: n.trams.tripIds[t], p0: { x: p0.x, z: p0.z, d: d0 },
       p1: { x: p1.x, z: p1.z, d: d1 } };
   });
   expect(fixture.id).toBeTruthy();
-
-  // The feed's clock starts with ITS first answer (polls may already be mid-cadence): swap lands five false
-  // minutes into its history exactly one poll later.
-  const body = now => {
-    fixture.t0 = fixture.t0 ?? now;
-    const swap = now - fixture.t0 > 20;
-    return { ts: fixture.t0 + (swap ? 300 : 0), vehicles: [{ kind: 'tram', trip: fixture.id,
-      x: (swap ? fixture.p1.x : fixture.p0.x), z: (swap ? fixture.p1.z : fixture.p0.z), d: swap ? fixture.p1.d : fixture.p0.d, heading: 0 }] };
-  };
-  const fulfill = route => route.fulfill({ json: body(Math.floor(Date.now() / 1000)) });
-  await page.route(url => url.pathname === '/rt' || url.pathname.endsWith('/rt.json'), fulfill);
 
   const rows = [];
   const t0 = Date.now();
