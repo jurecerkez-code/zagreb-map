@@ -58,6 +58,24 @@ export function nearestCardinal(a) {
 // user's, not the compass's.
 export function bearingOffset(h, rad) { return { x: h * Math.sin(rad), z: h * Math.cos(rad) }; }
 
+// --- The click cycles N -> E -> S -> W (issue #22: snap-to-nearest landed every further click on the same side,
+// so it read as "it only turns to north once").
+
+// The click target: the next cardinal clockwise. A heading within TOL of a cardinal counts as on it, so a map that
+// faces north goes east; any other heading goes to the next cardinal clockwise from where it points.
+export const CYCLE_TOL = 0.035;   // radians, about 2°
+export function nextCardinal(a) {
+  const order = CARDINALS;                                            // N E S W
+  // CARDINALS labels +π/2 as east, so the azimuth grows from N towards E: the angle from north, 0..2π
+  const cw = x => ((x % TAU) + TAU) % TAU;
+  const c = cw(a);
+  for (let k = 1; k <= 4; k++) {
+    const t = (k * Math.PI) / 2;
+    if (t - c > CYCLE_TOL) return order[k % 4];
+  }
+  return order[1];
+}
+
 // The compass, all its surfaces in one place. Three ways in, all free of state that could latch: a drag of the
 // needle turns the camera under the pointer, a click snaps to the nearest cardinal, and the N/E/S/W keys snap to
 // their side. The needle is drawn on every frame from the bearing the camera actually has, so a dropped press
@@ -87,9 +105,12 @@ export function makeNorth({ camera, controls, endHolds = () => {}, typingIn = ()
   };
   const snap = () => face(0);
   const snapNearest = () => face(nearestCardinal(controls.getAzimuthalAngle()));
+  // The click walks the four sides (N -> E -> S -> W), each press the next: the same button for a quick look
+  // around the block, not just straighten-up. snapNearest stays for callers that level the map once.
+  const cycle = () => face(nextCardinal(controls.getAzimuthalAngle()));
 
   // The gesture. A press starts on the compass; moving more than DRAG_PX px is a drag of the needle, and the
-  // camera follows the pointer's bearing live. A release without travel is the click: snap to nearest cardinal.
+  // camera follows the pointer's bearing live. A release without travel is the click: the next side clockwise.
   let drag = null;
   const DRAG_PX = 5;
   const headingOf = e => {
@@ -112,7 +133,7 @@ export function makeNorth({ camera, controls, endHolds = () => {}, typingIn = ()
     if (!drag || drag.id !== e.pointerId) return;
     const wasDrag = drag.moved;
     drag = null;
-    if (!wasDrag) snapNearest();
+    if (!wasDrag) cycle();
   };
   const onKey = e => {
     const k = e.key && e.key.toLowerCase();
@@ -125,5 +146,5 @@ export function makeNorth({ camera, controls, endHolds = () => {}, typingIn = ()
   doc.addEventListener('pointerup', onUp, true);
   doc.addEventListener('pointercancel', () => { drag = null; }, true);
   doc.addEventListener('keydown', onKey);
-  return { snap, face, snapNearest, draw, press: onPointer };
+  return { snap, face, snapNearest, cycle, draw, press: onPointer };
 }

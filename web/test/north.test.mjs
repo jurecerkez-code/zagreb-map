@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { wrapAngle, shortestTurn, northTurn, turnAt, needleDeg, TURN_MS, nearestCardinal, CARDINALS, CARDINAL_KEYS,
-  makeNorth } from '../north.js';
+  nextCardinal, CYCLE_TOL, makeNorth } from '../north.js';
 
 // The north button (brief 2026-10-15, approved by the owner): the map turns to face north, azimuth 0 in the local frame
 // (x east, z south: OrbitControls' theta is atan2(x, z) of the camera's offset from the target, so 0 is the camera
@@ -109,12 +109,14 @@ test('the page has the button, labelled by its id (ui.north), with the four card
   const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   // The tooltip names the keys; the label does not (a screen reader reads aria-keyshortcuts for that). Since
-  // 2026-11-04 the compass is four-sided: drag the needle anywhere, a click snaps to the nearest of N/E/S/W.
-  assert.match(html, /<button class="north-open" aria-label="Heading: drag the needle or tap N\/E\/S\/W" title="Heading: drag the needle or tap N\/E\/S\/W" aria-keyshortcuts="N E S W">/);
+  // 2026-11-05 a click walks the four sides N -> E -> S -> W (issue #22); the needle drag and the keys stay.
+  assert.match(html, /<button class="north-open" aria-label="Heading: click turns to the next side \(N → E → S → W\), drag the needle to face anywhere, keys N\/E\/S\/W" title="Heading: click turns to the next side \(N → E → S → W\), drag the needle to face anywhere, keys N\/E\/S\/W" aria-keyshortcuts="N E S W">/);
   // App.js's SV_UI table moved to web/i18n by id
   const en = JSON.parse(readFileSync(new URL('../i18n/en.json', import.meta.url), 'utf8'));
+  const hr = JSON.parse(readFileSync(new URL('../i18n/hr.json', import.meta.url), 'utf8'));
   const sv = JSON.parse(readFileSync(new URL('./fixtures/sv.json', import.meta.url), 'utf8'));
-  assert.equal(en['ui.north'], 'Heading: drag the needle or tap N/E/S/W');
+  assert.equal(en['ui.north'], 'Heading: click turns to the next side (N → E → S → W), drag the needle to face anywhere, keys N/E/S/W');
+  assert.equal(hr['ui.north'], 'Kompas: klik okreće na sljedeću stranu (S → I → J → Z), povuci iglu za slobodno okretanje, tipke N/E/S/W');
   assert.equal(sv['ui.north'], 'Vänd mot norr');
   assert.match(app, /nb\.setAttribute\('aria-label', T\('ui\.north'\)\)/);
   assert.match(app, /nb\.title = T\('ui\.north'\)/);
@@ -160,6 +162,31 @@ test('the nearest cardinal is exactly the next of N/E/S/W, north winning the sea
   assert.deepEqual({ ...CARDINAL_KEYS }, { n: 0, e: E, s: S, w: W });
 });
 
+// The click's walk around the four sides (issue #22): the target is the next cardinal clockwise, and a heading
+// within CYCLE_TOL of a cardinal counts as on it, so a map that faces north goes east.
+test('nextCardinal walks N -> E -> S -> W, tolerance counts as on the side', () => {
+  const E = Math.PI / 2, S = Math.PI, W = -Math.PI / 2;
+  assert.equal(nextCardinal(0), E);
+  assert.equal(nextCardinal(E), S);
+  assert.equal(nextCardinal(S), W);
+  assert.equal(nextCardinal(W), 0);
+  // 10° east of north -> E; 1° (inside tolerance, so "on north") -> E; 350° (10° west of north) -> N.
+  assert.equal(nextCardinal(10 * Math.PI / 180), E);
+  assert.equal(nextCardinal(1 * Math.PI / 180), E);
+  assert.equal(nextCardinal(-10 * Math.PI / 180), 0);
+  // The press before the seam must count too: 89° (inside TOL of E) is "on east", so the next press goes S.
+  assert.equal(nextCardinal(89 * Math.PI / 180), S);
+  // A thousand headings: the result is always a cardinal clockwise ahead by more than TOL and at most 90° + TOL.
+  for (let i = 0; i < 1000; i++) {
+    const a = (i * 2 * Math.PI / 1000) - Math.PI;
+    const to = nextCardinal(a);
+    const dist = ((to - a) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) || 2 * Math.PI;
+    assert.ok(CARDINALS.includes(to), `result ${to} is a cardinal`);
+    assert.ok(dist > CYCLE_TOL, `from ${a}: ${to} is ${dist} ahead (> TOL)`);
+    assert.ok(dist <= Math.PI / 2 + CYCLE_TOL + 1e-12, `from ${a}: ${to} is ${dist} ahead (<= 90° + TOL)`);
+  }
+});
+
 // Minimal controls mock: position/vector methods as in the real module; update() records the call.
 function makeRig() {
   const camera = { position: { x: 0, y: 120, z: 90, set(x, y, z) { this.x = x; this.y = y; this.z = z; } } };
@@ -193,15 +220,19 @@ function makeGestureDoc() {
   return { doc, evt, fire, svg };
 }
 
-test('a click on the compass snaps to the nearest cardinal, inertia dead', () => {
+test('a click on the compass faces the next side clockwise, inertia dead', () => {
   const { camera, controls } = makeRig();
-  camera.position.set(120, 120, 60);             // east of the centre: azimuth ~+63°, nearer east than north
+  camera.position.set(120, 120, 60);             // east of the centre: azimuth ~+63°; the next side is east
   const { doc, evt, fire } = makeGestureDoc();
   makeNorth({ camera, controls, doc });
   fire('pointerdown', true, evt(25, 25));
   fire('pointerup', true, evt(25, 25));          // no travel: the click
   assert.ok(controls.updates >= 1);
-  near(controls.getAzimuthalAngle(), Math.PI / 2, 'snapped exactly to the nearest side (east)');
+  near(controls.getAzimuthalAngle(), Math.PI / 2, 'faced exactly the next side clockwise (east)');
+  // Already on a side, the next click walks on (the whole point of #22: from E the walk goes to S).
+  fire('pointerdown', true, evt(25, 25));
+  fire('pointerup', true, evt(25, 25));
+  near(controls.getAzimuthalAngle(), Math.PI, 'a second click walked on to south');
   assert.deepEqual(controls._sphericalDelta.v, [0, 0, 0]);
   assert.deepEqual(controls._panOffset.v, [0, 0, 0]);
 });
@@ -217,11 +248,11 @@ test('a drag of the needle turns the map under the pointer, release does not dou
   const after = controls.updates;
   fire('pointerup', true, evt(75, 25));
   assert.equal(controls.updates, after, 'release of a drag adds no snap');
-  // A tiny wobble under the threshold stays a click.
+  // A tiny wobble under the threshold stays a click, and the click walks on: on east, next is south.
   fire('pointerdown', true, evt(25, 25));
   fire('pointermove', true, evt(28, 26));        // 3.2 px: wobble
   fire('pointerup', true, evt(28, 26));
-  near(controls.getAzimuthalAngle(), Math.PI / 2, 'wobble-click still snapped (stays east)');
+  near(controls.getAzimuthalAngle(), Math.PI, 'wobble-click walked the compass on to south');
   north.draw(Math.PI / 2);
   assert.ok(String(svg.style.transform || '').length > 0, 'the needle was drawn');
 });
