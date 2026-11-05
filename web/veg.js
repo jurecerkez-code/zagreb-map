@@ -1,9 +1,9 @@
 // Vegetation and the cable car: real OpenStreetMap data (data/<version>/veg.json, veg_trees.bin, veg_mask.bin.gz,
 // cable.bin; pipeline/s07_zagreb_veg.py).
 //
-// - Trees: 42,002 symbols at mapped coordinates (individual `natural=tree` nodes plus a nominal 8 m fill of the
-//   mapped `natural=tree_row` lines). A crown is two overlapping blobs with baked vertex shading; size and hue vary
-//   per tree (a look, not data).
+// - Trees: 144,878 symbols at mapped coordinates (individual `natural=tree` nodes plus a nominal 8 m fill of the
+//   mapped `natural=tree_row` lines). Each is one camera-facing quad with an alpha-tested baked sprite (#21:
+//   172 triangles per tree could not stay); size and hue vary per tree (a look, not data).
 // - Green cover: a 16 m class mask (grass, meadow, forest, wood, scrub, orchard, park, garden, allotments, ...)
 //   rasterized from the real polygons and painted into the TERRAIN by its shader, so it follows every hill by
 //   construction. Never geometry: a kilometre-wide triangle sinks under a slope and whole forests disappear.
@@ -58,46 +58,97 @@ export async function makeVeg({ THREE, base, scene, uniforms, on = true }) {
   const group = new THREE.Group();
   group.name = 'veg';
 
-  // ---- trees: two crown blobs and a trunk, baked vertex shading (the map's materials are unlit)
-  function shaded(geo, tint, lowY, highY, low = 0.62) {
-    const pos = geo.getAttribute('position');
-    const col = new Float32Array(pos.count * 3);
-    const c = new THREE.Color();
-    for (let i = 0; i < pos.count; i++) {
-      const t = Math.min(1, Math.max(0, (pos.getY(i) - lowY) / (highY - lowY)));
-      c.copy(tint).multiplyScalar(low + (1 - low) * t);
-      col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+  // ---- trees: one camera-facing quad per tree (2 triangles), alpha-tested against a baked sprite.
+  // The issue: 144,878 trees at 172 triangles each (two ico crowns + trunk) = 24.9 M triangles, 93% of the map.
+  // 144,878 quads = 289,756, inside the 400,000 this issue allows. A crossed-quads pair would take 579,512.
+  // The sprite is white-on-alpha so the theme tints it like the blobs were tinted, and its luminance keeps the
+  // baked bottom-dark shading of the old crowns so the picture gate still recognizes the views.
+  function treeSprite() {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    const img = g.createImageData(64, 64);
+    for (let y = 0; y < 64; y++) {
+      for (let x = 0; x < 64; x++) {
+        const dx = (x - 32) / 26, dy = (y - 26) / 24;
+        const r = dx * dx + dy * dy;
+        let a = 0, l = 0;
+        if (r < 1) {
+          // canopy: slightly lumpy disc, brighter at the top like the old gradient
+          const lump = 0.92 + 0.08 * Math.sin(x * 1.7) * Math.cos(y * 1.3);
+          a = r < lump * 0.94 ? 255 : 0;
+          l = Math.round(255 * (0.62 + 0.38 * (1 - y / 52)));
+        } else if (y >= 44 && y < 62 && Math.abs(x - 32) <= 2) {
+          a = 255;                                  // trunk sliver under the canopy, darkest part of the sprite
+          l = 96;
+        }
+        const o = (y * 64 + x) * 4;
+        img.data[o] = img.data[o + 1] = img.data[o + 2] = l;
+        img.data[o + 3] = a;
+      }
     }
-    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    return geo;
+    g.putImageData(img, 0, 0);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.generateMipmaps = true;
+    return tex;
   }
-  const trunkGeo = shaded(new THREE.CylinderGeometry(0.14, 0.26, 3.4, 6, 1, true), new THREE.Color(0xffffff), -1.7, 1.7, 0.55);
-  const crownLow = shaded(new THREE.IcosahedronGeometry(2.9, 1), new THREE.Color(0xffffff), -2.9, 2.9, 0.68);
-  const crownTop = shaded(new THREE.IcosahedronGeometry(1.9, 1), new THREE.Color(0xffffff), -1.9, 1.9, 0.72);
-  const trunkMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
-  const crownMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
-  const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, nTrees);
-  const crowns = new THREE.InstancedMesh(crownLow, crownMat, nTrees);
-  const tops = new THREE.InstancedMesh(crownTop, crownMat, nTrees);
-  const mtx = new THREE.Matrix4();
-  const tintC = new THREE.Color();
+  const treeMat = new THREE.ShaderMaterial({
+    uniforms: { uTex: { value: treeSprite() }, uTint: { value: new THREE.Color(0xffffff) } },
+    vertexShader: /* glsl */`
+      attribute vec3 iOffset;
+      attribute float iScale;
+      attribute vec3 iColor;
+      varying vec2 vUv;
+      varying vec3 vColor;
+      void main() {
+        vUv = uv;
+        vColor = iColor;
+        // Spherical billboard in the view matrix's own axes: the map is seen from above, where a merely
+        // vertical billboard foreshortens into a standing sticker. Facing the camera whole keeps one canopy
+        // disc from every angle the orbit controls allow. The centre sits at blob height (4.3*s).
+        vec3 right = vec3(viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0]);
+        vec3 up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
+        vec3 centre = iOffset + vec3(0.0, 4.3 * iScale, 0.0);
+        vec3 wp = centre + right * position.x * (5.9 * iScale) + up * position.y * (8.6 * iScale);
+        gl_Position = projectionMatrix * viewMatrix * vec4(wp, 1.0);
+      }`,
+    fragmentShader: /* glsl */`
+      uniform sampler2D uTex;
+      uniform vec3 uTint;
+      varying vec2 vUv;
+      varying vec3 vColor;
+      void main() {
+        vec4 t = texture2D(uTex, vUv);
+        if (t.a < 0.5) discard;
+        gl_FragColor = vec4(t.rgb * uTint * vColor, 1.0);
+      }`,
+  });
+  const plane = new THREE.PlaneGeometry(1, 1);
+  const treeGeo = new THREE.InstancedBufferGeometry();
+  treeGeo.index = plane.index;
+  treeGeo.setAttribute('position', plane.getAttribute('position'));
+  treeGeo.setAttribute('uv', plane.getAttribute('uv'));
+  const offsets = new Float32Array(nTrees * 3);
+  const scales = new Float32Array(nTrees);
+  const colors = new Float32Array(nTrees * 3);
   for (let i = 0; i < nTrees; i++) {
-    const x = trees[i * 3], y = trees[i * 3 + 1], z = trees[i * 3 + 2];
-    mtx.makeTranslation(x, y + 1.7, z);
-    trunks.setMatrixAt(i, mtx);
-    const s = 0.88 + ((i * 7) % 11) * 0.028;
-    const h = 0.86 + ((i * 13) % 17) * 0.0125;
-    mtx.compose(new THREE.Vector3(x, y + 5.6 * s, z), new THREE.Quaternion(), new THREE.Vector3(s, s * 1.12, s));
-    crowns.setMatrixAt(i, mtx);
-    mtx.compose(new THREE.Vector3(x + 0.5 * s, y + 7.4 * s, z - 0.3 * s), new THREE.Quaternion(), new THREE.Vector3(s, s * 1.05, s));
-    tops.setMatrixAt(i, mtx);
-    tintC.setRGB(h, h * 1.04, h * 0.92);
-    crowns.setColorAt(i, tintC); tops.setColorAt(i, tintC);
+    offsets[i * 3] = trees[i * 3];
+    offsets[i * 3 + 1] = trees[i * 3 + 1];
+    offsets[i * 3 + 2] = trees[i * 3 + 2];
+    scales[i] = 0.88 + ((i * 7) % 11) * 0.028;          // the same size walk the blobs had
+    const h = 0.86 + ((i * 13) % 17) * 0.0125;          // ... and the same per-tree hue
+    colors[i * 3] = h; colors[i * 3 + 1] = h * 1.04; colors[i * 3 + 2] = h * 0.92;
   }
-  trunks.instanceMatrix.needsUpdate = crowns.instanceMatrix.needsUpdate = tops.instanceMatrix.needsUpdate = true;
-  crowns.instanceColor.needsUpdate = tops.instanceColor.needsUpdate = true;
-  trunks.frustumCulled = crowns.frustumCulled = tops.frustumCulled = false;
-  group.add(trunks, crowns, tops);
+  treeGeo.setAttribute('iOffset', new THREE.InstancedBufferAttribute(offsets, 3));
+  treeGeo.setAttribute('iScale', new THREE.InstancedBufferAttribute(scales, 1));
+  treeGeo.setAttribute('iColor', new THREE.InstancedBufferAttribute(colors, 3));
+  treeGeo.instanceCount = nTrees;
+  const treeQuads = new THREE.Mesh(treeGeo, treeMat);
+  treeQuads.frustumCulled = false;
+  group.add(treeQuads);
 
   // ---- the cable car: its mapped line, cabins moving along it, the two mapped stations
   let cable = null;
@@ -170,14 +221,14 @@ export async function makeVeg({ THREE, base, scene, uniforms, on = true }) {
   const retheme = look => {
     const c = VEG_COLOURS[look] || VEG_COLOURS.arg;
     const k = nightOn ? NIGHT : 1;
-    trunkMat.color.set(c.trunk).multiplyScalar(k);
-    crownMat.color.set(c.crown).multiplyScalar(k);
+    // the sprite bakes the trunk darker, so the crown colour tints the whole tree like the old blobs did
+    treeMat.uniforms.uTint.value.set(c.crown).multiplyScalar(k);
     paintMask(look);
   };
 
   scene.add(group);
   return {
-    group, trees: nTrees, maskCells: m.w * m.h, classes,
+    group, trees: nTrees, triangles: nTrees * 2, maskCells: m.w * m.h, classes,
     setOn(v) {
       show = !!v;
       group.visible = show;

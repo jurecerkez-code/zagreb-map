@@ -4338,4 +4338,5 @@ window.__dbg = { get veg() { return veg; }, get facts() { return facts; }, pinFa
   posterPass: () => posterPass.state(), placeNow, roofYears, setRoofYears,
   invalidate: () => {},   // a no-op until #23: scripts/perf.mjs already asks for a redraw under this name
   northAzimuth: () => controls.getAzimuthalAngle(),
+  treeCount: () => veg?.trees,   // the veg build's own count, not a scene walk
   playState: () => ({ playing, year: uniforms.uYear.value }) };
