@@ -1,5 +1,5 @@
 {
- "home.triangles": 1,
+ "home.triangles": 27500000,
  "near.triangles": 27000000,
  "far.triangles": 39000000,
  "home.calls": 120,
