@@ -71,8 +71,8 @@ test('the page owner applies the ladder through setPixelRatio and says what it d
 });
 
 test('issue #23 boost: full dpr only after BOOST_MS of median frames under 8 ms', () => {
-  // shouldBoost, pure: 200 fps sustained over the whole window → boost; a 60 fps vsync ceiling → never.
-  assert.equal(shouldBoost(gapsAt(200, 500), 100000), true);
+  // shouldBoost, pure: 200 fps sustained over the whole window (1000 frames at 5 ms = 5 s) → boost; 60 fps → never.
+  assert.equal(shouldBoost(gapsAt(200, 1000), 100000), true);
   assert.equal(shouldBoost(gapsAt(60, 60), 100000), false);
   // Plenty fast but too fresh (no BOOST_MS of evidence): hold, exactly like the early-frames rule.
   assert.equal(shouldBoost(gapsAt(200, 30), 100000), false);
@@ -81,7 +81,7 @@ test('issue #23 boost: full dpr only after BOOST_MS of median frames under 8 ms'
   const renderer = { setPixelRatio: s => scales.push(s) };
   const q = makeQuality({ renderer, base: 1.5, boost: 2, say: () => {} });
   let t = 0;
-  for (let i = 0; i < 400; i++) q.frame(t += 5);                       // 200 fps, BOOST_MS comfortably full
+  for (let i = 0; i < 900; i++) q.frame(t += 5);                       // 200 fps for 4.5 s: the window is full
   assert.equal(q.boosted, true);
   assert.equal(scales.at(-1), 2);
   // A slow spell after the boost hands the run back to the ladder, un-boosted.

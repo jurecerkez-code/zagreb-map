@@ -68,7 +68,9 @@ export function makeQuality({ renderer, base = Math.min(
     frame(now) {
       if (last > 0) {
         gaps.push({ t: now, dt: now - last });
-        if (gaps.length > 400) gaps.splice(0, gaps.length - 400);   // ~13 s of history is plenty
+        // History must cover BOOST_MS of evidence at any rate (shouldBoost asks for the whole window); 1200 frames
+        // are 20 s at 60 fps and still 4 s at 300 — the trim cannot cut under the boost's burden of proof.
+        if (gaps.length > 1200) gaps.splice(0, gaps.length - 1200);
         const fps = medianFps(gaps, now);
         const next = nextStep(i, fps, now - lastChange);
         if (next !== i) { i = next; boosted = false; lastChange = now; apply(fps); }
