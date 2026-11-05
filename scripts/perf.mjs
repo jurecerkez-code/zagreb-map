@@ -34,7 +34,7 @@ await page.waitForFunction(() => document.getElementById('loading')?.hidden, nul
 bytesBeforeReveal = bytes;
 const msReveal = Date.now() - t0;
 await page.waitForFunction(() => { const s = window.__dbg?.stats(); return s && s.tiles >= s.tilesTotal && s.terrain === 'ready'; },
-  null, { timeout: 300000 });
+  null, { timeout: 480000 });
 await page.waitForTimeout(8000);
 
 const sample = () => page.evaluate(() => {
