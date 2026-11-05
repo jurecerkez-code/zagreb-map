@@ -1510,7 +1510,12 @@ function fetchRestPacks() {
   // Two at a time, centre-out: the line stays busy without a burst of parallel requests.
   const names = config.packs.map(packName);
   for (let lane = 0; lane < 2; lane++) {
-    (async () => { while (names.length) await fetchPack(names.shift()).catch(() => {}); })();
+    (async () => {
+      // A lane that dies on a fetch would freeze the stream with no signal: name the pack that stopped it.
+      let current = '?';
+      try { while (names.length) { current = names.shift(); await fetchPack(current); } }
+      catch (e) { console.warn(`[stream] pack lane ${lane} died on ${current}`, e); }
+    })();
   }
 }
 fetchPack(packName(config.packs[0]));
