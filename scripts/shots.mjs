@@ -46,9 +46,14 @@ const lum = async file => {
   const mean = sum / n;
   return { mean: Math.round(mean * 100) / 100, stddev: Math.round(Math.sqrt(Math.max(0, sq / n - mean * mean)) * 100) / 100 };
 };
-for (const [name, go, wait] of views) {
-  await page.evaluate(go);
-  await page.waitForTimeout(wait);
+// A view change re-streams packs, and on a slow runner the fixed wait ends mid-load: CI shot the far view as a
+// uniform 222/0 blank. Before judging a view, wait for its loads to drain (capped, so a stuck asset cannot hang
+// the gate), and if the frame still comes out uniform, settle once more and re-shoot it.
+const settle = () => page.waitForFunction(() => {
+  const s = window.__dbg?.stats();
+  return s && s.assets === 0 && window.__dbg.animDone !== false;
+}, null, { timeout: 120000, polling: 1000 }).catch(() => {});
+const shoot = async name => {
   const file = join(dir, `${name}.png`);
   // Not page.screenshot: the software compositor never finishes a page capture at this draw cost. One explicit
   // software render into the canvas and a read of its pixels in the same task is a bounded wait instead.
@@ -63,7 +68,20 @@ for (const [name, go, wait] of views) {
     // and both the baseline and every later gate run go through the same encoder, so the numbers stay comparable.
     .png({ compressionLevel: 9, palette: true, quality: 85, dither: 0, effort: 10 })
     .toFile(file);
-  result[name] = { ...await lum(file), png: baseline ? `${name}.png` : file };
+  return lum(file);
+};
+for (const [name, go, wait] of views) {
+  await page.evaluate(go);
+  await page.waitForTimeout(wait);
+  await settle();
+  let shot = await shoot(name);
+  if (shot.stddev < 1) {
+    console.log(name, 'frame uniform, settling before a re-shoot');
+    await settle();
+    await page.waitForTimeout(5000);
+    shot = await shoot(name);
+  }
+  result[name] = { ...shot, png: baseline ? `${name}.png` : join(dir, `${name}.png`) };
   console.log(name, JSON.stringify(result[name]));
 }
 writeFileSync(jsonPath, JSON.stringify(result, null, 1));
