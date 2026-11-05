@@ -1,0 +1,9 @@
+{
+ "home.triangles": 27500000,
+ "near.triangles": 27000000,
+ "far.triangles": 39000000,
+ "home.calls": 120,
+ "bytesBeforeReveal": 45000000,
+ "bytesTotal": 48000000,
+ "http404": 0
+}

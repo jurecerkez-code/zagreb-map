@@ -12,7 +12,7 @@ jobs:
     # Offline on every push: lint, pipeline unit tests (the network tests skip) and web unit tests.
     # network.yml runs the network tests and the e2e job weekly and on demand.
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45 # 20 fit the old suite; perf + picture gates measure a software-GL render (three views each), 25-30 min honest
     steps:
       - uses: actions/checkout@v7
 
@@ -70,6 +70,29 @@ jobs:
           python3 -m http.server 8643 --directory web &
           sleep 2
           node scripts/boot_smoke.mjs
+
+      - name: Perf budget
+        run: |
+          pkill -f "http.server 8644" || true
+          python3 -m http.server 8644 --directory web &
+          sleep 2
+          node scripts/perf.mjs http://127.0.0.1:8644/ --budget scripts/perf-budget.json --out perf.json
+
+      - name: Picture gate (contrast and brightness)
+        run: |
+          pkill -f "http.server 8644" || true
+          python3 -m http.server 8644 --directory web &
+          sleep 2
+          node scripts/shots.mjs http://127.0.0.1:8644/ --out shots.json && node scripts/shots-compare.mjs shots.json e2e/__screenshots__/baseline.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: measurements
+          path: |
+            perf.json
+            shots.json
+            shots/*.png
 
       # Live trams die softly: the map falls back to the timetable and nothing says so. Read the published
       # snapshot the page reads, and fail if it is stale, empty or tram-less.

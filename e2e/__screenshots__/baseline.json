@@ -1,0 +1,17 @@
+{
+ "home": {
+  "mean": 68.37,
+  "stddev": 33.43,
+  "png": "home.png"
+ },
+ "near": {
+  "mean": 71.75,
+  "stddev": 39.9,
+  "png": "near.png"
+ },
+ "far": {
+  "mean": 83.83,
+  "stddev": 70.03,
+  "png": "far.png"
+ }
+}

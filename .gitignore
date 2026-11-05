@@ -21,3 +21,8 @@ web/_shots/
 /*.png
 *.orig
 *.pre-about
+
+# measurement-gate local runs: CI regenerates these, never committed (baselines live in e2e/__screenshots__)
+/perf.json
+/shots.json
+/shots/
