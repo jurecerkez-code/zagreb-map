@@ -185,7 +185,7 @@
   "ui.mode.layers": "Slojevi konteksta",
   "ui.modes": "Oboji grad prema",
   "ui.about": "O karti",
-  "ui.north": "Smjer: povuci iglu ili pritisni N/E/S/W",
+  "ui.north": "Kompas: klik okreće na sljedeću stranu (S → I → J → Z), povuci iglu za slobodno okretanje, tipke N/E/S/W",
   "postcard.open": "Razglednica",
   "postcard.hint": "Pomaknite kartu da uokvirite sliku.",
   "postcard.filter": "Filtri slike",

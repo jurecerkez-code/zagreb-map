@@ -185,7 +185,7 @@
   "ui.mode.layers": "Context layers",
   "ui.modes": "Colour the city by",
   "ui.about": "About",
-  "ui.north": "Heading: drag the needle or tap N/E/S/W",
+  "ui.north": "Heading: click turns to the next side (N → E → S → W), drag the needle to face anywhere, keys N/E/S/W",
   "postcard.open": "Postcard",
   "postcard.hint": "Move the map to frame your picture.",
   "postcard.filter": "Filter",
