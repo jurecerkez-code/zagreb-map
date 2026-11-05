@@ -1,77 +1,27 @@
-// The streets drawn on the map: every mapped highway as a ribbon of its own width at the ground's height, the pavements
-// as their own thinner ribbons, and at night the 5,821 mapped street lamps as a glow with a pool of light under it.
-// pipeline/s17_zagreb_roads.py writes them (OpenStreetMap, ODbL): roads.json is the index, roads.bin.gz the points.
+// The streets drawn on the map (issue #27: the mesher lives in web/roads-worker.js, typed arrays in as typed
+// arrays out; this file is the orchestrator). One ribbon per way, painted by the fragment shader into pavement,
+// kerbstone and asphalt bands by distance from the centreline — the old map drew three overlapping ribbons where
+// one does the work now. The ribbons lift like the buildings do: aT * uRelief - aCut * uCutK, so the Hills slider
+// moves two uniforms and nothing is rebuilt (roads.rebuild() is gone; only the lamps still re-seat themselves).
 //
-// The ribbons are laid in 1,200 m tiles, the same size the buildings tile at, so the far ones are culled instead of
-// drawn: 95,754 ways over 601,179 points is about 2.4M triangles, and only the tiles in view cost anything.
-// A way is 2 vertices per point with the normals averaged at the joints, so a bend does not open a wedge.
-//
-// The colours are unlit (a road does not need the sun's shading) but they fade into the fog like the ground does, and
-// they cool towards blue at night exactly as the walls do, because a bright street in a dark city would read as a lie.
+// pipeline/s17_zagreb_roads.py writes the ways (OpenStreetMap, ODbL): roads.json the index, roads.bin.gz the
+// points, lamps.bin.gz the 5,821 mapped street lamps lit at night.
 import { gunzip } from './veg.js';
+import { TILE, KERB, EDGE_W, LIFT, CLASSES, PAVEMENT } from './roads-worker.js';
 
-const TILE = 1200;          // metres: the buildings' own tile size
-const LIFT = 0.18;          // metres above the ground: over the terrain, under nothing else
-const KERB_LIFT = 0.10;     // the pavement band, just under the asphalt: one polygon each, no z-fighting between them
-const KERB = 3.4;           // metres of pavement each side of a carriageway
-const EDGE_LIFT = 0.14;     // the kerb line: between the pavement and the asphalt, so one flank stays visible
-const EDGE_W = 0.6;         // metres of kerbstone showing on each side of a carriageway
-const POOL_R = 12;          // metres of the light pool a lamp throws on the pavement
-const POOL_Y = 0.14;        // metres above the ground, under the road at LIFT? no: pools lie on the pavement
-const LAMP_H = 7.0;         // metres: the head of a Zagreb street lamp
-const NIGHT_TINT = 'vec3(0.30, 0.36, 0.56)';   // the walls' own night cooling (app.js FRAG)
-
-// The class palette: asphalt greys for the carriageway, warmer greys for the pavements, so a street reads from a
-// pavement without either shouting. The motorway is the darkest, a service lane the lightest.
-// Measured off Zagreb, not picked: asphalt reads #4f5450 in the aerial imagery and a kerb side pavement #8d908e, so
-// the streets are the colour of the streets. The classes keep a step or two between them, enough to read the network
-// at the zoom where a street is a few pixels wide.
+// The class palette: asphalt greys for the carriageway, warmer greys for the pavements: measured off Zagreb
+// (#4f5450 asphalt, #8d908e kerb side pavement), the motorway the darkest, a service lane the lightest. The row
+// is laid out in roads-worker.js's CLASSES order — one vec3 per class index.
 const COLOUR = {
   motorway: '#4a4e4b', trunk: '#4b4f4c', primary: '#4c504d', secondary: '#4e524f', tertiary: '#4f5350',
   residential: '#4f5450', unclassified: '#515652', living_street: '#545955', service: '#575c58', pedestrian: '#7d817b',
   footway: '#8d908e', path: '#9a9791', steps: '#8a8781', cycleway: '#8b8f8c', tram: '#4d524e',
 };
-const PAVEMENT = new Set(['footway', 'path', 'steps', 'cycleway', 'pedestrian']);
-const SIDEWALK = '#8d908e';   // the band a carriageway sits in: the pavements on both sides, at a glance
+const SIDEWALK = '#8d908e';   // the pavements a carriageway sits between, painted by proximity like the kerb
 const EDGE = '#c9ccc9';       // kerbstone: the dressed granite between a Zagreb pavement and its asphalt reads near-white
-
-// The ground the streets are laid on. surfaceAt is the exact surface, but the terrain draws each chunk as flat
-// quads on a coarse grid, so on a slope the drawn ground stands metres above it and the street sinks into the hill.
-// The highest of the surface a cell either side is what the drawn quad stands on, and a street there stays on top.
-const CROSS = [[0, 0], [16, 0], [-16, 0], [0, 16], [0, -16]];
-const layOn = (surfaceAt, x, z) => {
-  let h = surfaceAt(x, z);
-  for (let i = 1; i < CROSS.length; i++) {
-    const v = surfaceAt(x + CROSS[i][0], z + CROSS[i][1]);
-    if (v > h) h = v;
-  }
-  return h;
-};
-
-function ribbon(tile, pts, o, n, w, colour, surfaceAt, lift = LIFT) {
-  const half = w / 2;
-  const base = tile.v;
-  for (let i = 0; i < n; i++) {
-    const x = pts[(o + i) * 2], z = pts[(o + i) * 2 + 1];
-    // The direction through this point: the segment, or the average of the two at a joint, so a bend stays closed.
-    const i0 = Math.max(0, i - 1), i1 = Math.min(n - 1, i + 1);
-    let dx = pts[(o + i1) * 2] - pts[(o + i0) * 2], dz = pts[(o + i1) * 2 + 1] - pts[(o + i0) * 2 + 1];
-    const len = Math.hypot(dx, dz) || 1;
-    dx /= len; dz /= len;
-    const nx = -dz * half, nz = dx * half;
-    const y = surfaceAt(x, z) + lift;
-    tile.pos.push(x + nx, y, z + nz, x - nx, y, z - nz);
-    tile.lift.push(lift, lift);   // kept, so the streets can be laid on the ground again when the relief moves
-    tile.col.push(colour[0], colour[1], colour[2], colour[0], colour[1], colour[2]);
-  }
-  for (let i = 0; i < n - 1; i++) {
-    const a = base + i * 2;
-    // Wound so the face looks UP: three culls a clockwise face, and these were clockwise, which is why a street
-    // drew nothing from above and only ever showed as a sliver at a grazing angle.
-    tile.idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
-  }
-  tile.v += n * 2;
-}
+const POOL_R = 12, POOL_Y = 0.14, LAMP_H = 7.0;
+const NIGHT_TINT = 'vec3(0.30, 0.36, 0.56)';   // the walls' own night cooling (app.js FRAG)
+const NEAR_M = 1500;          // tiles under this draw every class; past it only tertiary and above
 
 // A soft round light: a radial falloff in a texture, so 5,821 of them cost two draw calls and no per-pixel maths.
 function radialTexture(THREE, stops) {
@@ -87,7 +37,9 @@ function radialTexture(THREE, stops) {
   return tex;
 }
 
-export async function makeRoads({ THREE, base, scene, surfaceAt, uniforms, on = true }) {
+// The fetch lands as early as it can (the page hands the layer in at boot); the grid lands when the terrain
+// answers. The worker starts on the later of the two.
+export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt, uniforms, on = true }) {
   const meta = await (await fetch(`${base}roads.json`)).json();
   const [ptsBuf, lampBuf] = await Promise.all(['roads.bin.gz', 'lamps.bin.gz']
     .map(f => fetch(`${base}${f}`).then(r => r.arrayBuffer()).then(gunzip)));
@@ -98,56 +50,30 @@ export async function makeRoads({ THREE, base, scene, surfaceAt, uniforms, on = 
   group.name = 'roads';
   group.renderOrder = -1;          // under everything: a road is the floor of the scene
 
-  const tiles = new Map();
-  const colourCache = new Map();
-  for (const way of meta.ways) {
-    const n = way.c;
-    if (n < 2) continue;
-    const mid = way.o + (n >> 1);
-    const key = `${Math.floor(pts[mid * 2] / TILE)},${Math.floor(pts[mid * 2 + 1] / TILE)}`;
-    let tile = tiles.get(key);
-    if (!tile) tiles.set(key, tile = { pos: [], col: [], lift: [], idx: [], v: 0 });
-    let colour = colourCache.get(way.cls);
-    if (!colour) {
-      const c = new THREE.Color(COLOUR[way.cls] || '#94989c').convertSRGBToLinear();
-      colourCache.set(way.cls, colour = [c.r, c.g, c.b]);
-    }
-    // A carriageway sits in its pavements: one wider band in the pavement colour under it, so every street has its
-    // kerbs without a second dataset. A footway, a path, the steps and a cycleway are their own surface, not a road.
-    if (!PAVEMENT.has(way.cls)) {
-      let kerb = colourCache.get('__kerb');
-      if (!kerb) {
-        const c = new THREE.Color(SIDEWALK).convertSRGBToLinear();
-        colourCache.set('__kerb', kerb = [c.r, c.g, c.b]);
-      }
-      let edge = colourCache.get('__edge');
-      if (!edge) {
-        const c = new THREE.Color(EDGE).convertSRGBToLinear();
-        colourCache.set('__edge', edge = [c.r, c.g, c.b]);
-      }
-      ribbon(tile, pts, way.o, n, way.w + 2 * KERB, kerb, surfaceAt, KERB_LIFT);
-      // Between pavement and asphalt stands the kerb line: a thin bright band drawn under the asphalt's flanks, so
-      // the pavement ends against dressed stone, not against more grey. One ribbon per way; the asphalt covers its
-      // middle and 0.6 m of kerbstone stays showing on each side.
-      ribbon(tile, pts, way.o, n, way.w + 2 * EDGE_W, edge, surfaceAt, EDGE_LIFT);
-    }
-    ribbon(tile, pts, way.o, n, PAVEMENT.has(way.cls) ? Math.max(way.w, 1.6) : way.w, colour, surfaceAt);
-  }
-
+  // The shader: one draw per tile. Bands by signed distance across the ribbon; the class's own grey on the asphalt,
+  // the pavement and kerb stones by proximity for a carriageway, the class's colour down the whole width for a
+  // pavement way. Fog and the night's cooling exactly as before.
+  const myUniforms = {
+    uFog: uniforms.uFog,
+    uFogColor: uniforms.uFogColor,
+    uNight: uniforms.uNight,
+    uRelief: uniforms.uRelief,
+    uCutK: uniforms.uCutK,
+    uLift: { value: LIFT },
+    uCls: { value: CLASSES.map(c => new THREE.Color(COLOUR[c] || '#94989c')) },
+    uSide: { value: new THREE.Color(SIDEWALK) },
+    uEdge: { value: new THREE.Color(EDGE) },
+  };
   const mat = new THREE.ShaderMaterial({
-    uniforms: {
-      uFog: uniforms.uFog,           // the ground's own fog, shared: the street fades with it
-      uFogColor: uniforms.uFogColor,
-      uNight: uniforms.uNight,
-    },
+    uniforms: myUniforms,
     vertexShader: /* glsl */`
-      attribute vec3 aColour;
-      varying vec3 vColour;
-      varying float vDepth;
+      attribute float aU, aHalf, aCls, aT, aCut;
+      uniform float uRelief, uCutK, uLift;
+      varying float vU, vHalf, vCls, vDepth;
       void main() {
-        vec4 mv = modelViewMatrix * vec4(position, 1.0);
-        vColour = aColour;
-        vDepth = -mv.z;
+        vec4 w = vec4(position.x, aT * uRelief - aCut * uCutK + uLift, position.z, 1.0);
+        vec4 mv = modelViewMatrix * w;
+        vU = aU; vHalf = aHalf; vCls = aCls; vDepth = -mv.z;
         gl_Position = projectionMatrix * mv;
       }`,
     fragmentShader: /* glsl */`
@@ -155,10 +81,20 @@ export async function makeRoads({ THREE, base, scene, surfaceAt, uniforms, on = 
       uniform vec3 uFogColor;
       uniform vec2 uFog;
       uniform float uNight;
-      varying vec3 vColour;
-      varying float vDepth;
+      uniform vec3 uCls[${CLASSES.length}], uSide, uEdge;
+      varying float vU, vHalf, vCls, vDepth;
       void main() {
-        vec3 c = mix(vColour, vColour * ${NIGHT_TINT}, uNight);
+        vec3 c = uCls[int(vCls + 0.5)];
+        // A carriageway's bands by distance from the centreline: asphalt out to aHalf, the kerb just past it, the
+        // pavement's tone at the flanks; fwidth anti-aliases the edges. A pavement way is solid across.
+        float a = abs(vU);
+        float fw = max(fwidth(a), 1e-4);
+        float pave = (vCls >= ${CLASSES.indexOf('pedestrian')}.5 && vCls <= ${CLASSES.indexOf('cycleway')}.5) ? 1.0 : 0.0;
+        float kerb = smoothstep(vHalf - fw, vHalf + fw, a) * (1.0 - smoothstep(vHalf + ${EDGE_W.toFixed(2)} - fw, vHalf + ${EDGE_W.toFixed(2)} + fw, a));
+        float side = smoothstep(vHalf + ${EDGE_W.toFixed(2)} - fw, vHalf + ${EDGE_W.toFixed(2)} + fw, a);
+        c = mix(c, uEdge, kerb * (1.0 - pave));
+        c = mix(c, uSide, side * (1.0 - pave));
+        c = mix(c, c * ${NIGHT_TINT}, uNight);
         c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, vDepth));
         gl_FragColor = vec4(c, 1.0);
       }`,
@@ -167,34 +103,19 @@ export async function makeRoads({ THREE, base, scene, surfaceAt, uniforms, on = 
     polygonOffsetUnits: -4,
   });
 
-  let tris = 0;
-  const meshes = [];
-  for (const tile of tiles.values()) {
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(tile.pos, 3));
-    geo.setAttribute('aColour', new THREE.Float32BufferAttribute(tile.col, 3));
-    geo.setIndex(tile.idx);
-    geo.computeBoundingSphere();
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.userData.lift = tile.lift;
-    meshes.push(mesh);
-    mesh.frustumCulled = true;
-    group.add(mesh);
-    tris += tile.idx.length / 3;
-  }
-
-  // ---- street lamps: dark by day, and at night a warm head with a pool under it
+  // ---- street lamps: dark by day, and at night a warm head with a pool under it (relift() now does only these
+  // two draws — the streets themselves ride uRelief like the buildings, so there is nothing to rebuild)
   const lamps = new THREE.Group();
   lamps.name = 'streetlamps';
   lamps.visible = false;
   const glowTex = radialTexture(THREE, [[0, 0.95], [0.35, 0.45], [1, 0]]);
   const glowGeo = new THREE.BufferGeometry();
   const lampPos = new Float32Array((lampPts.length / 2) * 3);
-  for (let i = 0; i < lampPts.length / 2; i++) {
-    lampPos[i * 3] = lampPts[i * 2];
-    lampPos[i * 3 + 1] = surfaceAt(lampPts[i * 2], lampPts[i * 2 + 1]) + LAMP_H;
-    lampPos[i * 3 + 2] = lampPts[i * 2 + 1];
-  }
+  const seatLamp = i => {
+    const x = lampPts[i * 2], z = lampPts[i * 2 + 1];
+    lampPos[i * 3] = x; lampPos[i * 3 + 1] = surfaceAt(x, z) + LAMP_H; lampPos[i * 3 + 2] = z;
+  };
+  for (let i = 0; i < lampPts.length / 2; i++) seatLamp(i);
   glowGeo.setAttribute('position', new THREE.BufferAttribute(lampPos, 3));
   const glow = new THREE.Points(glowGeo, new THREE.PointsMaterial({
     map: glowTex, color: 0xffd7a4, size: 11, sizeAttenuation: true, transparent: true, opacity: 0.92,
@@ -208,55 +129,94 @@ export async function makeRoads({ THREE, base, scene, surfaceAt, uniforms, on = 
     map: glowTex, color: 0xffc98a, transparent: true, opacity: 0.30, blending: THREE.AdditiveBlending,
     depthWrite: false,
   }), lampPts.length / 2);
-  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1), v3 = new THREE.Vector3();
-  for (let i = 0; i < lampPts.length / 2; i++) {
-    const x = lampPts[i * 2], z = lampPts[i * 2 + 1];
-    v3.set(x, surfaceAt(x, z) + POOL_Y, z);
-    m.compose(v3, q, s);
-    pools.setMatrixAt(i, m);
-  }
+  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s1 = new THREE.Vector3(1, 1, 1), v3 = new THREE.Vector3();
+  const seatPool = i => {
+    v3.set(lampPts[i * 2], surfaceAt(lampPts[i * 2], lampPts[i * 2 + 1]) + POOL_Y, lampPts[i * 2 + 1]);
+    m4.compose(v3, q, s1);
+    pools.setMatrixAt(i, m4);
+  };
+  for (let i = 0; i < lampPts.length / 2; i++) seatPool(i);
   pools.instanceMatrix.needsUpdate = true;
   pools.frustumCulled = false;
   lamps.add(pools);
   group.add(lamps);
-
   scene.add(group);
 
-  // The relief is 0 until the terrain arrives (app.js setRelief), so a layer built before it lies flat under a city
-  // that rises metres higher: the streets disappear into the ground on every slope. This lays them on the ground
-  // again, and the lamps with them; app.js calls it when the relief lands and when its slider is let go.
-  function rebuild() {
-    for (const mesh of meshes) {
-      const a = mesh.geometry.attributes.position, arr = a.array, lift = mesh.userData.lift;
-      for (let i = 0; i < a.count; i++) {
-        const k = i * 3;
-        arr[k + 1] = surfaceAt(arr[k], arr[k + 2]) + lift[i];
-      }
-      a.needsUpdate = true;
-      mesh.geometry.computeBoundingSphere();
-    }
-    const ga = glow.geometry.attributes.position, gp = ga.array;
-    for (let i = 0; i < lampPts.length / 2; i++) {
-      gp[i * 3 + 1] = surfaceAt(gp[i * 3], gp[i * 3 + 2]) + LAMP_H;
-    }
-    ga.needsUpdate = true;
-    for (let i = 0; i < lampPts.length / 2; i++) {
-      v3.set(lampPts[i * 2], surfaceAt(lampPts[i * 2], lampPts[i * 2 + 1]) + POOL_Y, lampPts[i * 2 + 1]);
-      m.compose(v3, q, s);
-      pools.setMatrixAt(i, m);
-    }
+  function relift() {
+    for (let i = 0; i < lampPts.length / 2; i++) { seatLamp(i); seatPool(i); }
+    glowGeo.attributes.position.needsUpdate = true;
     pools.instanceMatrix.needsUpdate = true;
   }
 
+  // The worker's tiles land: one geometry per tile with the major classes leading the index (roads-worker.js
+  // guarantees it), so a tile beyond 1.5 km draws only its first range, set by update(camera) each due frame.
+  const meshes = [];
+  let drawnTris = 0;
+
+  function addTile(t) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(t.pos, 3));
+    geo.setAttribute('aU', new THREE.BufferAttribute(t.aU, 1));
+    geo.setAttribute('aHalf', new THREE.BufferAttribute(t.aHalf, 1));
+    geo.setAttribute('aCls', new THREE.BufferAttribute(t.aCls, 1));
+    geo.setAttribute('aT', new THREE.BufferAttribute(t.aT, 1));
+    geo.setAttribute('aCut', new THREE.BufferAttribute(t.aCut, 1));
+    geo.setIndex(new THREE.BufferAttribute(t.idx, 1));
+    // The culling sphere arrives computed (roads-worker.js): the main thread is array wrangling, not scans.
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(t.sphere.x, t.sphere.y, t.sphere.z), t.sphere.r);
+    geo.userData = { hiCount: t.hiCount, full: t.idx.length };
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.frustumCulled = true;
+    group.add(mesh);
+    meshes.push(mesh);
+    drawnTris += t.tris;
+  }
+
+  function update(camera) {
+    for (const m of meshes) {
+      const b = m.geometry.boundingSphere;
+      const far = b && (camera.position.x - b.center.x) ** 2 + (camera.position.z - b.center.z) ** 2 > NEAR_M * NEAR_M;
+      const u = m.geometry.userData;
+      const count = far && u.hiCount ? u.hiCount : u.full;
+      if (m.geometry.drawRange.count !== count) m.geometry.setDrawRange(0, count);
+    }
+  }
+
   const api = {
-    group,
-    rebuild,
-    get drawn() { return { tiles: tiles.size, triangles: tris, lamps: lampPts.length / 2 }; },
-    setNight(night) {
-      lamps.visible = !!night && on;
-    },
+    group, update,
+    get drawn() { return { tiles: meshes.length, triangles: drawnTris, lamps: lampPts.length / 2 }; },
+    relift,   // the streets ride uRelief like the buildings; only the lamps' seats are one breath of CPU
+    setNight(night) { lamps.visible = !!night && on; },
     setVisible(v) { group.visible = !!v && on; },
   };
   api.setNight(false);
+
+  if (!baseGrid) return api;   // no terrain in this build: the streets stand flat at their lift, as before
+
+  // The terrain is in: kick the worker with everything it needs, then build the tile meshes on the main thread.
+  // The points transfer; the (t, cut) texture stays put for the ground's own shader, so it goes by clone. The
+  // worker's round trip gets its own measure, reachable from perf.json as builders['roads-worker'].
+  performance.mark('roads-worker-start');
+  const worker = new Worker('roads-worker.js', { type: 'module' });
+  const answer = await new Promise((resolve, reject) => {
+    worker.onmessage = ({ data }) => resolve(data);
+    worker.onerror = e => reject(e);
+    worker.postMessage({ pts: pts.buffer, ways: meta.ways, tex: baseGrid.tex, grid: { x0: baseGrid.x0, z0: baseGrid.z0, cell: baseGrid.cell, nx: baseGrid.nx, nz: baseGrid.nz } },
+      [pts.buffer]);
+  });
+  worker.terminate();
+  performance.measure('roads-worker', 'roads-worker-start');   // fetch + bake on the other thread, wall time
+
+  let mainMs = 0;
+  for (const t of Object.values(answer.tiles)) {
+    // Per-tile attribution: the stream is still flying (buildings' GL uploads own most of this thread right now),
+    // so a single wall-clock measure of the loop reads contention, not roads. The sum of the tiles' own segments
+    // is the main-thread cost issue #27 budgets (≤ 50 ms).
+    const a = performance.now();
+    addTile(t);
+    mainMs += performance.now() - a;
+  }
+  performance.measure('roads', { start: performance.now() - mainMs, end: performance.now() });   // the loop's own time
+  console.log(`[roads] ${meshes.length} tiles, ${drawnTris} tris, main thread ${Math.round(mainMs)} ms`);
   return api;
 }

@@ -2,6 +2,30 @@
 import { ShapeUtils, Vector2 } from './vendor/three.core.js';
 import { parse, ATTR_FLOATS } from './tile.js';
 
+// In decimetres a 500 m block's winding sum can pass 2^31 — always use float doubles here.
+const shoelace2 = (xz, s, e) => {
+  let sum = 0;
+  for (let i = s; i < e; i++) {
+    const j = i + 1 === e ? s : i + 1;
+    sum += xz[2 * i] * xz[2 * j + 1] - xz[2 * j] * xz[2 * i + 1];
+  }
+  return sum;
+};
+// Issue #27: ring winding is not normalised. The walls the quad order emits face OUT of the footprint exactly when
+// an exterior ring reads negative area, and point into the courtyard when a hole reads positive. If a tile comes
+// the other way (or mixed, as some land), write it out again reversed — anything else and FrontSide culls wrong.
+function normaliseRing(xz, r, hole, vertStart) {
+  const s = vertStart[r], e = vertStart[r + 1], n = e - s;
+  if (n < 3) return;
+  const area = shoelace2(xz, s, e);
+  const wrong = hole ? area < 0 : area > 0;
+  if (!wrong || area === 0) return;
+  for (let i = 0; i < n >> 1; i++) {
+    const a = s + i, b = s + (n - 1 - i);
+    for (let k = 0; k < 2; k++) { const t = xz[2 * a + k]; xz[2 * a + k] = xz[2 * b + k]; xz[2 * b + k] = t; }
+  }
+}
+
 // Exported for web/test/worker.test.mjs; the page only talks to the worker through messages.
 export function build(t) {
   let nVert = 0, nIdx = 0;
@@ -22,6 +46,7 @@ export function build(t) {
       const shapes = []; // one roof per exterior ring: a MultiPolygon part has several
       // Walls
       for (let r = r0; r < r1; r++) {
+        normaliseRing(t.xz, r, t.hole[r], t.vertStart);
         const s = t.vertStart[r], e = t.vertStart[r + 1], n = e - s;
         const ring = [];
         for (let i = 0; i < n; i++) {
@@ -41,7 +66,15 @@ export function build(t) {
         const roofStart = v;
         for (const pt of contour.concat(...holes)) { pos.set([pt.x, roof, pt.y], v * 3); bld[v] = b; v++; }
         for (const tri of ShapeUtils.triangulateShape(contour, holes)) {
-          idx.set([roofStart + tri[0], roofStart + tri[1], roofStart + tri[2]], k); k += 3;
+          // The normals the pick and the sun both read from the winding: with the ring normalised the triangulator
+          // is free to reverse a ring (it does — ShapeUtils flips CW contours), so lose the guess: every roof
+          // triangle's normal must climb (+y) or it is wound the wrong way once the map culls back faces (#27).
+          const [a, b2, c] = tri.map(i => roofStart + i);
+          let [t0, t1, t2] = [a, b2, c];
+          const ux = pos[3 * t1] - pos[3 * t0], uz = pos[3 * t1 + 2] - pos[3 * t0 + 2];
+          const vx = pos[3 * t2] - pos[3 * t0], vz = pos[3 * t2 + 2] - pos[3 * t0 + 2];
+          if (uz * vx - ux * vz < 0) { const d = t1; t1 = t2; t2 = d; }   // wrong way round: flip, not hide
+          idx.set([t0, t1, t2], k); k += 3;
         }
       }
     }
