@@ -1,7 +1,9 @@
 // The trams drawn on the map (web/trams.js says where each one is): the mapped rails, the vessels running to the
 // timetable now, and ZET's live vehicles from /rt where the feed puts them. Every tram is a TMK 2200 at true size
-// (data/<version>/trams.json vehicle: 32 m long, 2.3 m wide, 3.4 m high) in the livery the feed gives the line, in
-// one InstancedMesh per part so the whole day costs six draw calls.
+// (data/<version>/trams.json vehicle: 32 m long, 2.3 m wide, 3.4 m high) in ZET's own livery — blue body, black
+// window band, grey roof, a sloped windshield on both cabs (it runs double-ended), a single-arm pantograph — built
+// in three sections that follow the shape independently, because one rigid 32 m block reads wrong on every bend.
+// One InstancedMesh per part keeps the whole day at a handful of draw calls.
 //
 // app.js calls step() every frame while the trams show (at Today only, like the boats): the timetable is read from
 // the page's clock in Zagreb's time, so the trams on the screen are the trams on the street, and the live feed is
@@ -68,15 +70,25 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
   }
   liftRails();
 
-  // ---- the vehicles: a body, a window band and the line's own band, all at true size
+  // ---- the vehicles: a TMK 2200 as the fleet actually runs them. ZET blue (#0e63b8) over black windows and a
+  // grey roof; the cab's big windshield tilts back, the doors sit inside the window band, and the half-diamond
+  // pantograph reads as two bars at map zoom. Three sections per tram, each placed on the shape itself: the
+  // bellows between them are where the tram bends on a curve, exactly like the street.
   const v = trams.vehicle;
   const L = v.length || 32, W = v.width || 2.3, H = v.height || 3.4;
-  const bodyGeo = shadedBox(THREE, L, H, W, '#e9e7e2').translate(0, LIFT + H / 2, 0);
-  const winGeo = shadedBox(THREE, L * 0.9, H * 0.28, W + 0.05, '#1b2026').translate(0, LIFT + H * 0.62, 0);
-  const bandGeo = new THREE.BoxGeometry(L * 0.998, 0.5, W + 0.05).translate(0, LIFT + 0.6, 0);
+  const ZET = '#0e63b8', GLASS = '#171a1e', ROOF = '#c9cdd2', DARK = '#22262b', SIGN = '#e8b33f';
+  const geoOf = c => shadedBox(THREE, 1, 1, 1, c);   // unit cube, scaled per instance; the shading rides along
   const bodyMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
   const winMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
-  const bandMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const roofMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
+  const faceMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
+  // Every material stays white: the geometry's vertices carry both the colour and the face's light
+  // (a coloured base colour would multiply the vertices' own, and the pantograph would go twice as dark).
+  const pantMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
+  const signMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
+
+  const SEC_LEN = [9.6, 11.2, 9.6], SEC_OFF = [-11.2, 0, 11.2];   // three sections, two 0.8 m bellows between
+  const TILT = 0.42;                                              // the windshield's lean-back, in radians
 
   const schedCap = net.peakRunning();          // no second of the day puts more trams on the street than this
   const liveCap = 320;                          // ZET's feed carries about 150 trams; room for a busy moment
@@ -86,32 +98,73 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
     m.frustumCulled = false;                    // they move every frame, all over the city
     m.count = 0;
     m.name = name;
-    if (mat === bandMat) m.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
     return m;
   };
+  // Caps are per section where a part exists per section; the cab parts exist twice per tram.
   const parts = (tag, cap) => ({
-    body: make(cap, bodyGeo, bodyMat, `${tag}-body`),
-    win: make(cap, winGeo, winMat, `${tag}-windows`),
-    band: make(cap, bandGeo, bandMat, `${tag}-line`),
+    body: make(cap * 3, geoOf(ZET), bodyMat, `${tag}-body`),
+    win: make(cap * 3, geoOf(GLASS), winMat, `${tag}-windows`),
+    roof: make(cap * 3, geoOf(ROOF), roofMat, `${tag}-roof`),
+    face: make(cap * 2, geoOf(GLASS), faceMat, `${tag}-cab`),
+    pant: make(cap * 2, geoOf(DARK), pantMat, `${tag}-pant`),
+    sign: make(cap * 2, geoOf(SIGN), signMat, `${tag}-sign`),
     cap,
   });
   const sched = parts('tram', schedCap);
   const live = parts('tram-live', liveCap);
-  for (const p of [sched, live]) group.add(p.body, p.win, p.band);
+  for (const p of [sched, live]) group.add(p.body, p.win, p.roof, p.face, p.pant, p.sign);
 
-  const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0),
-    P = new THREE.Vector3(), S = new THREE.Vector3(1, 1, 1), C = new THREE.Color();
-  const lineColour = trams.lines.map(l => l.text || l.colour || '#1c3f94');
-  // What each drawn instance is, for the tooltip, the ride (app.js stepRide, which stands behind the tram) and for
-  // __dbg: index -> {trip, live, x, z, heading, d}
+  const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), QT = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0),
+    ZAX = new THREE.Vector3(0, 0, 1), P = new THREE.Vector3(), S = new THREE.Vector3(1, 1, 1);
+  // What each drawn tram is, for the tooltip, the ride (app.js stepRide, which stands behind the tram) and for
+  // __dbg: index -> {trip, live, x, z, heading, d}; each body mesh holds three consecutive instances for one tram.
   let drawnSched = [], drawnLive = [];
 
-  function put(p, i, x, y, z, heading, colour) {
-    Q.setFromAxisAngle(Y, -heading);            // three.js turns anticlockwise seen from above, from +x towards -z
-    M.compose(P.set(x, y, z), Q, S);
-    p.body.setMatrixAt(i, M); p.win.setMatrixAt(i, M); p.band.setMatrixAt(i, M);
-    C.set(colour);
-    p.band.setColorAt(i, C);
+  // One instance: yaw about the world's Y (from +x towards -z), then an optional lean in the tram's own frame
+  // (the windshields tilt; everything else does not).
+  function instance(mesh, i, x, y, z, heading, sx, sy, sz, lean = 0) {
+    Q.setFromAxisAngle(Y, -heading);
+    if (lean) Q.multiply(QT.setFromAxisAngle(ZAX, lean));
+    M.compose(P.set(x, y, z), Q, S.set(sx, sy, sz));
+    mesh.setMatrixAt(i, M);
+  }
+
+  // A whole tram: three sections bent on the shape, cab ends with their windshields, the pantograph's two bars.
+  function putVehicle(p, k, trip, d, x, y, z, heading) {
+    const shape = trip != null ? net.trips[trip * 5] : null;
+    const sLen = trip != null ? net.trips[trip * 5 + 2] : 0;
+    const i3 = k * 3, i2 = k * 2;
+    for (let s = 0; s < 3; s++) {
+      if (shape != null && d != null) {
+        const dd = Math.max(0, Math.min(sLen, d + SEC_OFF[s]));
+        const pt = net.pointAt(shape, dd, dd);
+        const yy = surfaceAt(pt.x, pt.z);
+        instance(p.body, i3 + s, pt.x, yy + LIFT + H / 2, pt.z, pt.heading, SEC_LEN[s], H, W);
+        instance(p.win, i3 + s, pt.x, yy + LIFT + 1.98, pt.z, pt.heading, SEC_LEN[s] * 0.94, 1.25, W + 0.04);
+        instance(p.roof, i3 + s, pt.x, yy + LIFT + H + 0.05, pt.z, pt.heading, SEC_LEN[s] * 0.98, 0.1, W * 0.94);
+        if (s === 1) {   // the pantograph lives on the middle section
+          const bx = Math.cos(pt.heading) * 0.4, bz = -Math.sin(pt.heading) * 0.4;
+          instance(p.pant, i2, pt.x - bx, yy + LIFT + H + 1.05, pt.z - bz, pt.heading, 0.11, 1.9, 0.11, -0.9);
+          instance(p.pant, i2 + 1, pt.x + bx, yy + LIFT + H + 1.05, pt.z + bz, pt.heading, 0.11, 1.9, 0.11, 0.9);
+        }
+      } else {
+        instance(p.body, i3 + s, x, y + LIFT + H / 2, z, heading, SEC_LEN[s], H, W);
+        instance(p.win, i3 + s, x, y + LIFT + 1.98, z, heading, SEC_LEN[s] * 0.94, 1.25, W + 0.04);
+        instance(p.roof, i3 + s, x, y + LIFT + H + 0.05, z, heading, SEC_LEN[s] * 0.98, 0.1, W * 0.94);
+      }
+    }
+    if (shape != null && d != null) {   // both cabs: the TMK 2200 runs double-ended, so both ends get a windshield
+      const dF = Math.min(sLen, d + L / 2 - 0.35), dR = Math.max(0, d - L / 2 + 0.35);
+      const pF = net.pointAt(shape, dF, dF), yF = surfaceAt(pF.x, pF.z);
+      const pR = net.pointAt(shape, dR, dR), yR = surfaceAt(pR.x, pR.z);
+      instance(p.face, i2, pF.x, yF + LIFT + 2.15, pF.z, pF.heading, 0.14, 1.5, W - 0.06, -TILT);
+      instance(p.face, i2 + 1, pR.x, yR + LIFT + 2.15, pR.z, pR.heading, 0.14, 1.5, W - 0.06, TILT);
+      // the destination sign stands proud of the windshield, or its amber never reaches the eye
+      const dFS = Math.min(sLen, dF + 0.13), dRS = Math.max(0, dR - 0.13);
+      const pFS = net.pointAt(shape, dFS, dFS), pRS = net.pointAt(shape, dRS, dRS);
+      instance(p.sign, i2, pFS.x, yF + LIFT + H - 0.42, pFS.z, pF.heading, 0.09, 0.42, 1.5);
+      instance(p.sign, i2 + 1, pRS.x, yR + LIFT + H - 0.42, pRS.z, pR.heading, 0.09, 0.42, 1.5);
+    }
   }
 
   // ---- the live feed: ZET's own positions, already in engine metres (scripts/serve.py projects them)
@@ -227,7 +280,7 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
         heading = Math.atan2(-Math.cos(o.bearing * Math.PI / 180), Math.sin(o.bearing * Math.PI / 180));
       }
       const y = surfaceAt(x, z);
-      put(live, drawnLive.length, x, y, z, heading, lineColour[net.trips[o.trip * 5 + 3]] || '#1c3f94');
+      putVehicle(live, drawnLive.length, o.trip, d, x, y, z, heading);
       drawnLive.push({ k: `tram:${o.trip}`, trip: o.trip, live: true, x, y, z, heading, d, next: net.nextStopAt(o.trip, d) });
     }
 
@@ -237,15 +290,15 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
       const p = net.positionAt(trip, sec);
       if (!p) continue;
       const y = surfaceAt(p.x, p.z);
-      put(sched, drawnSched.length, p.x, y, p.z, p.heading, lineColour[net.trips[trip * 5 + 3]] || '#1c3f94');
+      putVehicle(sched, drawnSched.length, trip, p.d, p.x, y, p.z, p.heading);
       drawnSched.push({ k: `tram:${trip}`, trip, live: false, x: p.x, y, z: p.z, heading: p.heading, d: p.d, next: net.nextStopAt(trip, p.d) });
     }
 
     for (const p of [sched, live]) {
       const n = p === sched ? drawnSched.length : drawnLive.length;
-      p.body.count = p.win.count = p.band.count = n;
-      p.body.instanceMatrix.needsUpdate = p.win.instanceMatrix.needsUpdate = p.band.instanceMatrix.needsUpdate = true;
-      if (p.band.instanceColor) p.band.instanceColor.needsUpdate = true;
+      p.body.count = p.win.count = p.roof.count = n * 3;
+      p.face.count = p.pant.count = p.sign.count = n * 2;
+      for (const mesh of [p.body, p.win, p.roof, p.face, p.pant, p.sign]) mesh.instanceMatrix.needsUpdate = true;
       // The raycast culls against the instances' own bounds first, and they are empty until the matrices hold
       // something: computed here, every frame, since the trams move all over the city. Without it hitAt never hits.
       p.body.computeBoundingSphere();
@@ -267,20 +320,18 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
     const hit = ray.intersectObjects([live.body, sched.body], false)[0];
     if (!hit || hit.instanceId === undefined) return null;
     const set = hit.object === live.body ? drawnLive : drawnSched;
-    const d = set[hit.instanceId];
+    const d = set[Math.floor(hit.instanceId / 3)];   // three body sections stand consecutive for one drawn tram
     if (!d) return null;
     const depth = hit.distance * ray.ray.direction.dot(camera.getWorldDirection(F));
     return { ...d, depth };
   }
 
-  // Night: the body, the windows and the line's band are unlit, so they are darkened by hand as the trees are.
+  // Night: the body, the windows, the roof and the cab trim are unlit, so they are darkened by hand as the trees are.
   let nightOn = false;
   function setNight(v) {
     nightOn = !!v;
     const k = nightOn ? NIGHT : 1;
-    bodyMat.color.setScalar(k);
-    winMat.color.setScalar(k);
-    bandMat.color.setScalar(k);
+    for (const m of [bodyMat, winMat, roofMat, faceMat, pantMat, signMat]) m.color.setScalar(k);
   }
 
   scene.add(group);
