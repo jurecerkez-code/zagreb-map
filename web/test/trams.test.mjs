@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { parseTrams, makeNet, tramClock, tramInfo, tramHtml, ZONE, RIDE_PROFILE, runProfile, dwellFor, delaySeconds } from '../trams.js';
+import { parseTrams, makeNet, tramClock, tramInfo, tramHtml, ZONE, RIDE_PROFILE, runProfile, dwellFor } from '../trams.js';
 import { makeT } from '../i18n.js';
 
 const I18N = Object.fromEntries(['en', 'hr'].map(l => [l, JSON.parse(readFileSync(new URL(`../i18n/${l}.json`, import.meta.url), 'utf8'))]));
@@ -70,9 +70,6 @@ test('the ride itself: dwell is clamped into 8–20 s, the delay is seconds of t
   assert.equal(dwellFor(5), 8, 'a shorter timetable stand: 8 at least');
   assert.equal(dwellFor(12), 12, 'a stand the timetable has');
   assert.equal(dwellFor(45), 20, 'a long one: 20 at most');
-  // A second too early over a 60 m hop in 12 s (5 m/s): 0.2 s of delay
-  const slope = 60 / 12;
-  assert.ok(Math.abs(delaySeconds(61, 60, slope) - 0.2) < 1e-9);
   // a two-second hop (no cruise section): its profile is a triangle with no cruise and still lands
   const tiny = runProfile(4, 6);
   assert.equal(tiny.tc, 0);

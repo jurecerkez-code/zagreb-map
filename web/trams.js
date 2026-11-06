@@ -58,11 +58,6 @@ export function runProfile(runSec, distM, P = RIDE_PROFILE) {
 // The dwell the profile gives a stay, never below 8 s and never above 20.
 export const dwellFor = ttStay => Math.max(RIDE_PROFILE.dwellMin, Math.min(RIDE_PROFILE.dwell, ttStay));
 
-// The live feed says a point, the timetable says a distance: seconds of delay, as the current segment's slope says
-// them. export so the layer and the HUD agree (issue #26's delay measure).
-export function delaySeconds(liveD, expectedD, metresPerSec) {
-  return (liveD - expectedD) / Math.max(1e-3, metresPerSec);
-}
 
 export function parseTrams(json) {
   const ok = json && Array.isArray(json.lines) && Array.isArray(json.shapes) && Array.isArray(json.trip_ids)

@@ -11,7 +11,7 @@
 // leaves the boats out: it reads a building id from a pixel) and reports how far along the ray the tram lies, so
 // app.js can ask the pick pass whether a building stands in front of it. The tooltip itself is web/boat-tip.js,
 // mounted a second time with web/trams.js tramHtml.
-import { parseTrams, makeNet, tramClock, tramInfo, tramHtml, delaySeconds } from './trams.js';
+import { parseTrams, makeNet, tramClock, tramInfo, tramHtml } from './trams.js';
 import { gunzip } from './veg.js';   // the same gzip in transit, inflated here: no library either way
 
 const LIVE_MS = 15000;      // ZET refreshes its feed about once a minute; a quarter of that keeps the map current
@@ -133,16 +133,23 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
     }
     return null;
   }
-  // Issue #26: live trams do not jump between feeds. Every followed trip carries a delay in SECONDS — the gap
-  // between the feed's projected distance and the timetable's expectation, eased to its new target over 20 s and
-  // never by teleporting the vehicle. Between two polls the vehicle keeps the timetable's own pace (plus its delay).
-  const delayOf = new Map();   // trip -> { now, target } in seconds
+  // Issue #26: live trams do not jump between feeds. Every followed trip carries a delay in METRES along the shape
+  // — the gap between the feed's projected distance and the timetable's expectation at the same clock — eased to
+  // its new target over 20 s and never by teleporting the vehicle. Metres, not seconds, because the pace changes at
+  // every stop's edge: an offset held in seconds would hop by exactly its own share there.
+  // lastD: when the trip's service window ends (a tram that outruns its own day), the timetable's expectation
+  // stops existing — falling back to the feed's raw point from there is exactly the teleport the ease exists to
+  // prevent, so the last drawn distance stands as the drawn distance until the feed moves it again.
+  const delayOf = new Map();   // trip -> { now, target, lastD }
   let delayTickAt = 0;         // wall-time the ease last moved (the layer has no external per-frame clock)
 
   async function poll() {
     try {
       const feed = (await fetchRt()) || {};
-      const feedSec = Number(feed.ts) || tramClock();
+      // Same clock on both sides, always: the drawn position samples the timetable at the PAGE's Zagreb clock in
+      // step(), so the delay must be measured against the same clock here. The feed's own stamp (liveAt) is only
+      // the staleness reading for the HUD: mixing a minutes-stale feed clock into exp once pulled every drawn tram
+      // through double-counted seconds (the live-swap snap, #26).
 
       // Only trams: a vehicle whose trip id is not in the schedule is a bus on another ZET line. Each is put on its
       // own shape once here, not every frame: a live position holds until the next answer.
@@ -153,13 +160,16 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
         seen.add(trip);
         const p = net.projectAt(trip, x.x, x.z);
         const t = delayOf.get(trip) || { now: 0, target: 0 };
-        const exp = net.positionAt(trip, feedSec);
+        const exp = net.positionAt(trip, tramClock());
         if (exp) {
-          const run = net.runAt(trip, exp.d);
-          const slope = run ? (run.d1 - run.d0) / Math.max(1, run.arr - run.dep) : 1;
-          t.target = delaySeconds(p.d, exp.d, slope);
-          if (!delayOf.has(trip)) t.now = t.target;   // first sighting lands where the feed says: zero ease distorts
-          delayOf.set(trip, t);
+          // The delay lives in metres along the shape (feed point minus the timetable's expectation), never in
+          // seconds: a seconds reading multiplied by the current pace hops by the delay's own share at every stop
+          // boundary the pace changes, which is exactly the snap the live marker must never take (#26).
+          t.target = Math.max(-900, Math.min(900, p.d - exp.d));
+          if (!delayOf.has(trip)) {
+            t.now = t.target;                       // a first sighting appears where it actually is
+            delayOf.set(trip, t);
+          } else if (Math.abs(t.target - t.now) > 600) t.now = t.target;   // a teleport still snaps, a stutter never does
         }
         out.push({ ...x, trip, d: p.d, heading: p.heading });
       }
@@ -180,11 +190,15 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
     group.visible = show;
     if (!show) return;
     const sec = tramClock();
-    // The live delay's 20 s ease, ticked once per step with wall time (the app may skip frames when idle).
+    // The live delay's 20 s ease, ticked once per step with wall time (the app may skip frames when idle). The
+    // per-frame wish is capped at a tram's own ceiling — 2.5 m a frame and 10 m/s a second — because the ease is
+    // exactly what must never outrun its vehicle: a teleported feed catches up at tram speed, not faster.
     if (delayTickAt) {
       const dtEase = Math.min(0.5, Math.max(0, (performance.now() - delayTickAt) / 1000));
       if (dtEase > 0) for (const track of delayOf.values()) {
-        track.now += (track.target - track.now) * (1 - Math.exp(-dtEase / 20));
+        const wish = (track.target - track.now) * (1 - Math.exp(-dtEase / 20));
+        const cap = Math.min(2.5, 10 * dtEase);
+        track.now += Math.max(-cap, Math.min(cap, wish));
       }
     }
     delayTickAt = performance.now();
@@ -197,11 +211,12 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
       const track = delayOf.get(o.trip);
       const exp = net.positionAt(o.trip, sec);
       let x = o.x, z = o.z, d = o.d, heading = o.heading;
-      if (track && exp) {
-        // The timetable's own pace, plus the ease: the live tram moves between polls exactly as a live one should.
-        const run = net.runAt(o.trip, exp.d);
-        const slope = run ? (run.d1 - run.d0) / Math.max(1, run.arr - run.dep) : 0;
-        d = exp.d + track.now * slope;
+      if (track && (exp || track.lastD != null)) {
+        // The timetable's own distance, plus the ease: both terms already in metres, so a stop boundary (where the
+        // pace changes) never moves the tram by the delay's own share between two frames. Past the end of the
+        // service window the last served distance stands (the window's end has no expectation to jump back to).
+        d = exp ? exp.d + track.now : track.lastD;
+        track.lastD = d;
         const pt = net.pointAt(net.trips[o.trip * 5], d, d);
         x = pt.x; z = pt.z;
         // The feed sends no bearing: the shape's own direction is the direction of travel. A bearing in degrees from
@@ -294,8 +309,17 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
     get list() { return [...drawnSched, ...drawnLive]; },   // what is on the screen now (scripts/trams_check.mjs)
     get drawn() { return { schedule: drawnSched.length, live: drawnLive.length, total: drawnSched.length + drawnLive.length }; },
     get liveAt() { return liveAt; },
-    // The ease's seconds for a followed trip — the ride's ETA and its LIVE dot read them (issue #26).
-    liveDelay(t) { return delayOf.get(t)?.now ?? null; },
+    // The ease's seconds for a followed trip — the ride's ETA and its LIVE dot read them (issue #26). Stored in
+    // metres, read at the segment's own pace so an ETA stays an ETA; a paused tram still eases, so the fallback is
+    // a tram-under-load pace, not a hop.
+    liveDelay(t) {
+      const m = delayOf.get(t)?.now;
+      if (m == null) return null;
+      const exp = net.positionAt(t, tramClock());
+      const run = exp ? net.runAt(t, exp.d) : null;
+      const pace = run ? (run.d1 - run.d0) / Math.max(1, run.arr - run.dep) : 0;
+      return m / Math.max(1, pace);
+    },
     get vehicles() { return liveVehicles.length; },
     // the tooltip: web/boat-tip.js mounts a second time on this
     html: (hit, T, esc) => (hit && hit.trip !== undefined ? tramHtml(tramInfo(net, hit, T), esc) : ''),
