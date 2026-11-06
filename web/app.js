@@ -23,7 +23,8 @@ import { BOATS_KEY, boatsOnFrom, boatsShown, parseFerries, boatInfo, boatHtml } 
 import { makeFerries } from './ferries-layer.js';
 import { makeTrams } from './trams-layer.js';
 import { makeRoads } from './roads-layer.js';
-import { tramInfo, tramHtml } from './trams.js';
+import { tramInfo, tramHtml, tramClock } from './trams.js';
+import { makeRideHud } from './ride-hud.js';
 import { mountBoatTip } from './boat-tip.js';
 import { estimateTone, inkOn, rgba, luma, rgb, unknownFill } from './tone.js';
 import { THEMES, SHADING } from './themes.js';
@@ -3800,10 +3801,18 @@ const RIDE_AHEAD = 1.75;      // metres in front of the roof's front edge
 const RIDE_UP = 3.8;          // metres above the street: the roof, not the street
 const RIDE_LOOK = 90;         // metres ahead the camera looks
 const RIDE_LOOK_UP = 12;      // metres up at that distance: a few degrees over the level, so the skyline reads
-const RIDE_EASE_S = 0.22;     // seconds to close most of the way to where the tram has got to
+const RIDE_CHASE_BACK = 25;   // chase view: this many metres behind the tram
+const RIDE_CHASE_UP = 12;     // and this much over it
 const RIDE_GONE_MS = 12000;   // a tram the layer stops drawing (a trip that ended) ends its ride after this long
 const RIDE_FOG = 900;         // metres the fog is measured from while riding: 15 m would grey out the street ahead
 const rideExit = document.getElementById('ride-exit');
+const hud = makeRideHud({ T });
+document.body.append(hud.el);
+hud.hide();
+const rideFrame = document.createElement('div');
+rideFrame.className = 'ride-frame';
+rideFrame.hidden = true;
+document.body.append(rideFrame);
 let ride = null;
 const ridePos = new THREE.Vector3(), rideAim = new THREE.Vector3();
 function startRide(tram) {
@@ -3813,14 +3822,18 @@ function startRide(tram) {
     trip: tram.trip,                   // what the layer's list is looked up by: the feed may move it between frames
     pos: camera.position.clone(),      // the ride's camera, eased towards the tram's place
     aim: controls.target.clone(),
+    aimV: new THREE.Vector3(),         // the aim's spring's speed: the camera turns into a bend, never snaps
     heading: Number.isFinite(tram.heading) ? tram.heading : 0,   // the way it was drawn, until the layer says again
     from: { pos: camera.position.clone(), target: controls.target.clone() },   // where the ride gives it back
     gone: 0,                           // when the layer last drew this trip
+    view: 'cab',                       // the front window; V toggles the chase
   };
   controls.enabled = false;
   controls._sphericalDelta.set(0, 0, 0);   // a drag's glide must not start the ride off course
   controls._panOffset.set(0, 0, 0);
   rideExit.hidden = false;
+  hud.show();
+  rideFrame.hidden = false;
   tramTip.hide();   // the sheet's own click hides it too; this covers a ride started any other way
 }
 function endRide() {
@@ -3828,6 +3841,8 @@ function endRide() {
   const { pos, target } = ride.from;
   ride = null;
   rideExit.hidden = true;
+  hud.hide();
+  rideFrame.hidden = true;
   camera.position.copy(pos);
   controls.target.copy(target);
   controls._sphericalDelta.set(0, 0, 0);
@@ -3835,7 +3850,13 @@ function endRide() {
   controls.enabled = true;
   controls.update();
 }
-function stepRide(dt) {
+// Where the ride's camera stands and where it looks, for trip entry t drawn along its shape at distance d.
+// The camera is ON the track (a point of the shape), its aim further along it, so curves are the view, not a heading.
+function ridePoint(t, d, ahead) {
+  const s = trams.net.trips[t * 5];
+  return trams.net.pointAt(s, d + ahead, undefined);
+}
+function stepRide(dt, now = performance.now()) {
   if (!trams?.on) { endRide(); return; }        // the trams left the map (a year in the past): so does the ride
   const o = trams.list.find(t => t.trip === ride.trip);
   if (!o) {
@@ -3845,19 +3866,25 @@ function stepRide(dt) {
     return;
   }
   ride.gone = 0;
-  const k = calm.matches ? 1 : 1 - Math.exp(-dt / RIDE_EASE_S);   // reduced motion: no glide, the camera is there
-  const g = surfaceAt(o.x, o.z);
-  // The layer reports the direction it draws the tram in; a tram whose direction it cannot say keeps the last one.
-  if (Number.isFinite(o.heading)) ride.heading = o.heading;
-  const fx = Math.cos(ride.heading), fz = Math.sin(ride.heading);  // the engine's angle: from +x towards +z
-  // The front of the roof, a little past it, so the view is the driver's and the tram's own body is out of the frame.
-  const ahead = RIDE_LEN / 2 + RIDE_AHEAD;
-  const bx = o.x + fx * ahead, bz = o.z + fz * ahead;
-  // 3.8 m over the higher end of the street the camera stands on: ahead of a climbing tram a hill may rise.
-  ridePos.set(bx, Math.max(g, surfaceAt(bx, bz)) + RIDE_UP, bz);
-  rideAim.set(bx + fx * RIDE_LOOK, surfaceAt(bx + fx * RIDE_LOOK, bz + fz * RIDE_LOOK) + RIDE_LOOK_UP, bz + fz * RIDE_LOOK);
-  ride.pos.lerp(ridePos, k);
-  ride.aim.lerp(rideAim, k);
+  const d = Number.isFinite(o.d) ? o.d : 0;   // delay-corrected along the shape for a live trip (trams-layer.js)
+  const chase = ride.view === 'chase';
+  // The camera's place on the track and its aim further along it (#26). In the cab the front edge clears the body;
+  // in the chase we hang behind and above.
+  const p = ridePoint(ride.trip, chase ? d - RIDE_CHASE_BACK : d, chase ? 0 : RIDE_LEN / 2 + RIDE_AHEAD);
+  const a = ridePoint(ride.trip, d, chase ? 0 : RIDE_LOOK);
+  const g1 = surfaceAt(p.x, p.z), g2 = surfaceAt(a.x, a.z);
+  const sway = (!calm.matches && !chase) ? Math.sin(now / 1000 * Math.PI * 2 * 1.3) * 0.03 : 0;
+  ridePos.set(p.x, Math.max(g1, surfaceAt(p.x, p.z)) + (chase ? RIDE_CHASE_UP : RIDE_UP) + sway, p.z);
+  rideAim.set(a.x, Math.max(g1, g2) + (chase ? RIDE_UP : RIDE_LOOK_UP), a.z);
+  // Spring on the aim ONLY: a bend is where the eyes go, a lurch never where the body stands.
+  const k = calm.matches ? 1e9 : 2 * Math.PI * 0.8;
+  const ax = (rideAim.x - ride.aim.x) * k * k, ay = (rideAim.y - ride.aim.y) * k * k, az = (rideAim.z - ride.aim.z) * k * k;
+  ride.aimV.x += (ax - 2 * k * ride.aimV.x) * dt;
+  ride.aimV.y += (ay - 2 * k * ride.aimV.y) * dt;
+  ride.aimV.z += (az - 2 * k * ride.aimV.z) * dt;
+  if (calm.matches) ride.aim.copy(rideAim);
+  else ride.aim.addScaledVector(ride.aimV, dt);
+  ride.pos.lerp(ridePos, calm.matches ? 1 : 1 - Math.exp(-dt / 0.35));
   camera.position.copy(ride.pos);
   controls.target.copy(ride.aim);
   camera.lookAt(ride.aim);   // the camera's up is the world's, so the horizon stays level whatever the street does
@@ -3865,10 +3892,41 @@ function stepRide(dt) {
   // from here it is measured from a street's, or the city would grey out a hundred metres ahead.
   const [fogNear, fogFar] = weather.fog();
   uniforms.uFog.value.set(RIDE_FOG * fogNear, RIDE_FOG * fogFar);
+  // The HUD: line, sign, the next stop by the profile, the speed, and live truth with the feed's minute.
+  const line = trams.net.lineOf(ride.trip);
+  const n = net_nextRide(ride.trip, d);
+  // The ETA while a live delay stands: the stop's timetable second plus the followed trip's delay (trams-layer.js).
+  const holdup = o.live ? (trams.liveDelay(ride.trip) || 0) : 0;
+  hud.update({
+    line: line?.short || line?.id || String(ride.trip),
+    colour: line?.colour,
+    headsign: o.next?.name || '',
+    next: n ? { name: n.name, sec: Math.max(0, n.sec - tramClock() + holdup) } : null,
+    speedKmh: ride_speedKmh(ride.trip, d),
+    live: !!o.live,
+    staleSec: trams.liveAt ? (Date.now() / 1000 - trams.liveAt) : null,
+    fetchedAt: trams.liveAt || null,
+  });
+}
+// The next stop and its timetable second along the profile — the HUD's arrival minute (the pill says "in n min").
+function net_nextRide(t, d) {
+  const n = trams.net.nextStopAt(t, d);
+  if (!n) return null;
+  return { name: n.name, sec: n.sec };
+}
+// The run's speed at d: its own profile's speed at the same second of the day (a dwell reads 0, the brake reads what the brake reads).
+function ride_speedKmh(t, d) {
+  const run = trams.net.runAt(t, d);
+  if (!run?.inRun) return 0;
+  const elapsed = tramClock() - run.dep;
+  return run.prof.speed(Math.max(0, Math.min(run.arr - run.dep, elapsed))) * 3.6;
 }
 rideExit.addEventListener('click', endRide);
 addEventListener('keydown', e => {
   if (ride && e.key === 'Escape' && !(e.target instanceof Element && e.target.closest('dialog'))) endRide();
+  if (ride && (e.key === 'v' || e.key === 'V')) {
+    ride.view = ride.view === 'cab' ? 'chase' : 'cab';
+  }
 });
 function stepBoatTip() {
   const t = boatTip.shown;
