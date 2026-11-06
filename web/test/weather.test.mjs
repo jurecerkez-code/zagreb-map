@@ -402,10 +402,11 @@ for (const [, name, body] of src.matchAll(/const (\w+) = \/\* glsl \*\/`([\s\S]*
 const lines = (...ls) => new RegExp(ls.map(l => l.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('(?:\\s|//[^\\n]*)*'));
 
 test('the water shimmers in TERRAIN_FRAG\'s water branch, before the edge and distance fades', () => {
-  assert.match(glsl.TERRAIN_FRAG, /\$\{WEATHER_GLSL\}\s*\$\{WAVE_GLSL\}/);   // the shimmer uses WEATHER_GLSL's hash
+  assert.match(glsl.TERRAIN_FRAG, /\$\{WEATHER_GLSL\}\s*\$\{LIGHT_GLSL\}\s*\$\{WAVE_GLSL\}/);   // the shimmer uses WEATHER_GLSL's hash
   assert.match(glsl.TERRAIN_FRAG, lines(
     '} else {',
     'c = shimmer(c, vWorld.xz, length(vWorld - cameraPosition));',
+    'c *= lighting(vec3(0.0, 1.0, 0.0));',
     '}',
     'c = mix(uFogColor, c, fadeAt(vWorld.xz));',
     'c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, length(vWorld - cameraPosition)));',
@@ -429,10 +430,13 @@ test('snow and rain in the buildings\' FRAG: roofs only, after the light and bef
     'outColor = vec4(mod(id, 256.0), mod(floor(id / 256.0), 256.0), floor(id / 65536.0), 255.0) / 255.0;',
     '#elif defined(FAINT)',
     'outColor = vec4(uFaintColor, uFaint);',
+    '#define gl_FragColor outColor',   // #24: the tail follows into every non-PICK branch
+    '#include <tonemapping_fragment>',
+    '#include <colorspace_fragment>',
     '#else',
   ));
   assert.match(glsl.FRAG, lines(
-    'vec3 c = base * light * foot;',
+    'vec3 c = base * lighting(n) * foot;',
     'float flatTop = smoothstep(0.85, 0.95, n.y);',
     'c *= 1.0 - ${glf(WET.roof)} * uWet * flatTop;',
     'if (uSnow > 0.0) {',
@@ -447,7 +451,8 @@ test('snow and rain in the buildings\' FRAG: roofs only, after the light and bef
     'c = mix(c, uHoverTo, 0.35);', 'h = mix(h, uHoverTo, 0.35);', 'vLit = 1.0;', '}',
     'if (uBlind > 0.5 && vGid == uSelected) vLit = -1.0;'));
   assert.equal([...glsl.VERT.matchAll(/vLit = /g)].length, 3);
-  assert.match(glsl.TERRAIN_FRAG, lines('c = shaded(c, normalize(vNormal));', 'c = weatherGround(c, vWorld.xz);'));
+  assert.match(glsl.TERRAIN_FRAG, lines('vec3 nG = normalize(vNormal);', 'c = shaded(c, nG);',
+    'c *= lighting(nG);', 'c = weatherGround(c, vWorld.xz);'));
   assert.match(glsl.WEATHER_GLSL, /\$\{glf\(SNOW\.ground\)\}/);
 });
 

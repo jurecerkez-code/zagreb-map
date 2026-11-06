@@ -97,6 +97,9 @@ export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt
         c = mix(c, c * ${NIGHT_TINT}, uNight);
         c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, vDepth));
         gl_FragColor = vec4(c, 1.0);
+        // #24: the display transform is the renderer's own tail
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
       }`,
     polygonOffset: true,             // the terrain writes its own depth at the same height: pull the street forward
     polygonOffsetFactor: -2,

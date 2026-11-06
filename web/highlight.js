@@ -65,7 +65,12 @@ const FRAG = /* glsl */`
   uniform vec3 uColour;
   uniform float uAlpha;
   out vec4 outColor;
-  void main() { outColor = vec4(uColour, uAlpha); }
+  void main() {
+    outColor = vec4(uColour, uAlpha);
+    #define gl_FragColor outColor
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }
 `;
 
 export function makeHighlight(THREE, { uRelief, attrFloats, renderer, reduced }) {

@@ -102,14 +102,15 @@ test('the ground and the walls are shaded with themes.js SHADING, the constants 
     '1.0 - ${glf(SHADING.dark)} * uShade, 1.0 + ${glf(SHADING.light)} * uShade); }',
   ));
   assert.match(glsl.TERRAIN_FRAG, lines(
-    'c = mix(shaded(uLand, n), c * (${glf(SHADING.wallMin)} + ${glf(SHADING.wallLit)} * max(dot(n, uSun), 0.0)),',
+    'c = mix(shaded(uLand, n), c * lighting(n),',
     'smoothstep(1.0, 3.0, vWallH));',
   ));
   assert.doesNotMatch(glsl.TERRAIN_FRAG, /\b0\.(6|3|66|34)\b/);
   assert.match(src, /uSun: \{ value: new THREE\.Vector3\(\.\.\.SHADING\.sun\)\.normalize\(\) \}/);
-  // the buildings' walls take the same wallMin + wallLit as the quay walls
-  assert.match(src, lines('float light = n.y > 0.9 ? 1.04 : ${glf(SHADING.wallMin)} + ${glf(SHADING.wallLit)} * sun;'));
-  assert.doesNotMatch(src, /0\.66 \+ 0\.34 \* sun/);
+  // #24: the walls stand in the one shared light with the roofs: LIGHT_GLSL in every scene fragment shader
+  assert.match(src, /const LIGHT_GLSL = \/\* glsl \*\/`[\s\S]*vec3 lighting\(vec3 n\) \{[\s\S]*2\.2[\s\S]*0\.55/);
+  assert.match(glsl.FRAG + glsl.TERRAIN_FRAG, /\$\{LIGHT_GLSL\}[\s\S]*lighting\(n\)/);
+  assert.doesNotMatch(glsl.FRAG + glsl.TERRAIN_FRAG, /SHADING\.wallMin|SHADING\.wallLit/);
   // and the looks' own values, with no fallback: every look has them (themes.test.mjs)
   assert.match(src, /uQuay: \{ value: col\(THEME\.quay\) \}/);
   assert.match(src, /uShade: \{ value: THEME\.reliefShade \}/);

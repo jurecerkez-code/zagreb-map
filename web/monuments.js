@@ -184,6 +184,9 @@ export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, render
         c = c * (0.5 + 0.22 * sky + 0.42 * sun) + spec;
         c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, vDEye));
         gl_FragColor = vec4(c, 1.0);
+        // #24: the display transform is the renderer's own tail
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
       }`,
   });
   // One InstancedMesh per kind.

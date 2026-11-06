@@ -20,7 +20,13 @@ const OPTIONAL_404 = new Set(['rt', 'build.json']);
 let bytes = 0, bytesBeforeReveal = null, http404 = 0, optional404 = 0;
 const files = [], notFound = [];
 // A page warning is as good as a log line here — a stalled pack lane was last seen silent (run 42011722454).
-page.on('console', m => { if (m.type() === 'warning' || m.type() === 'error') console.log(`[page] ${m.text()}`); });
+// #24: a broken shader fails the gate, loudly: three logs its compile errors on the console and the picture would
+// degrade quietly otherwise.
+const shaderErrors = [];
+page.on('console', m => {
+  if (m.type() === 'warning' || m.type() === 'error') console.log(`[page] ${m.text()}`);
+  if (m.type() === 'error' && /Shader Error|WebGLProgram|validateStatus/.test(m.text())) shaderErrors.push(m.text());
+});
 page.on('response', async r => {
   if (r.status() === 404) {
     const path = r.url().replace(url, '');
@@ -89,6 +95,11 @@ const result = {
 console.log(JSON.stringify(result, null, 1));
 if (out) writeFileSync(out, JSON.stringify(result, null, 1));
 await browser.close();
+
+if (shaderErrors.length) {
+  console.error(`shader errors on the page: ${shaderErrors.length} (the first: ${shaderErrors[0].slice(0, 300)})`);
+  process.exit(1);
+}
 
 if (budget) {
   const get = k => k.split('.').reduce((o, p) => o?.[p], result);

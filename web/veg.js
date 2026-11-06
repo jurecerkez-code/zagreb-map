@@ -124,6 +124,9 @@ export async function makeVeg({ THREE, base, scene, uniforms, on = true }) {
         vec4 t = texture2D(uTex, vUv);
         if (t.a < 0.5) discard;
         gl_FragColor = vec4(t.rgb * uTint * vColor, 1.0);
+        // #24: the display transform is the renderer's own tail (non-GLSL3: pc_fragColor maps to gl_FragColor)
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
       }`,
   });
   const plane = new THREE.PlaneGeometry(1, 1);

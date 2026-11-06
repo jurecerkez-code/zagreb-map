@@ -57,8 +57,11 @@ import { makeMonuments, monumentsOnFrom, monumentCard, MONUMENTS_KEY } from './m
 import { makeVeg } from './veg.js';
 import { makePosterPass, posterInks, posterColours, posterYear, nearestIndex } from './poster.js';
 
-// Colours are authored in sRGB and drawn as they are.
-THREE.ColorManagement.enabled = false;
+// #24: authored sRGB becomes the renderer's working space. Every texture the city photographs (the roof and ground
+// bytes, the trees, the roads' taper, the labels) carries its space on the texture; every uniform colour is a
+// THREE.Color, so management converts it; every custom fragment shader ends in the tone-mapping + colourspace tail.
+// Nothing comes back: no convertSRGBToLinear, no manual conversions anywhere.
+THREE.ColorManagement.enabled = true;
 
 // Looks (web/themes.js), chosen in web/look.js: ?theme=arg|kalk|blatimme|paper, else the viewer's last choice, else
 // Ärg. THEME is the look on now (THEME.unknown: buildings with no year yet, a neutral grey apart from the maquette).
@@ -275,6 +278,12 @@ let renderer;
 // No WebGL: say so in the page's language, not that the data failed.
 // #23: start at min(dpr, 1.5) with MSAA stepping in below it (antialias only pays where the ratio is low).
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: devicePixelRatio < 1.5 }); } catch (e) { await halt(e, 'ui.nowebgl'); }
+// #24: filmic output. The renderer owns the display transform: AgX with a per-mode exposure (sun modes further down
+// the file, 1.15 at golden hour), the canvas stays display sRGB. The pick pass renders into a target and so
+// automatically stays raw and tone-mapping-free.
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.AgXToneMapping;
+renderer.toneMappingExposure = 1.15;
 // The GPU's own name, read once: integrated chips (Intel, Mali, Adreno, Apple, ...) open the quality ladder one
 // notch down instead of learning the lesson at 13 fps.
 let gpuName = '';
@@ -436,6 +445,7 @@ function textureFor(L) {
   ctx.strokeText(L.name, LABEL_PX * 0.2, LABEL_PX / 2);
   ctx.fillText(L.name, LABEL_PX * 0.2, LABEL_PX / 2);
   t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;   // #24: canvas pixels are authored sRGB
   t.anisotropy = 4;
   t.userData = { aspect: c.width / c.height };
   labelTex.set(L.name + L.water, t);
@@ -457,6 +467,7 @@ labelPlane.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1);
 const TERRAIN_UNIFORMS = ['uTerrain', 'uGridO', 'uGridN', 'uCell', 'uRelief', 'uCutK'];
 function labelMaterial(map, onWater) {
   const m = new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, depthTest: !LABELS_ON_TOP });
+  m.toneMapped = false;   // #24: labels are interface, not film: crisp ink, no tone curve over them
   m.userData.level = { value: 0 };
   m.onBeforeCompile = s => {
     for (const k of TERRAIN_UNIFORMS) s.uniforms[k] = uniforms[k];
@@ -683,6 +694,10 @@ const uniforms = {
   uGridO: { value: new THREE.Vector2(0, 0) }, uGridN: { value: new THREE.Vector2(1, 1) }, uCell: { value: 1 },
   uEdgeBuildings: { value: 0 },
   uSun: { value: new THREE.Vector3(...SHADING.sun).normalize() },
+  // #24: the scene's one light, a near-white warm sun against a cool sky (#24). The walls' and roofs' shading
+  // (SHADING.wallMin/wallLit) is gone: lighting is the model below, sunAzimuth/sunAmt handled by their colours.
+  uSunCol: { value: new THREE.Color('#ffdcae') },
+  uSkyCol: { value: new THREE.Color('#b3c7dd') },
   // The Foto look (themes.js foto): the real photographed roof and ground colours from data/<version>/roof_rgb.bin
   // and ground_rgb.bin (pipeline/s06_zagreb_ortho.py, sampled by scripts/sample_ortho.py). uFoto 1 only in that look
   // and only once the files loaded; alpha 0 on a texel means "not sampled", so the period colour stays honest.
@@ -955,9 +970,20 @@ const VERT = /* glsl */`
   }
 `;
 
+// #24: one light model for the whole scene (copy in ferries-layer.js for the boats): a warm direct sun (2.2, its
+// warmth carried by uSunCol) plus a cool sky fill (0.55, leaning bluer in shade) over the fragment's own normal.
+// The relief's contouring, the foot and the city's shadows multiply on top of it: contrast comes from light.
+const LIGHT_GLSL = /* glsl */`
+  vec3 lighting(vec3 n) {
+    vec3 direct = uSunCol * (max(dot(n, uSun), 0.0) * 2.2);
+    vec3 ambient = uSkyCol * (mix(0.6, 1.0, n.y * 0.5 + 0.5) * 0.55);
+    return direct + ambient;
+  }`;
+
 const FRAG = /* glsl */`
   precision highp float;
   uniform vec3 uFogColor, uSun, uHoverTo;
+  uniform vec3 uSunCol, uSkyCol;
   uniform float uNight;                     // 1 in the Night mode: the walls lose the light with the ground
   uniform vec2 uFog;
   uniform sampler2D uRoof;
@@ -967,6 +993,7 @@ const FRAG = /* glsl */`
   ${GRID_GLSL}
   ${FADE_GLSL}
   ${WEATHER_GLSL}
+  ${LIGHT_GLSL}
   in vec3 vColor;
   in vec3 vWorld;
   in float vRel;
@@ -986,6 +1013,9 @@ const FRAG = /* glsl */`
       outColor = vec4(mod(id, 256.0), mod(floor(id / 256.0), 256.0), floor(id / 65536.0), 255.0) / 255.0;
     #elif defined(FAINT)
       outColor = vec4(uFaintColor, uFaint);   // flat: no light, hatch or outline
+      #define gl_FragColor outColor
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
     #else
       // n faces the camera (screen-space derivatives), so on every wall seen from outside it is the outward normal.
       vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
@@ -1055,12 +1085,10 @@ const FRAG = /* glsl */`
           base = col;
         }
       }
-      // Low afternoon sun from the south-west (uSun, shared with the ground), a soft sky from above. The foot darkens
-      // the first 12 m above the building's own base, and the skirt under it.
-      float sun = max(dot(n, uSun), 0.0);
-      float light = n.y > 0.9 ? 1.04 : ${glf(SHADING.wallMin)} + ${glf(SHADING.wallLit)} * sun;
+      // The shared light (LIGHT_GLSL): a warm sun from uSun, a cool sky from above; roofs lit the same way as walls.
+      // The foot darkens the first 12 m above the building's own base, and the skirt under it.
       float foot = mix(0.82, 1.0, clamp(vRel / 12.0, 0.0, 1.0));
-      vec3 c = base * light * foot;
+      vec3 c = base * lighting(n) * foot;
       // The weather (WEATHER_GLSL) on the roofs, the walls keeping their colour: darker in the rain; in the snow white in
       // drifts, at most SNOW.roof of the way. A hovered or selected roof's snow takes the same tint as the building
       // (vLit 1), so the hover reads on a snowy roof as on a wall; the quest's red building stays red (vLit -1).
@@ -1075,6 +1103,10 @@ const FRAG = /* glsl */`
       // Night, after the fog so the whole frame cools together: the walls go with the ground.
       c = mix(c, c * vec3(0.30, 0.36, 0.56), uNight);
       outColor = vec4(c, 1.0);
+      // #24: filmic output, the renderer's own curve; GLSL3 names its out, so the chunks' gl_FragColor is this one.
+      #define gl_FragColor outColor
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
     #endif
   }
 `;
@@ -1153,14 +1185,14 @@ loadMonuments().catch(optional('The monuments'));
 // ---------- The sun ----------
 // The map is lit by the sun that is actually over Zagreb at the date and hour asked for (web/sun.js, NOAA's solar
 // position), not by a fixed afternoon from the south-west: ?date=2026-06-21 and ?sun=07:30 set it, otherwise it is the
-// moment the visitor arrives. Below about ten degrees the shading keeps a low sun instead, because the map has no
-// night: no moon, no street lighting, and a black city would be a lie of a different kind.
+// moment the visitor arrives. #24: below six degrees there is no sun to shade with: the Night look takes over
+// (applySunMode), so the floor here only keeps the 6-degree band itself believable.
 let sunState = null;
 function setSun({ date = null, clock = null } = {}) {
   const s = sunFor({ date, clock });
   const [x, y, z] = s.vector;
-  const low = y < 0.17;
-  uniforms.uSun.value.set(x, low ? 0.17 : y, z).normalize();
+  const low = y < 0.105;
+  uniforms.uSun.value.set(x, low ? 0.105 : y, z).normalize();
   sunState = { ...s, clamped: low };
   return sunState;
 }
@@ -1198,22 +1230,35 @@ async function loadCityHeight() {
 }
 loadCityHeight().catch(optional("The shadows"));
 
-// The sun's mode: live (the moment the visitor arrives, refreshed every minute), day (noon on the current date) or
-// night (the sun down, the city lit only by its own colours, cooled towards blue). Live is the default.
-let sunMode = ['live', 'day', 'night'].includes(QUERY.get('sunmode')) ? QUERY.get('sunmode') : 'live';
+// The sun's mode: golden (a fixed golden hour, 38° up, azimuth 225° — the default city most visitors see), live (the
+// moment they arrive, refreshed every minute), day (noon on the current date) or night (the sun down, the city lit
+// only by its own colours, cooled towards blue). #24: golden is the default; live under 6° is the Night look, the
+// exposure walks from 1.15 at noon up to 1.35 at 5° so the low sun keeps its light instead of a knee-high glow.
+const SUN_EXPOSURE = { golden: 1.15, day: 1.15, night: 1.3 };   // live walks its own ramp by the elevation
+let sunMode = ['golden', 'live', 'day', 'night'].includes(QUERY.get('sunmode')) ? QUERY.get('sunmode') : 'golden';
 function applySunMode(mode = sunMode) {
   invalidate(600);   // the day's light (or the Night) lands on walls, roofs, sky (#23)
   sunMode = mode;
-  const night = mode === 'night';
-  uniforms.uNight.value = night ? 1 : 0;
+  let night = mode === 'night';
   if (night) {
     // Below the horizon there is no sun to shade with: a high, cool light from the north keeps the relief readable.
     uniforms.uSun.value.set(0.0, 0.62, -0.78).normalize();
     sunState = { ...sunState, elevation: -6, azimuth: 0, clamped: true, mode };
+  } else if (mode === 'golden') {
+    const el = 38 * Math.PI / 180, az = 225 * Math.PI / 180;   // 38° up, south-west over the river (#24)
+    uniforms.uSun.value.set(-Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).normalize();
+    sunState = { ...sunState, elevation: 38, azimuth: 225, clamped: false, mode };
   } else {
     setSun({ date: QUERY.get('date'), clock: mode === 'day' ? '12:00' : QUERY.get('sun') });
     sunState.mode = mode;
+    if (mode === 'live' && sunState.elevation < 6) night = true;   // #24: the grazing rule becomes the Night look
   }
+  uniforms.uNight.value = night ? 1 : 0;
+  // The mode's film exposure: 1.15 from golden hour to noon, up to 1.35 as the live sun touches 5°; the Night keeps
+  // a lift over it, at 1.30, or its own colours would sink under the tone curve.
+  renderer.toneMappingExposure = (mode === 'live' && !night)
+    ? 1.15 + 0.2 * Math.max(0, Math.min(60 - Math.max(sunState.elevation, 5), 55)) / 55
+    : (night ? 1.3 : SUN_EXPOSURE[mode]);
   syncVegNight();        // the trees are unlit too: without this they would glow at night
   // The sky goes with the mode (skyNow reads uNight and applySky carries it to the clear colour and the fog). Both are
   // defined further down the file, so the call is guarded and the first look switch settles it.
@@ -1626,6 +1671,7 @@ const WATER_VERT = /* glsl */`
 const TERRAIN_FRAG = /* glsl */`
   precision highp float;
   uniform vec3 uFogColor, uSun, uColour, uLand;
+  uniform vec3 uSunCol, uSkyCol;
   uniform vec2 uFog;
   uniform sampler2D uGround;
   uniform float uFoto, uFotoGround;
@@ -1665,6 +1711,7 @@ const TERRAIN_FRAG = /* glsl */`
   ${GRID_GLSL}
   ${FADE_GLSL}
   ${WEATHER_GLSL}
+  ${LIGHT_GLSL}
   ${WAVE_GLSL}
   in vec3 vWorld;
   in vec3 vNormal;
@@ -1688,7 +1735,9 @@ const TERRAIN_FRAG = /* glsl */`
           vec4 vg = texture(uVegTex, muv);
           c = mix(c, vg.rgb, vg.a);
         }
-        c = shaded(c, normalize(vNormal));
+        vec3 nG = normalize(vNormal);
+        c = shaded(c, nG);
+        c *= lighting(nG);      // #24: the shared light, under the relief's own contouring and the weather
         c = weatherGround(c, vWorld.xz);
         // The sun's own shadows: the streets a building keeps from the light (and the city a mountain does).
         c *= mix(0.58, 1.0, sunShadow(vWorld));
@@ -1697,17 +1746,22 @@ const TERRAIN_FRAG = /* glsl */`
         c = mix(c, c * vec3(0.30, 0.36, 0.56), uNight);   // snow, or wet (WEATHER_GLSL)
       } else if (uKind < 1.5) {
         vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
-        c = mix(shaded(uLand, n), c * (${glf(SHADING.wallMin)} + ${glf(SHADING.wallLit)} * max(dot(n, uSun), 0.0)),
+        c = mix(shaded(uLand, n), c * lighting(n),   // #24: above a metre the quay stands in the buildings' light
           smoothstep(1.0, 3.0, vWallH));
         c = mix(weatherGround(c, vWorld.xz), c, smoothstep(1.0, 3.0, vWallH));   // a low bank takes the ground's weather
       } else {
         c = shimmer(c, vWorld.xz, length(vWorld - cameraPosition));   // the water's ripples (WAVE_GLSL)
+        c *= lighting(vec3(0.0, 1.0, 0.0));   // #24: flat water in the same light as flat ground
       }
       c = mix(uFogColor, c, fadeAt(vWorld.xz));
       c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, length(vWorld - cameraPosition)));
       // Night, after the fades: everything cools together, the sky included.
       c = mix(c, c * vec3(0.30, 0.36, 0.56), uNight);
       outColor = vec4(c, 1.0);
+      // #24: filmic output; the pick pass renders to a target and stays raw on its own.
+      #define gl_FragColor outColor
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
     #endif
   }
 `;
@@ -4138,9 +4192,13 @@ function applySky() {
 }
 // Night: the sky's light gone, the fog with it, and the page's own ground (the canvas is transparent, the sky behind it
 // is --bg). Kept out of skyNow and applySky, which web/test/weather.test.mjs holds to their exact shape.
+// Night sky darkening happens in the colour space the visitors see: with colour management on, a linear multiply of
+// 0.14 would come back brighter than the sky it replaces, so dim the hex digits as they are authored.
+const dimSrgb = (hex, k) => '#' + hex.replace(/^#/, '').replace(/../g,
+  h => Math.round(parseInt(h, 16) * k).toString(16).padStart(2, '0'));
 function applyNightSky(night) {
   if (night) {
-    const dark = '#' + new THREE.Color(THEME.sky).multiplyScalar(0.14).getHexString();
+    const dark = dimSrgb(THEME.sky, 0.14);
     renderer.setClearColor(dark, 1);
     uniforms.uFogColor.value.set(dark);
     document.documentElement.style.setProperty('--bg', dark);
