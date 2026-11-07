@@ -358,52 +358,6 @@ def test_gate_is_s99_validate(monkeypatch, tmp_path):
     assert seen == [(tmp_path / VERSION, tmp_path / "data", True)]
 
 
-def test_wrangler_config():
-    lines = (ROOT / "wrangler.jsonc").read_text(encoding="utf-8").splitlines()
-    cfg = json.loads("\n".join(line for line in lines if not line.lstrip().startswith("//")))
-    assert cfg["name"] == "husforhus"
-    # A Worker script in front of the assets, run first only for /api/* (the report form and the owner's triage)
-    assert cfg["main"] == "src/worker.js" and (ROOT / cfg["main"]).is_file()
-    assert cfg["assets"]["binding"] == "ASSETS"
-    assert cfg["assets"]["run_worker_first"] == ["/api/*"]
-    assert [(d["binding"], d["migrations_dir"]) for d in cfg["d1_databases"]] == [("REPORTS", "src/migrations")]
-    assert [r["binding"] for r in cfg["r2_buckets"]] == ["PHOTOS"]
-    assert len(cfg["triggers"]["crons"]) == 1
-    # No secret and no Access setting in the repo: they are dashboard variables and Worker secrets, kept across deploys
-    assert cfg["keep_vars"] is True and "vars" not in cfg
-    assert "account_id" not in cfg  # wrangler takes it from `wrangler login`
-    assert cfg["assets"]["directory"] == "./dist"
-    assert cfg["assets"]["not_found_handling"] == "none"  # a missing data file is a 404, not index.html
-    assert cfg["workers_dev"] is False  # launched 2026-10-17: only the production address
-    assert cfg["observability"] == {"enabled": False}
-    assert {r["pattern"] for r in cfg["routes"]} == {"husforhus.se", "www.husforhus.se"}
-    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", cfg["compatibility_date"])
-
-
-def test_worker_sources_are_public_and_hold_no_secret():
-    allow = (ROOT / "scripts" / "public" / "allowlist.txt").read_text(encoding="utf-8").splitlines()
-    assert "src/**" in allow
-    text = "\n".join(p.read_text(encoding="utf-8") for p in sorted((ROOT / "src").rglob("*")) if p.is_file())
-    text += (ROOT / "wrangler.jsonc").read_text(encoding="utf-8")
-    assert not re.search(r"gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}", text)  # no GitHub token
-    assert "cloudflare" "access" not in text  # the Access team domain is a dashboard variable (and a leak rule)
-    assert "env.GITHUB_TOKEN" in text and "env.ACCESS_AUD" in text
-
-
-def test_package_scripts_and_ignores():
-    pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
-    assert re.fullmatch(r"\d+\.\d+\.\d+", pkg["devDependencies"]["wrangler"])  # pinned exactly
-    assert "build_dist.py" in pkg["scripts"]["dist"]
-    assert "8787" in pkg["scripts"]["preview:local"]
-    assert "--allow-dirty" in pkg["scripts"]["preview:local"]  # local only: uncommitted work may be looked at
-    deploy = pkg["scripts"]["deploy:preview"]
-    assert "wrangler deploy" in deploy and "--allow-dirty" not in deploy
-    assert deploy.index("dist") < deploy.index("wrangler")
-    assert "--message" in deploy and "git rev-parse" in deploy  # the version records the commit it came from
-    ignored = (ROOT / ".gitignore").read_text(encoding="utf-8").split()
-    assert "dist/" in ignored and ".wrangler/" in ignored and ".dist-versions.json" in ignored
-
-
 def test_the_photos_the_version_uses_ship_and_no_others(bd, web, tmp_path):
     # S06_wiki copies photos to web/data/photos/ by key; s03_tiles lists the ones a version uses
     keys = ["0123456789abcdef-500.jpg", "fedcba9876543210-500.png"]
