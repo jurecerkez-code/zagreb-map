@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { THEMES, SHADING } from '../themes.js';
+import { sunVector } from '../sun.js';
 import { readFileSync } from 'node:fs';
 import { oklab, oklabLin, lin, rgb, hex, estimateTone, inkOn } from '../tone.js';
 
@@ -89,17 +90,15 @@ test('Ärg hatches "Year unknown"; the other looks do not', () => {
 // a bank 1 to 3 m high blends between the two. Land is lighter than the water and the walls in shade darker in
 // every light look, so the blend crosses the water's lightness and only hue keeps them apart there: BANK_MIN is the
 // floor the looks hold (the floor Kalkfärg sits on for red-blind viewers is a question for the M4 look review).
-// #24: the filmic pipe compresses mid-tones, so the measured protan floor is Kalkfärg's 1.3: the floor moves with it,
-// and the same M4 review that owned the old 3.9 owns the new 1.3.
+// #24: the filmic pipe compresses mid-tones, so the measured protan floor is Kalkfärg's 1.4: the floor moves with it,
+// and the same M4 review that owned the old 3.9 now has 1.4 at the corrected 225 degree sun.
 const BANK_MIN = 1;
 // app.js's light uniforms, read from the source so the test tracks them: the shader multiplies the albedo by them
 // (colour management on: they are linear working-space), direct sun × 2.2, sky fill × 0.55 with a horizon lift.
 const APP = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const uniHex = u => APP.match(new RegExp(`${u}: \\{ value: new THREE\\.Color\\('(#[0-9a-f]{6})'\\)`))?.[1];
 const SUN_COL = rgb(uniHex('uSunCol')).map(lin), SKY_COL = rgb(uniHex('uSkyCol')).map(lin);
-const DEG = Math.PI / 180;
-const EL = 38 * DEG, AZ = 225 * DEG;
-const SUN = [-Math.sin(AZ) * Math.cos(EL), Math.sin(EL), -Math.cos(AZ) * Math.cos(EL)];
+const SUN = sunVector({ elevation: 38, azimuth: 225 });
 { const l = Math.hypot(...SUN); SUN.forEach((v, i) => SUN[i] = v / l); }
 const SUN_LEVEL = Math.hypot(SUN[0], SUN[2]);
 const UP = [0, 1, 0];
@@ -160,7 +159,7 @@ for (const [name, th] of Object.entries(THEMES)) {
       const far = (c, min, what) => assert.ok(dE(c, g.water, kind) >= min,
         `${kind}: ${what} ${c} / lit water ${g.water}: ΔE ${dE(c, g.water, kind).toFixed(1)}`);
       // #24 floors from the measured filmic margins (scripts/probe_theme.mjs, 2026-11): kalk's weakest
-      // red-blind (protan) numbers are bank 1.3, wall 3.1, slope 6.1; Blå timme's worst is bank 6.1 (protan). The M4
+      // red-blind (protan) numbers are bank 1.4, wall 3.1, slope 6.1; Blå timme's worst is bank 6.1 (protan). The M4
       // look review still owns Kalkfärg's red-blind banks; paper is upstream's comparison palette, skipped as above.
       g.slopes.forEach(c => far(c, name === 'paper' ? 4 : 4.5, 'slope'));
       g.walls.forEach(c => far(c, name === 'paper' ? 1.2 : 2.5, 'wall'));

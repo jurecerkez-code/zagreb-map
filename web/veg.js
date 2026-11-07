@@ -43,6 +43,17 @@ export async function gunzip(buf) {
   return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
 }
 
+// DataTexture bytes remain authored sRGB even though THREE.Color's working values are linear. getHex converts
+// the shaded working colour back to display bytes; sampling the sRGB-tagged texture then decodes it exactly once.
+export function srgbLut(THREE, classes, palette, shade = 1) {
+  const lut = new Uint8Array(256 * 3), colour = new THREE.Color();
+  for (let i = 1; i <= classes.length; i++) {
+    const packed = colour.set(palette[classes[i - 1]] || palette.grass).multiplyScalar(shade).getHex(THREE.SRGBColorSpace);
+    lut[i * 3] = (packed >> 16) & 255; lut[i * 3 + 1] = (packed >> 8) & 255; lut[i * 3 + 2] = packed & 255;
+  }
+  return lut;
+}
+
 export async function makeVeg({ THREE, base, scene, uniforms, on = true }) {
   const meta = await (await fetch(`${base}veg.json`)).json();
   const [treeBuf, maskBuf] = await Promise.all([
@@ -189,18 +200,13 @@ export async function makeVeg({ THREE, base, scene, uniforms, on = true }) {
   }
 
   // ---- green cover painted into the terrain
-  const lut = new Uint8Array(256 * 3);
-  const tmpCol = new THREE.Color();
   let greenTexture = null;
   let nightOn = false;                       // the Night mode: unlit materials are not shaded, so they are darkened here
   const NIGHT = 0.36;
   function paintMask(look) {
     const c = VEG_COLOURS[look] || VEG_COLOURS.arg;
     const k = nightOn ? NIGHT : 1;
-    for (let i = 1; i <= classes.length; i++) {
-      tmpCol.set(c[classes[i - 1]] || c.grass).multiplyScalar(k);
-      lut[i * 3] = Math.round(tmpCol.r * 255); lut[i * 3 + 1] = Math.round(tmpCol.g * 255); lut[i * 3 + 2] = Math.round(tmpCol.b * 255);
-    }
+    const lut = srgbLut(THREE, classes, c, k);
     const rgba = new Uint8Array(m.w * m.h * 4);
     for (let k = 0, o = 0; k < mask.length; k++, o += 4) {
       const v = mask[k];

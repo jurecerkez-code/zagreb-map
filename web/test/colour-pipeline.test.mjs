@@ -11,6 +11,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
+import { sunVector } from '../sun.js';
 
 const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
 const app = read('app.js');
@@ -106,16 +107,29 @@ test('perf gate captures shader warnings and makes the run invalid', () => {
     'relevant shader warnings invalidate the run with exit 2');
 });
 
+test('picture comparisons pin the drawing buffer, not the adaptive quality scale', () => {
+  const shots = readFileSync(new URL('../../scripts/shots.mjs', import.meta.url), 'utf8');
+  assert.match(shots, /renderer\.setPixelRatio\(1\)/);
+  assert.match(shots, /domElement\.width !== innerWidth \|\| renderer\.domElement\.height !== innerHeight/);
+});
+
 test('display output is sRGB after the whole renderer setup', () => {
   const assignments = [...app.matchAll(/renderer\.outputColorSpace = THREE\.(\w+);/g)].map(m => m[1]);
   assert.deepEqual(assignments, ['SRGBColorSpace']);
 });
 
+test('golden uses the real 225 degree south-west vector, not a mirrored x', () => {
+  const actual = sunVector({ elevation: 38, azimuth: 225 });
+  const expected = [-0.557208, 0.615661, 0.557208];
+  actual.forEach((v, i) => assert.ok(Math.abs(v - expected[i]) < 1e-6, `component ${i}: ${v}`));
+  assert.match(app, /\.set\(\.\.\.sunVector\(\{ elevation: 38, azimuth: 225 \}\)\)/);
+});
+
 test('golden is the default sun mode and the four modes stand', () => {
   assert.match(app, /\['golden', 'live', 'day', 'night'\]\.includes\(QUERY\.get\('sunmode'\)\) \? QUERY\.get\('sunmode'\) : 'golden'/);
   assert.match(app, /const SUN_EXPOSURE = \{ golden: 1\.15, day: 1\.15, night: 1\.3 \}/);
-  // live low sun: under 6 degrees the Night look takes over
-  assert.match(app, /mode === 'live' && sunState\.elevation < 6\) night = true/);
+  // live low sun: under 6 degrees the computed Night look takes over
+  assert.match(app, /const night = sunIsNight\(mode, sunState\.elevation\)/);
   // tone mapping is the renderer's: AgX, display sRGB
   assert.match(app, /renderer\.toneMapping = THREE\.AgXToneMapping;/);
   assert.match(app, /renderer\.outputColorSpace = THREE\.SRGBColorSpace;/);

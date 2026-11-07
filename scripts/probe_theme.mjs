@@ -1,13 +1,13 @@
 // Probe: per look, min DeltaE of slopes/walls/banks vs lit water under the #24 pipe (mirrors themes.test.mjs helpers).
 import { THEMES, SHADING } from '../web/themes.js';
+import { sunVector } from '../web/sun.js';
 import { readFileSync } from 'node:fs';
 import { oklabLin, lin, rgb, hex } from '../web/tone.js';
 
 const APP = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
 const uniHex = u => APP.match(new RegExp(`${u}: \\{ value: new THREE\\.Color\\('(#[0-9a-f]{6})'\\)`))?.[1];
 const SUN_COL = rgb(uniHex('uSunCol')).map(lin), SKY_COL = rgb(uniHex('uSkyCol')).map(lin);
-const DEG = Math.PI / 180, EL = 38 * DEG, AZ = 225 * DEG;
-const SUN = [-Math.sin(AZ) * Math.cos(EL), Math.sin(EL), -Math.cos(AZ) * Math.cos(EL)];
+const SUN = sunVector({ elevation: 38, azimuth: 225 });
 { const l = Math.hypot(...SUN); SUN.forEach((v, i) => SUN[i] = v / l); }
 const SUN_LEVEL = Math.hypot(SUN[0], SUN[2]);
 const UP = [0, 1, 0];

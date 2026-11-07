@@ -59,6 +59,11 @@ const shoot = async name => {
   // software render into the canvas and a read of its pixels in the same task is a bounded wait instead.
   const dataUrl = await page.evaluate(() => {
     const { renderer, scene, camera } = window.__dbg;
+    // #24: compare equal pixels across revisions, not the adaptive quality step a particular load happened to reach.
+    renderer.setPixelRatio(1);
+    if (renderer.domElement.width !== innerWidth || renderer.domElement.height !== innerHeight) {
+      throw new Error(`Unexpected capture buffer ${renderer.domElement.width}x${renderer.domElement.height}`);
+    }
     renderer.render(scene, camera);
     return renderer.domElement.toDataURL('image/png');
   });

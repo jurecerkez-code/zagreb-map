@@ -14,7 +14,7 @@ import { latLonToLocal, localToLatLon } from './sweref.js';
 import { makeT, legacy, pickLang } from './i18n.js';
 import { plaquesByGid, plaqueSection } from './plaque.js';
 import { makeFacts } from './facts.js';
-import { sunFor } from './sun.js';
+import { sunFor, sunVector, sunIsNight } from './sun.js';
 import { archaeologySection } from './archaeology.js';
 import { photoSlides, photoFigure } from './photos.js';
 import { metroOnFrom, metroHref, METRO_KEY, stationCard } from './metro.js';
@@ -1240,19 +1240,19 @@ let sunMode = ['golden', 'live', 'day', 'night'].includes(QUERY.get('sunmode')) 
 function applySunMode(mode = sunMode) {
   invalidate(600);   // the day's light (or the Night) lands on walls, roofs, sky (#23)
   sunMode = mode;
-  let night = mode === 'night';
-  if (night) {
-    // Below the horizon there is no sun to shade with: a high, cool light from the north keeps the relief readable.
-    uniforms.uSun.value.set(0.0, 0.62, -0.78).normalize();
-    sunState = { ...sunState, elevation: -6, azimuth: 0, clamped: true, mode };
-  } else if (mode === 'golden') {
-    const el = 38 * Math.PI / 180, az = 225 * Math.PI / 180;   // 38° up, south-west over the river (#24)
-    uniforms.uSun.value.set(-Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).normalize();
+  if (mode === 'golden') {
+    // Golden's fixed direction uses the same coordinate convention as the real solar clock.
+    uniforms.uSun.value.set(...sunVector({ elevation: 38, azimuth: 225 })).normalize();
     sunState = { ...sunState, elevation: 38, azimuth: 225, clamped: false, mode };
   } else {
     setSun({ date: QUERY.get('date'), clock: mode === 'day' ? '12:00' : QUERY.get('sun') });
     sunState.mode = mode;
-    if (mode === 'live' && sunState.elevation < 6) night = true;   // #24: the grazing rule becomes the Night look
+  }
+  const night = sunIsNight(mode, sunState.elevation);
+  if (night) {
+    // Explicit Night and a live sun below six degrees share this vector, not the clamped grazing light.
+    uniforms.uSun.value.set(0.0, 0.62, -0.78).normalize();
+    sunState = { ...sunState, elevation: -6, azimuth: 0, clamped: true, mode };
   }
   uniforms.uNight.value = night ? 1 : 0;
   // The mode's film exposure: 1.15 from golden hour to noon, up to 1.35 as the live sun touches 5°; the Night keeps
@@ -1280,10 +1280,10 @@ setInterval(() => { if (sunMode === 'live' && !document.hidden) applySunMode('li
 // guard keeps the call harmless while it is not there yet, and the loader applies the mode once it is.
 function syncVegNight() {
   try {
-    veg.setNight(sunMode === 'night', THEME_NAME);
+    veg.setNight(!!uniforms.uNight.value, THEME_NAME);
   } catch { /* not built yet */ }
-  trams?.setNight(sunMode === 'night');   // the trams are unlit too
-  roads?.setNight(sunMode === 'night');   // and the street lamps are only lit then
+  trams?.setNight(!!uniforms.uNight.value);   // the trams are unlit too
+  roads?.setNight(!!uniforms.uNight.value);   // live below six degrees lights the lamps too
 }
 
 // ---------- The sun's button ----------
@@ -4275,7 +4275,7 @@ makeTrams({ THREE, base: DATA, scene, camera, surfaceAt, on: tramsOn })
   .then(t => {
     trams = t;
     window.__trams = () => t;          // a dev hook: what the layer drew and what is under a point, for probes
-    t.setNight(sunMode === 'night');   // unlit materials glow in the Night mode without this
+    t.setNight(!!uniforms.uNight.value);   // unlit materials glow in the Night mode without this
     t.step(tramsShown());
   })
   .catch(e => console.warn('The trams did not load.', e));
@@ -4290,7 +4290,7 @@ function startRoads(baseGrid) {
     .then(r => {
       roads = r;
       window.__roads = () => r;          // a dev hook: what was drawn, for probes
-      roads.setNight(sunMode === 'night');
+      roads.setNight(!!uniforms.uNight.value);
       console.log('streets', r.drawn);
     })
     .catch(e => console.warn('The streets did not load.', e));
