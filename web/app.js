@@ -310,7 +310,6 @@ canvas.addEventListener('webglcontextrestored', () => {
   el.setAttribute('aria-live', 'polite');
   el.hidden = true;
 });
-renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
 // dpr 1.5 at the top ladder step (0.85 of it on an integrated chip): the boost to full dpr is quality.js's to grant.
 const pxStart = Math.min(devicePixelRatio || 1, 1.5) * STEPS[gpuLow ? 1 : 0];
 renderer.setPixelRatio(pxStart);
@@ -539,7 +538,9 @@ if (plaqueList.length) {
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#1f4e9c'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 6;
   ctx.beginPath(); ctx.arc(32, 32, 26, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  const mat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), sizeAttenuation: false, depthTest: false });
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({ map: tex, sizeAttenuation: false, depthTest: false });
   for (const p of plaqueList) {
     const s = new THREE.Sprite(mat);
     s.scale.set(0.022, 0.022, 1);
@@ -3055,7 +3056,9 @@ function discTexture(text, fill, ink) {
   g.lineWidth = 7; g.strokeStyle = '#ffffff'; g.stroke();
   g.fillStyle = ink; g.font = `800 44px ${getComputedStyle(document.body).fontFamily}`; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillText(text, 48, 51);
-  return new THREE.CanvasTexture(c);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 function drawWalk(w) {
   walkGroup.clear();

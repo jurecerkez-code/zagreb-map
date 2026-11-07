@@ -86,4 +86,7 @@ for (const [name, go, wait] of views) {
 }
 writeFileSync(jsonPath, JSON.stringify(result, null, 1));
 console.log('wrote', jsonPath);
-await browser.close();
+// SwiftShader can keep the browser's close promise pending after every shot and the JSON are safely on disk.
+// Bound it so a successful measurement also becomes a successful CI/background exit, not a silent orphan.
+await Promise.race([browser.close(), new Promise(resolve => setTimeout(resolve, 10000))]);
+process.exit(0);

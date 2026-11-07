@@ -154,7 +154,8 @@ export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, render
   group.name = 'monuments';
   const geos = shapes(THREE);
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uYear: uniforms.uYear, uSun: uniforms.uSun, uFog: uniforms.uFog, uFogColor: uniforms.uFogColor,
+    uniforms: { uYear: uniforms.uYear, uSun: uniforms.uSun, uSunCol: uniforms.uSunCol, uSkyCol: uniforms.uSkyCol,
+      uNight: uniforms.uNight, uFog: uniforms.uFog, uFogColor: uniforms.uFogColor,
       uYearMax: { value: yearMax }, uStone: { value: new THREE.Color() }, uFig: { value: [new THREE.Color(), new THREE.Color(), new THREE.Color()] },
       uWater: { value: new THREE.Color() }, uGold: { value: new THREE.Color() } },
     side: THREE.DoubleSide,
@@ -173,15 +174,18 @@ export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, render
         gl_Position = hidden ? vec4(2.0, 2.0, 2.0, 1.0) : projectionMatrix * mv;
       }`,
     fragmentShader: `
-      uniform vec3 uSun, uFogColor, uStone, uFig[3], uWater, uGold;
+      uniform vec3 uSun, uSunCol, uSkyCol, uFogColor, uStone, uFig[3], uWater, uGold;
+      uniform float uNight;
       uniform vec2 uFog;
       varying vec3 vN; varying float vPart, vMat, vDEye, vY;
       void main() {
         vec3 n = normalize(vN) * (gl_FrontFacing ? 1.0 : -1.0);
         vec3 c = vPart < 0.5 ? uStone : vPart < 1.5 ? uFig[int(vMat + 0.5)] : vPart < 2.5 ? uWater : uGold;
-        float sun = max(dot(n, normalize(uSun)), 0.0), sky = 0.5 + 0.5 * n.y;
         float spec = vPart > 0.5 && vPart < 1.5 && vMat < 0.5 ? pow(max(dot(reflect(-normalize(uSun), n), vec3(0.0, 1.0, 0.0)), 0.0), 12.0) * 0.18 : 0.0;
-        c = c * (0.5 + 0.22 * sky + 0.42 * sun) + spec;
+        vec3 direct = uSunCol * (max(dot(n, normalize(uSun)), 0.0) * 2.2);
+        vec3 ambient = uSkyCol * (mix(0.6, 1.0, n.y * 0.5 + 0.5) * 0.55);
+        c = c * (direct + ambient) + spec;
+        c = mix(c, c * vec3(0.30, 0.36, 0.56), uNight);
         c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, vDEye));
         gl_FragColor = vec4(c, 1.0);
         // #24: the display transform is the renderer's own tail

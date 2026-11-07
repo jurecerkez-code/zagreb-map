@@ -223,6 +223,7 @@ export function drawPoster(ctx, L, C) {
 // ---------- The pass ----------
 // The shader: each pixel of the copied frame to OKLab (sRGB decoded, LMS, cube roots: tone.js oklabLin's numbers), the
 // nearest match colour found, its ink written. uCount match colours are used of MAX_INKS.
+// #24: this pass reads and writes display bytes, so it must not get a tone/sRGB conversion tail.
 export const POSTER_FRAG = /* glsl */ `
 uniform sampler2D uFrame;
 uniform vec3 uMatch[${MAX_INKS}];

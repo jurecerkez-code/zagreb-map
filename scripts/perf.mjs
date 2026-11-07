@@ -22,10 +22,12 @@ const files = [], notFound = [];
 // A page warning is as good as a log line here — a stalled pack lane was last seen silent (run 42011722454).
 // #24: a broken shader fails the gate, loudly: three logs its compile errors on the console and the picture would
 // degrade quietly otherwise.
-const shaderErrors = [];
+const shaderErrors = [], warnings = [];
 page.on('console', m => {
-  if (m.type() === 'warning' || m.type() === 'error') console.log(`[page] ${m.text()}`);
-  if (m.type() === 'error' && /Shader Error|WebGLProgram|validateStatus/.test(m.text())) shaderErrors.push(m.text());
+  const text = m.text();
+  if (m.type() === 'warning' || m.type() === 'error') console.log(`[page] ${text}`);
+  if (m.type() === 'error' && /Shader Error|WebGLProgram|validateStatus/.test(text)) shaderErrors.push(text);
+  if (m.type() === 'warning' && /shader|WebGL/i.test(text)) warnings.push(text);
 });
 page.on('response', async r => {
   if (r.status() === 404) {
@@ -90,7 +92,7 @@ const marks = await page.evaluate(() => Object.fromEntries(performance.getEntrie
 const result = {
   url, msReveal, bytesBeforeReveal, bytesTotal: bytes, requests: files.length, http404, optional404, notFound,
   heaviest: files.sort((a, b) => b[0] - a[0]).slice(0, 15).map(([n, f]) => `${(n / 1e6).toFixed(2)} MB ${f}`),
-  home, near, far, builders: marks,
+  home, near, far, builders: marks, warnings: warnings.length,
 };
 console.log(JSON.stringify(result, null, 1));
 if (out) writeFileSync(out, JSON.stringify(result, null, 1));
@@ -99,6 +101,10 @@ await browser.close();
 if (shaderErrors.length) {
   console.error(`shader errors on the page: ${shaderErrors.length} (the first: ${shaderErrors[0].slice(0, 300)})`);
   process.exit(1);
+}
+if (warnings.length) {
+  console.error(`shader/WebGL warnings on the page: ${warnings.length} (the first: ${warnings[0].slice(0, 300)})`);
+  process.exit(2);
 }
 
 if (budget) {

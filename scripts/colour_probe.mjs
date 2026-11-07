@@ -92,11 +92,12 @@ await settle();
       const e = dE(got, exp.hex);
       tried.push({ gid, x, y, exp: exp.hex, got, dE: +e.toFixed(1) });
       if (e <= DE_MAX_ROOF) good.push(tried[tried.length - 1]);
-      if (good.length >= 2) break outer;       // two clean reads are the probe
+      if (tried.length >= 2 && good.length >= 2) break outer; // two clean reads are the probe
     }
   }
-  report.push({ probe: 'roof', floor: DE_MAX_ROOF, tried: tried.slice(0, 8), good: good.length });
-  if (!good.length) worst = Math.max(worst, ...tried.map(t => t.dE));
+  report.push({ probe: 'roof', floor: DE_MAX_ROOF, valid: tried.length, tried: tried.slice(0, 8), good: good.length });
+  if (tried.length < 2) throw new Error(`colour_probe: only ${tried.length} valid roof sample(s); two are required`);
+  if (good.length < 2) worst = Math.max(worst, ...tried.map(t => t.dE));
 }
 
 // ---- Asphalt: paper look, the residential ribbon nearest the centre, read under the same fall.
@@ -125,10 +126,11 @@ await settle();
   if (e > DE_MAX_ROAD) worst = Math.max(worst, e);
 }
 
-await browser.close();
+await Promise.race([browser.close(), new Promise(resolve => setTimeout(resolve, 10000))]);
 console.log(JSON.stringify(report, null, 1));
 if (worst) {
   console.error(`colour probe over its floor: worst ΔE ${worst.toFixed(1)}`);
   process.exit(1);
 }
 console.log('colour probe: authored colours survive the renderer');
+process.exit(0);

@@ -64,7 +64,7 @@ export function makeRoofYears(THREE, { attrs, stride, count, camera, renderer, u
 
   // ---- The glyph atlas: red = the ink's coverage, green = the halo's.
   const canvas = document.createElement('canvas');
-  const tex = new THREE.CanvasTexture(canvas);
+  const tex = new THREE.CanvasTexture(canvas); // #24: data texture, not display colour
   tex.generateMipmaps = true;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
