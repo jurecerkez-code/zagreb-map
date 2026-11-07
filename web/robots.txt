@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://husforhus.se/sitemap.xml
+Sitemap: https://jurecerkez-code.github.io/zagreb-map/sitemap.xml

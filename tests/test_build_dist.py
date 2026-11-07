@@ -431,19 +431,19 @@ def test_robots_and_sitemap_ship(bd):
     shipped = {str(p) for p in bd.app_files(ROOT / "web")}
     assert {"robots.txt", "sitemap.xml"} <= shipped
     robots = (ROOT / "web" / "robots.txt").read_text(encoding="utf-8")
-    assert "Sitemap: https://husforhus.se/sitemap.xml" in robots.splitlines()
+    assert "Sitemap: https://jurecerkez-code.github.io/zagreb-map/sitemap.xml" in robots.splitlines()
     sitemap = (ROOT / "web" / "sitemap.xml").read_text(encoding="utf-8")
-    assert "<loc>https://husforhus.se/</loc>" in sitemap and re.search(r"<lastmod>\d{4}-\d{2}-\d{2}</lastmod>", sitemap)
+    assert "<loc>https://jurecerkez-code.github.io/zagreb-map/</loc>" in sitemap and re.search(r"<lastmod>\d{4}-\d{2}-\d{2}</lastmod>", sitemap)
 
 
 def test_the_page_describes_itself_without_javascript():
     # search engines and no-JS readers: valid JSON-LD on the canonical URL, and a plain-text noscript line
     html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
     ld = json.loads(re.search(r'<script type="application/ld\+json">(.*?)</script>', html, re.S).group(1))
-    assert ld["@type"] == "WebApplication" and ld["url"] == "https://husforhus.se/"
-    assert ld["image"] == "https://husforhus.se/og.png" and (ROOT / "web" / "og.png").is_file()
-    assert '<link rel="canonical" href="https://husforhus.se/">' in html
-    assert re.search(r"<noscript><p[^>]*>[^<]*Stockholm", html)
+    assert ld["@type"] == "WebApplication" and ld["url"] == "https://jurecerkez-code.github.io/zagreb-map/"
+    assert ld["image"] == "https://jurecerkez-code.github.io/zagreb-map/og.png" and (ROOT / "web" / "og.png").is_file()
+    assert '<link rel="canonical" href="https://jurecerkez-code.github.io/zagreb-map/">' in html
+    assert re.search(r"<noscript><p[^>]*>[^<]*Zagreb", html)
 
 
 def test_every_documented_rebuild_runs_the_search_step():
