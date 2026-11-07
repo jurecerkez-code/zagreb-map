@@ -59,6 +59,11 @@ const shoot = async name => {
   // software render into the canvas and a read of its pixels in the same task is a bounded wait instead.
   const dataUrl = await page.evaluate(() => {
     const { renderer, scene, camera } = window.__dbg;
+    // #24: compare equal pixels across revisions, not the adaptive quality step a particular load happened to reach.
+    renderer.setPixelRatio(1);
+    if (renderer.domElement.width !== innerWidth || renderer.domElement.height !== innerHeight) {
+      throw new Error(`Unexpected capture buffer ${renderer.domElement.width}x${renderer.domElement.height}`);
+    }
     renderer.render(scene, camera);
     return renderer.domElement.toDataURL('image/png');
   });
@@ -86,4 +91,7 @@ for (const [name, go, wait] of views) {
 }
 writeFileSync(jsonPath, JSON.stringify(result, null, 1));
 console.log('wrote', jsonPath);
-await browser.close();
+// SwiftShader can keep the browser's close promise pending after every shot and the JSON are safely on disk.
+// Bound it so a successful measurement also becomes a successful CI/background exit, not a silent orphan.
+await Promise.race([browser.close(), new Promise(resolve => setTimeout(resolve, 10000))]);
+process.exit(0);
