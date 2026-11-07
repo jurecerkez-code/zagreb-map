@@ -4370,6 +4370,7 @@ function stats() {
   return {
     version, theme: THEME_NAME, tileSize: config.tileSize, calls: r.calls, triangles: r.triangles, geometries: m.geometries,
     textures: m.textures, fps: Math.round(fps * 10) / 10, tiles: loaded, tilesTotal: config.tiles.length,
+    assets: Math.max(0, config.tiles.length - loaded),   // #24: remaining tile work, never an undefined sentinel
     labels: labelsShown, roofYears: roofYears?.shown, distance: Math.round(camera.position.distanceTo(controls.target)), decoder: decoder(),
     pixelRatio: renderer.getPixelRatio(), viewport: [innerWidth, innerHeight],
     terrain: terrainState, relief: Math.round(uRelief.value * 100) / 100, terrainChunks: chunkMeshes.length,

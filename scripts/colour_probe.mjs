@@ -17,7 +17,7 @@ import { oklabLin, lin, rgb } from '../web/tone.js';
 
 const url = process.argv[2] || 'http://127.0.0.1:8643/';
 const DE_MAX_ROOF = 10;    // pinned by the measured values of 2026-11 (see docs/plan.md round 6)
-const DE_MAX_ROAD = 12;
+const DE_MAX_ROAD = 10;   // #24: asphalt must read within 10 of #4f5450
 
 const dE = (a, b) => {
   const p = oklabLin(rgb(a).map(lin)), q = oklabLin(rgb(b).map(lin));

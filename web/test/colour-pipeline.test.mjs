@@ -97,6 +97,8 @@ test('colour probe cannot pass with sparse roof coverage', () => {
     'the JSON report must say how many roofs were actually sampled');
   assert.match(probe, /if \(tried\.length < 2\) throw new Error/,
     'empty or one-sample roof measurements must fail explicitly');
+  assert.match(probe, /const DE_MAX_ROAD = 10;/,
+    'the street floor is the issue limit, not a relaxed twelve-point tolerance');
 });
 
 test('perf gate captures shader warnings and makes the run invalid', () => {
@@ -111,6 +113,13 @@ test('picture comparisons pin the drawing buffer, not the adaptive quality scale
   const shots = readFileSync(new URL('../../scripts/shots.mjs', import.meta.url), 'utf8');
   assert.match(shots, /renderer\.setPixelRatio\(1\)/);
   assert.match(shots, /domElement\.width !== innerWidth \|\| renderer\.domElement\.height !== innerHeight/);
+});
+
+test('stats exposes actual remaining tile assets for readiness probes', () => {
+  const start = app.indexOf('function stats()');
+  const end = app.indexOf("if (new URLSearchParams(location.search).has('debug'))", start);
+  const stats = app.slice(start, end);
+  assert.match(stats, /assets: Math\.max\(0, config\.tiles\.length - loaded\)/);
 });
 
 test('display output is sRGB after the whole renderer setup', () => {
