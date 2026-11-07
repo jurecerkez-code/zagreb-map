@@ -22,6 +22,7 @@ import { makeMetroLayer } from './metro-layer.js';
 import { BOATS_KEY, boatsOnFrom, boatsShown, parseFerries, boatInfo, boatHtml } from './ferries.js';
 import { makeFerries } from './ferries-layer.js';
 import { makeTrams } from './trams-layer.js';
+import { advanceRideAim } from './ride-camera.js';
 import { makeRoads } from './roads-layer.js';
 import { tramInfo, tramHtml, tramClock, tramsDataPath } from './trams.js';
 import { makeRideHud } from './ride-hud.js';
@@ -3878,14 +3879,16 @@ function stepRide(dt, now = performance.now()) {
   const sway = (!calm.matches && !chase) ? Math.sin(now / 1000 * Math.PI * 2 * 1.3) * 0.03 : 0;
   ridePos.set(p.x, Math.max(g1, surfaceAt(p.x, p.z)) + (chase ? RIDE_CHASE_UP : RIDE_UP) + sway, p.z);
   rideAim.set(a.x, Math.max(g1, g2) + (chase ? RIDE_UP : RIDE_LOOK_UP), a.z);
-  // Spring on the aim ONLY: a bend is where the eyes go, a lurch never where the body stands.
-  const k = calm.matches ? 1e9 : 2 * Math.PI * 0.8;
-  const ax = (rideAim.x - ride.aim.x) * k * k, ay = (rideAim.y - ride.aim.y) * k * k, az = (rideAim.z - ride.aim.z) * k * k;
-  ride.aimV.x += (ax - 2 * k * ride.aimV.x) * dt;
-  ride.aimV.y += (ay - 2 * k * ride.aimV.y) * dt;
-  ride.aimV.z += (az - 2 * k * ride.aimV.z) * dt;
-  if (calm.matches) ride.aim.copy(rideAim);
-  else ride.aim.addScaledVector(ride.aimV, dt);
+  // The exact critical spring stays bounded at the actual frame interval rather than
+  // diverging after a slow frame (k * dt > 2 in the previous explicit Euler integration).
+  if (calm.matches) {
+    ride.aim.copy(rideAim);
+    ride.aimV.set(0, 0, 0);
+  } else {
+    const next = advanceRideAim({ position: ride.aim, velocity: ride.aimV, target: rideAim, dt });
+    ride.aim.copy(next.position);
+    ride.aimV.copy(next.velocity);
+  }
   ride.pos.lerp(ridePos, calm.matches ? 1 : 1 - Math.exp(-dt / 0.35));
   camera.position.copy(ride.pos);
   controls.target.copy(ride.aim);
