@@ -102,19 +102,38 @@ test('the ground and the walls are shaded with themes.js SHADING, the constants 
     '1.0 - ${glf(SHADING.dark)} * uShade, 1.0 + ${glf(SHADING.light)} * uShade); }',
   ));
   assert.match(glsl.TERRAIN_FRAG, lines(
-    'c = mix(shaded(uLand, n), c * lighting(n),',
+    'c = mix(shaded(uLand, n), c * lighting(n, sunShadow(vWorld)),',
     'smoothstep(1.0, 3.0, vWallH));',
   ));
   assert.doesNotMatch(glsl.TERRAIN_FRAG, /\b0\.(6|3|66|34)\b/);
   assert.match(src, /uSun: \{ value: new THREE\.Vector3\(\.\.\.SHADING\.sun\)\.normalize\(\) \}/);
   // #24: the walls stand in the one shared light with the roofs: LIGHT_GLSL in every scene fragment shader
-  assert.match(src, /const LIGHT_GLSL = \/\* glsl \*\/`[\s\S]*vec3 lighting\(vec3 n\) \{[\s\S]*2\.2[\s\S]*0\.55/);
-  assert.match(glsl.FRAG + glsl.TERRAIN_FRAG, /\$\{LIGHT_GLSL\}[\s\S]*lighting\(n\)/);
+  assert.match(src, /const LIGHT_GLSL = \/\* glsl \*\/`[\s\S]*vec3 lighting\(vec3 n, float visibility\) \{[\s\S]*2\.2[\s\S]*0\.55/);
+  assert.match(glsl.FRAG + glsl.TERRAIN_FRAG, /\$\{LIGHT_GLSL\}[\s\S]*lighting\(nG?, sunShadow\(vWorld\)\)/);
   assert.doesNotMatch(glsl.FRAG + glsl.TERRAIN_FRAG, /SHADING\.wallMin|SHADING\.wallLit/);
   // and the looks' own values, with no fallback: every look has them (themes.test.mjs)
   assert.match(src, /uQuay: \{ value: col\(THEME\.quay\) \}/);
   assert.match(src, /uShade: \{ value: THEME\.reliefShade \}/);
   assert.doesNotMatch(src, /THEME\.quay \|\||THEME\.reliefShade \?\?/);
+});
+
+test('city shadows block direct sun on every surface without multiplying the sky fill', () => {
+  assert.ok(glsl.SHADOW_GLSL, 'the city height lookup and shadow walk must be shared, not terrain-only');
+  assert.match(glsl.SHADOW_GLSL, /float sunShadow\(vec3 p\)/);
+  assert.match(glsl.LIGHT_GLSL, /vec3 lighting\(vec3 n, float visibility\)/);
+  assert.match(glsl.LIGHT_GLSL, /vec3 direct = uSunCol \* \(max\(dot\(n, uSun\), 0\.0\) \* 2\.2 \* visibility\);/);
+  assert.match(glsl.LIGHT_GLSL, /vec3 ambient = uSkyCol \* \(mix\(0\.6, 1\.0, n\.y \* 0\.5 \+ 0\.5\) \* 0\.55\);/);
+  assert.match(glsl.FRAG, /base \* lighting\(n, sunShadow\(vWorld\)\) \* foot/);
+  assert.match(glsl.FRAG, /\$\{SHADOW_GLSL\}/);
+  assert.match(glsl.TERRAIN_FRAG, /c \*= lighting\(nG, sunShadow\(vWorld\)\);/);
+  assert.doesNotMatch(glsl.FRAG + glsl.TERRAIN_FRAG, /c \*= mix\(0\.58, 1\.0, sunShadow/);
+  for (const name of ['uHgt', 'uHgtN', 'uHgtO', 'uHgtCell', 'uHgtOn']) {
+    for (const stage of ['FRAG', 'TERRAIN_FRAG']) {
+      const expand = s => s.replace(/\$\{(\w+_GLSL)\}/g, (_, key) => expand(glsl[key]));
+      const count = [...expand(glsl[stage]).matchAll(new RegExp(`uniform .*\\b${name}\\b`, 'g'))].length;
+      assert.equal(count, 1, `${stage}: exactly one ${name} declaration`);
+    }
+  }
 });
 
 test('names lie on the ground, water names on their own water, nudged towards the camera by the ground\'s own error', () => {

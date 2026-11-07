@@ -971,12 +971,39 @@ const VERT = /* glsl */`
   }
 `;
 
+// #24: the city's height field casts shadows on every lit surface, not just on the ground. The roof
+// has to clear its own height before a blocker counts; walls keep a metre of numerical ground clearance.
+const SHADOW_GLSL = /* glsl */`
+  uniform sampler2D uHgt;
+  uniform vec2 uHgtN, uHgtO;
+  uniform float uHgtCell, uHgtOn;
+  float cityHeight(vec2 xz) {
+    vec2 uv = (xz - uHgtO) / (uHgtCell * uHgtN);
+    if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return -500.0;
+    vec4 s = texture(uHgt, uv);
+    return (s.r * 65280.0 + s.g * 255.0) * 0.1;
+  }
+  float sunShadow(vec3 p) {
+    if (uHgtOn < 0.5 || uNight > 0.5) return 1.0;
+    float horizontal = length(uSun.xz);
+    if (horizontal < 0.06) return 1.0;
+    vec2 dir = uSun.xz / horizontal;
+    float rise = uSun.y / horizontal;
+    float t = 10.0;
+    for (int i = 0; i < 20; i++) {
+      if (cityHeight(p.xz + dir * t) > p.y + t * rise + 1.5) return 0.0;
+      t += 14.0 + float(i) * 6.0;
+    }
+    return 1.0;
+  }
+`;
+
 // #24: one light model for the whole scene (copy in ferries-layer.js for the boats): a warm direct sun (2.2, its
 // warmth carried by uSunCol) plus a cool sky fill (0.55, leaning bluer in shade) over the fragment's own normal.
-// The relief's contouring, the foot and the city's shadows multiply on top of it: contrast comes from light.
+// Buildings and terrain share SHADOW_GLSL. It occludes only direct sun, never the sky's diffuse fill.
 const LIGHT_GLSL = /* glsl */`
-  vec3 lighting(vec3 n) {
-    vec3 direct = uSunCol * (max(dot(n, uSun), 0.0) * 2.2);
+  vec3 lighting(vec3 n, float visibility) {
+    vec3 direct = uSunCol * (max(dot(n, uSun), 0.0) * 2.2 * visibility);
     vec3 ambient = uSkyCol * (mix(0.6, 1.0, n.y * 0.5 + 0.5) * 0.55);
     return direct + ambient;
   }`;
@@ -995,6 +1022,7 @@ const FRAG = /* glsl */`
   ${FADE_GLSL}
   ${WEATHER_GLSL}
   ${LIGHT_GLSL}
+  ${SHADOW_GLSL}
   in vec3 vColor;
   in vec3 vWorld;
   in float vRel;
@@ -1086,10 +1114,10 @@ const FRAG = /* glsl */`
           base = col;
         }
       }
-      // The shared light (LIGHT_GLSL): a warm sun from uSun, a cool sky from above; roofs lit the same way as walls.
+      // The shared light (LIGHT_GLSL) and city shadows (SHADOW_GLSL): warm sun, cool sky, every surface occluded.
       // The foot darkens the first 12 m above the building's own base, and the skirt under it.
       float foot = mix(0.82, 1.0, clamp(vRel / 12.0, 0.0, 1.0));
-      vec3 c = base * lighting(n) * foot;
+      vec3 c = base * lighting(n, sunShadow(vWorld)) * foot;
       // The weather (WEATHER_GLSL) on the roofs, the walls keeping their colour: darker in the rain; in the snow white in
       // drifts, at most SNOW.roof of the way. A hovered or selected roof's snow takes the same tint as the building
       // (vLit 1), so the hover reads on a snowy roof as on a wall; the quest's red building stays red (vLit -1).
@@ -1679,40 +1707,14 @@ const TERRAIN_FRAG = /* glsl */`
   uniform sampler2D uVegTex;
   uniform vec2 uVegN, uVegOrigin;
   uniform float uVegCell, uVegOn;
-  // The sun's shadows: the city's height per 16 m cell (ground or roof, whichever is taller) and the night flag.
-  uniform sampler2D uHgt;
-  uniform vec2 uHgtN, uHgtO;
-  uniform float uHgtCell, uHgtOn, uNight, uHgtShow;
-
-  // The tallest thing in the cell a point falls in, or well below ground outside the texture.
-  float cityHeight(vec2 xz) {
-    vec2 uv = (xz - uHgtO) / (uHgtCell * uHgtN);
-    if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return -500.0;
-    vec4 s = texture(uHgt, uv);                  // decimetres split over two bytes, nearest sampled
-    return (s.r * 65280.0 + s.g * 255.0) * 0.1;
-  }
-
-  // Walk from a ground point towards the sun: if anything along the way stands above the line, it is in shadow.
-  // Twenty taps, fine near the point and growing out to about a kilometre, which is longer than any shadow the
-  // afternoon sun throws across this city.
-  float sunShadow(vec3 p) {
-    if (uHgtOn < 0.5 || uNight > 0.5) return 1.0;
-    float horizontal = length(uSun.xz);
-    if (horizontal < 0.06) return 1.0;                       // the sun nearly overhead: nothing to walk towards
-    vec2 dir = uSun.xz / horizontal;
-    float rise = uSun.y / horizontal;                        // tan of the elevation
-    float t = 10.0;
-    for (int i = 0; i < 20; i++) {
-      if (cityHeight(p.xz + dir * t) > p.y + t * rise + 1.5) return 0.0;
-      t += 14.0 + float(i) * 6.0;
-    }
-    return 1.0;
-  }
+  uniform float uNight, uHgtShow;
+  // uHgt and the shadow walk are shared with FRAG by SHADOW_GLSL, included below.
   uniform float uShade, uKind;   // uKind: 0 ground, 1 wall, 2 water
   ${GRID_GLSL}
   ${FADE_GLSL}
   ${WEATHER_GLSL}
   ${LIGHT_GLSL}
+  ${SHADOW_GLSL}
   ${WAVE_GLSL}
   in vec3 vWorld;
   in vec3 vNormal;
@@ -1738,21 +1740,20 @@ const TERRAIN_FRAG = /* glsl */`
         }
         vec3 nG = normalize(vNormal);
         c = shaded(c, nG);
-        c *= lighting(nG);      // #24: the shared light, under the relief's own contouring and the weather
+        // #24: only direct sunlight is occluded. The cool sky still reaches the shaded streets.
+        c *= lighting(nG, sunShadow(vWorld));
         c = weatherGround(c, vWorld.xz);
-        // The sun's own shadows: the streets a building keeps from the light (and the city a mountain does).
-        c *= mix(0.58, 1.0, sunShadow(vWorld));
         if (uHgtShow > 0.5) c = vec3(clamp(cityHeight(vWorld.xz) / 120.0, 0.0, 1.0), clamp(cityHeight(vWorld.xz) / 40.0, 0.0, 1.0), 0.15);
         // Night: the map keeps its colours and loses the light, cooled towards blue.
         c = mix(c, c * vec3(0.30, 0.36, 0.56), uNight);   // snow, or wet (WEATHER_GLSL)
       } else if (uKind < 1.5) {
         vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
-        c = mix(shaded(uLand, n), c * lighting(n),   // #24: above a metre the quay stands in the buildings' light
+        c = mix(shaded(uLand, n), c * lighting(n, sunShadow(vWorld)),   // #24: above a metre the quay stands in the buildings' light
           smoothstep(1.0, 3.0, vWallH));
         c = mix(weatherGround(c, vWorld.xz), c, smoothstep(1.0, 3.0, vWallH));   // a low bank takes the ground's weather
       } else {
         c = shimmer(c, vWorld.xz, length(vWorld - cameraPosition));   // the water's ripples (WAVE_GLSL)
-        c *= lighting(vec3(0.0, 1.0, 0.0));   // #24: flat water in the same light as flat ground
+        c *= lighting(vec3(0.0, 1.0, 0.0), sunShadow(vWorld));   // #24: flat water in the same light as flat ground
       }
       c = mix(uFogColor, c, fadeAt(vWorld.xz));
       c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, length(vWorld - cameraPosition)));
