@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,4 +44,12 @@ test('strict picture gate permits equal baseline and its 1.25 mean ceiling, not 
 test('strict picture gate does not permit the older five-percent mean drop', () => {
   assert.equal(run(inputs(80 * 0.97, 40), false).status, 0);
   assert.equal(run(inputs(80 * 0.97, 40), true).status, 1);
+});
+
+test('CI invokes the picture comparison with the strict gate, not just support for it', () => {
+  const workflow = readFileSync(join(engine, '.github', 'workflows', 'ci.yml'), 'utf8');
+  const command = workflow.split(/\r?\n/).find(line => line.includes('node scripts/shots-compare.mjs'));
+  assert.ok(command, 'the workflow must include a picture comparison step');
+  assert.match(command, /node\s+scripts\/shots-compare\.mjs\s+.*\s--strict(?:\s|$)/,
+    'the CI command must opt into no contrast loss and the 1.00x to 1.25x mean bounds');
 });

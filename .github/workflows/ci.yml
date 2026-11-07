@@ -83,7 +83,7 @@ jobs:
           pkill -f "http.server 8644" || true
           python3 -m http.server 8644 --directory web &
           sleep 2
-          node scripts/shots.mjs http://127.0.0.1:8644/ --out shots.json && node scripts/shots-compare.mjs shots.json e2e/__screenshots__/baseline.json
+          node scripts/shots.mjs http://127.0.0.1:8644/ --out shots.json && node scripts/shots-compare.mjs shots.json e2e/__screenshots__/baseline.json --strict
 
       - uses: actions/upload-artifact@v4
         if: always()
