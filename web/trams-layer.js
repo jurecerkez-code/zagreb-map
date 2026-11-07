@@ -15,7 +15,7 @@
 // mounted a second time with web/trams.js tramHtml.
 import { parseTrams, makeNet, tramClock, tramInfo, tramHtml } from './trams.js';
 import { gunzip } from './veg.js';   // the same gzip in transit, inflated here: no library either way
-import { BODY_PARTS, SECTION_LENGTH, SECTION_CENTRES, vehicleDimensions, makeDoorFrame } from './tram-model.js';
+import { BODY_PARTS, BELLOWS_WIDTH, BELLOWS_CENTRES, SECTION_LENGTH, SECTION_CENTRES, vehicleDimensions, makeDoorFrame, makeVehicleParts, sideOffset, setVehicleNight } from './tram-model.js';
 
 const LIVE_MS = 15000;      // ZET refreshes its feed about once a minute; a quarter of that keeps the map current
 const NIGHT = 0.36;         // the same hand darkening the trees get: an unlit material does not dim at night
@@ -76,7 +76,7 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
   // four bellows, wheelsets and door outlines read at street level, not another blue cuboid.
   const dimensions = vehicleDimensions(trams.vehicle);
   const L = dimensions.length, W = dimensions.width, H = dimensions.height;
-  const ZET = '#0e63b8', GLASS = '#171a1e', ROOF = '#c9cdd2', DARK = '#22262b', SIGN = '#e8b33f';
+  const ROOF = '#c9cdd2', DARK = '#22262b';
   const geoOf = c => shadedBox(THREE, 1, 1, 1, c);   // unit cube, scaled per instance; the shading rides along
   const bodyMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
   const winMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
@@ -106,20 +106,11 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
     return m;
   };
   // Cab parts exist twice per tram. Body parts are five, and door frames and axles are five on each visible side.
-  const parts = (tag, cap) => ({
-    body: make(cap * BODY_PARTS, geoOf(ZET), bodyMat, `${tag}-body`),
-    win: make(cap * BODY_PARTS, geoOf(GLASS), winMat, `${tag}-windows`),
-    roof: make(cap * BODY_PARTS, geoOf(ROOF), roofMat, `${tag}-roof`),
-    doors: make(cap * BODY_PARTS * 2, doorGeo, doorMat, `${tag}-doors`),
-    wheels: make(cap * BODY_PARTS * 2, wheelGeo, wheelMat, `${tag}-wheels`),
-    face: make(cap * 2, geoOf(GLASS), faceMat, `${tag}-cab`),
-    pant: make(cap * 2, geoOf(DARK), pantMat, `${tag}-pant`),
-    sign: make(cap * 2, geoOf(SIGN), signMat, `${tag}-sign`),
-    cap,
-  });
+  const parts = (tag, cap) => makeVehicleParts({ make, geoOf, tag, cap,
+    bodyMat, winMat, roofMat, doorGeo, doorMat, wheelGeo, wheelMat, faceMat, pantMat, signMat });
   const sched = parts('tram', schedCap);
   const live = parts('tram-live', liveCap);
-  for (const p of [sched, live]) group.add(p.body, p.win, p.roof, p.doors, p.wheels, p.face, p.pant, p.sign);
+  for (const p of [sched, live]) group.add(p.body, p.win, p.roof, p.bellows, p.doors, p.wheels, p.face, p.pant, p.sign);
 
   const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), QT = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0),
     ZAX = new THREE.Vector3(0, 0, 1), P = new THREE.Vector3(), S = new THREE.Vector3(1, 1, 1);
@@ -151,7 +142,7 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
         instance(p.roof, iBody + s, pt.x, yy + LIFT + H + 0.05, pt.z, pt.heading, SECTION_LENGTH * 0.98, 0.1, W * 0.94);
         for (const side of [-1, 1]) {
           const index = iDetail + s * 2 + (side === 1 ? 1 : 0), offset = side * (W / 2 + 0.035);
-          const dx = Math.sin(pt.heading) * offset, dz = Math.cos(pt.heading) * offset;
+          const lateral = sideOffset(pt.heading, offset), dx = lateral.x, dz = lateral.z;
           instance(p.doors, index, pt.x + dx, yy + LIFT + 1.25, pt.z + dz, pt.heading, 1, 1, 1);
           const axleD = Math.max(0, Math.min(sLen, dd + side * 0.65));
           const axle = net.pointAt(shape, axleD, axleD), axleY = surfaceAt(axle.x, axle.z);
@@ -168,7 +159,15 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
         instance(p.roof, iBody + s, x, y + LIFT + H + 0.05, z, heading, SECTION_LENGTH * 0.98, 0.1, W * 0.94);
       }
     }
-    if (shape != null && d != null) {   // both cabs: the TMK 2200 runs double-ended, so both ends get a windshield
+    if (shape != null && d != null) {
+      // Real geometry at each of the four joints, not just an empty gap between five boxes.
+      for (let s = 0; s < BELLOWS_CENTRES.length; s++) {
+        const jd = Math.max(0, Math.min(sLen, d + BELLOWS_CENTRES[s]));
+        const joint = net.pointAt(shape, jd, jd), jy = surfaceAt(joint.x, joint.z);
+        instance(p.bellows, k * BELLOWS_CENTRES.length + s, joint.x, jy + LIFT + H / 2, joint.z,
+          joint.heading, BELLOWS_WIDTH, H * 0.94, W * 0.9);
+      }
+      // Both cabs: the TMK 2200 runs double-ended, so both ends get a windshield.
       const dF = Math.min(sLen, d + L / 2 - 0.35), dR = Math.max(0, d - L / 2 + 0.35);
       const pF = net.pointAt(shape, dF, dF), yF = surfaceAt(pF.x, pF.z);
       const pR = net.pointAt(shape, dR, dR), yR = surfaceAt(pR.x, pR.z);
@@ -312,9 +311,10 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
     for (const p of [sched, live]) {
       const n = p === sched ? drawnSched.length : drawnLive.length;
       p.body.count = p.win.count = p.roof.count = n * BODY_PARTS;
+      p.bellows.count = n * BELLOWS_CENTRES.length;
       p.doors.count = p.wheels.count = n * BODY_PARTS * 2;
       p.face.count = p.pant.count = p.sign.count = n * 2;
-      for (const mesh of [p.body, p.win, p.roof, p.doors, p.wheels, p.face, p.pant, p.sign]) mesh.instanceMatrix.needsUpdate = true;
+      for (const mesh of [p.body, p.win, p.roof, p.bellows, p.doors, p.wheels, p.face, p.pant, p.sign]) mesh.instanceMatrix.needsUpdate = true;
       // The raycast culls against the instances' own bounds first, and they are empty until the matrices hold
       // something: computed here, every frame, since the trams move all over the city. Without it hitAt never hits.
       p.body.computeBoundingSphere();
@@ -347,7 +347,7 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
   function setNight(v) {
     nightOn = !!v;
     const k = nightOn ? NIGHT : 1;
-    for (const m of [bodyMat, winMat, roofMat, doorMat, wheelMat, faceMat, pantMat, signMat]) m.color.setScalar(k);
+    for (const p of [sched, live]) setVehicleNight(p, nightOn, NIGHT);
   }
 
   scene.add(group);
