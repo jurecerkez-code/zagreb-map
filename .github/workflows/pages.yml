@@ -22,10 +22,13 @@ jobs:
       - name: Prune data versions the site does not serve
         run: |
           current=$(python3 -c "import json;print(json.load(open('web/data/current.json'))['version'])")
-          echo "serving $current"
+          trams=$(python3 -c "import json;d=json.load(open('web/data/current.json'));print(d.get('trams_version') or d['version'])")
+          echo "serving $current, with tram timetable $trams"
           for d in web/data/v*; do
             [ -d "$d" ] || continue
-            [ "$(basename "$d")" = "$current" ] || rm -rf "$d"
+            if [ "$(basename "$d")" != "$current" ] && [ "$(basename "$d")" != "$trams" ]; then
+              rm -rf "$d"
+            fi
           done
           du -sh web
       # Which commit the site is: the page shows it in the console and via __dbg.__build, so a stale tab stops
