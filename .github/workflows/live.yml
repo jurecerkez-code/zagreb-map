@@ -22,9 +22,10 @@ jobs:
       - name: The timetable the feed is filtered against
         working-directory: src
         run: |
-          base=https://jurecerkez-code.github.io/zagreb-map/data
+          # Scheduled production refreshes follow the deployed site. Dispatching a branch uses that exact commit's data.
+          if [ "$GITHUB_REF_NAME" = main ]; then base=https://jurecerkez-code.github.io/zagreb-map/data; else base="https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_SHA/web/data"; fi
           curl -fsS "$base/current.json" -o web/data/current.json 2>/dev/null || { mkdir -p web/data; curl -fsS "$base/current.json" -o web/data/current.json; }
-          v=$(python3 -c "import json;print(json.load(open('web/data/current.json'))['version'])")
+          v=$(python3 -c "import json;d=json.load(open('web/data/current.json'));print(d.get('trams_version') or d['version'])")
           mkdir -p "web/data/$v"
           curl -fsS "$base/$v/trams.json" -o "web/data/$v/trams.json"
           echo "schedule $v, $(wc -c < "web/data/$v/trams.json") bytes"

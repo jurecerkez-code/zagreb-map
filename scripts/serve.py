@@ -122,16 +122,21 @@ def _trip_ids():
     """The trip ids in web/data/<current version>/trams.json, reloaded when the version changes: a vehicle whose
     trip is not one of them is a bus on another ZET line and the map does not draw it."""
     try:
-        version = json.loads((WEB / "data" / "current.json").read_text(encoding="utf-8"))["version"]
+        current = json.loads((WEB / "data" / "current.json").read_text(encoding="utf-8"))
+        city_version = current["version"]
+        version = current.get("trams_version", city_version)
     except Exception:
         return frozenset()
-    if _schedule["version"] != version:
+    # A new timetable does not change the city's immutable geometry version.
+    # Key the cache by both, so it reloads when just the timetable changes.
+    cache_key = (city_version, version)
+    if _schedule["version"] != cache_key:
         try:
             trams = json.loads((WEB / "data" / version / "trams.json").read_text(encoding="utf-8"))
             _schedule["trips"] = frozenset(trams.get("trip_ids") or ())
         except Exception:
             _schedule["trips"] = frozenset()
-        _schedule["version"] = version
+        _schedule["version"] = cache_key
     return _schedule["trips"]
 
 
