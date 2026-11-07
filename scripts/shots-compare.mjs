@@ -9,13 +9,14 @@ const [shotsPath, baselinePath] = process.argv.slice(2);
 const shots = JSON.parse(readFileSync(shotsPath, 'utf8'));
 const baseline = JSON.parse(readFileSync(baselinePath, 'utf8'));
 
+const strict = process.argv.includes('--strict');   // #24 opts in: no contrast drop; mean 1.00x to 1.25x.
 const rows = [];
 let failed = false;
 for (const [view, base] of Object.entries(baseline)) {
   const now = shots[view];
   if (!now) { console.error(`missing view in shots: ${view}`); failed = true; continue; }
-  const stddevOk = now.stddev >= base.stddev * 0.97;
-  const meanOk = now.mean >= base.mean * 0.95 && now.mean <= base.mean * 1.20;
+  const stddevOk = now.stddev >= base.stddev * (strict ? 1 : 0.97);
+  const meanOk = now.mean >= base.mean * (strict ? 1 : 0.95) && now.mean <= base.mean * (strict ? 1.25 : 1.20);
   failed = failed || !stddevOk || !meanOk;
   rows.push({
     view,
