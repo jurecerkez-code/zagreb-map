@@ -59,6 +59,9 @@ export function runProfile(runSec, distM, P = RIDE_PROFILE) {
 export const dwellFor = ttStay => Math.max(RIDE_PROFILE.dwellMin, Math.min(RIDE_PROFILE.dwell, ttStay));
 
 
+// ZET timetable releases move independently of the immutable city assets.
+export const tramsDataPath = ({ version, trams_version }) => `data/${trams_version || version}/`;
+
 export function parseTrams(json) {
   const ok = json && Array.isArray(json.lines) && Array.isArray(json.shapes) && Array.isArray(json.trip_ids)
     && Array.isArray(json.headsigns) && Array.isArray(json.stop_names);
