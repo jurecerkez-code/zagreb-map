@@ -158,8 +158,8 @@ LASER = dict(ring_m=15.0, min_lod1_m=25.0, budget_bytes=500_000_000)
 LASER_TOWERS: tuple = ()
 PRIVATE_ADDRESSES = True
 SNAPSHOT = "2022"
-MAKER = ""
-CONTACT = ""
+MAKER = "Jure Čerkez"
+CONTACT = "https://github.com/jurecerkez-code/zagreb-map"
 RELEASE_WAITS_FOR = ("a maker and contact for About (GDPR Art. 14)", "licence check of every source")
 LANG_FROM_BROWSER = True   # a Croatian browser is not 'sv' yet, so this only helps a Swedish one for now;
 # the switch and ?lang=sv are the way in. Set False to keep every visitor in English.

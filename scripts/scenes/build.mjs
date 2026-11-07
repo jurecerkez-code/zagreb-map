@@ -11,7 +11,7 @@ const DEFAULT_DURATION_S = 8;
 
 // Per-scene metadata the CSVs don't carry. sensitive: shows a warning and never autoplays (none of the Zagreb stories
 // tells of deaths). The beats, captions and sources come from scripts/scenes/zagreb_scenes.py (which writes the CSVs
-// and docs/scenes-sources.md); the Stockholm stories this engine came with are in web/scenes/_stockholm/.
+// and docs/scenes-sources.md); the local evidence then builds web/scenes/<id>.json.
 export const SCENES = {
   'two-hills': { title: { en: 'Two hills: Gradec and Kaptol', sv: 'Dva brda: Gradec i Kaptol' }, year: 1242, sensitive: false, ready: true },
   'earthquake-1880': { title: { en: 'The 1880 earthquake and the rebuilding', sv: 'Potres 1880. i obnova' }, year: 1880, sensitive: false, ready: true },
