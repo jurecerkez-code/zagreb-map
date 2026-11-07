@@ -1735,10 +1735,15 @@ const TERRAIN_FRAG = /* glsl */`
       if (uKind < 0.5) {
         // Foto: the ground in its photographed colour, one mean per terrain node (linear-filtered between nodes),
         // unless the Foto look is being judged with the look's own land (?fotoground=0).
-        if (uFoto > 0.5 && uFotoGround > 0.5) c = texture(uGround, ((vWorld.xz - uGridO) / uCell + 0.5) / uGridN).rgb;
+        vec4 photoGround = vec4(0.0);
+        if (uFoto > 0.5 && uFotoGround > 0.5) {
+          photoGround = texture(uGround, ((vWorld.xz - uGridO) / uCell + 0.5) / uGridN);
+          c = mix(c, photoGround.rgb, photoGround.a);
+        }
         // The mapped green cover (parks, meadows, the Medvednica forest) painted over the ground: a texture, not
         // geometry, so it follows the hills by construction and can never sink under them.
-        if (uVegOn > 0.5) {
+        // Foto keeps real coverage. Default mapped green only where there is no usable photograph.
+        if (uVegOn > 0.5 && (uFotoGround < 0.5 || photoGround.a < 0.5)) {
           vec2 muv = ((vWorld.xz - uVegOrigin) / uVegCell + 0.5) / uVegN;
           vec4 vg = texture(uVegTex, muv);
           c = mix(c, vg.rgb, vg.a);

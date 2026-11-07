@@ -139,7 +139,22 @@ test('golden is the default sun mode and the four modes stand', () => {
   assert.match(app, /const SUN_EXPOSURE = \{ golden: 1\.15, day: 1\.15, night: 1\.3 \}/);
   // live low sun: under 6 degrees the computed Night look takes over
   assert.match(app, /const night = sunIsNight\(mode, sunState\.elevation\)/);
+
   // tone mapping is the renderer's: AgX, display sRGB
   assert.match(app, /renderer\.toneMapping = THREE\.AgXToneMapping;/);
   assert.match(app, /renderer\.outputColorSpace = THREE\.SRGBColorSpace;/);
+});
+
+test('photographed ground keeps alpha and wins over synthetic green in Foto', () => {
+  const body = app.slice(app.indexOf('const TERRAIN_FRAG ='), app.indexOf('function terrainMaterial'));
+  assert.match(body, /vec4 photoGround = vec4\(0\.0\);/,
+    'start with no photographed coverage');
+  assert.match(body, /photoGround = texture\(uGround,/,
+    'sample the photographed ground as RGBA, not only RGB');
+  assert.match(body, /c = mix\(c, photoGround\.rgb, photoGround\.a\);/,
+    'use the actual coverage of the photographed ground');
+  assert.match(body, /if \(uVegOn > 0\.5 && \(uFotoGround < 0\.5 \|\| photoGround\.a < 0\.5\)\)/,
+    'retain the mapped fallback when the look is not Foto or a texel has no photograph');
+  assert.ok(body.indexOf('vec4 photoGround = vec4(0.0)') < body.indexOf('if (uFoto > 0.5 && uFotoGround > 0.5)'),
+    'initialize coverage before sampling the ground');
 });
