@@ -38,8 +38,8 @@ TRAM = "0"
 CONNECT = 40.0                      # metres a segment block may sit from the previous block's end to still belong
 
 
-def rows(name):
-    with open(GTFS / name, encoding="utf-8-sig", newline="") as fh:
+def rows(name, source=None):
+    with open((source or GTFS) / name, encoding="utf-8-sig", newline="") as fh:
         return list(csv.DictReader(fh))
 
 
@@ -48,16 +48,16 @@ def seconds(hhmmss):
     return h * 3600 + m * 60 + s
 
 
-def active_services(day: date):
+def active_services(day: date, source=None):
     """calendar.txt plus the exceptions in calendar_dates.txt, which is how ZET handles holidays."""
     active = set()
     wd = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"][day.weekday()]
-    for r in rows("calendar.txt"):
+    for r in rows("calendar.txt", source):
         if r[wd] != "1":
             continue
         if r["start_date"] <= day.strftime("%Y%m%d") <= r["end_date"]:
             active.add(r["service_id"])
-    for r in rows("calendar_dates.txt"):
+    for r in rows("calendar_dates.txt", source):
         if r["date"] != day.strftime("%Y%m%d"):
             continue
         if r["exception_type"] == "1":
@@ -119,24 +119,27 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--version", required=True)
     ap.add_argument("--date", default=None, help="service day, YYYY-MM-DD (default today)")
+    ap.add_argument("--gtfs", type=Path, default=GTFS, help="directory of extracted ZET GTFS text files")
+    ap.add_argument("--rails-from", type=Path, help="existing trams.json; copy its unchanged mapped rail geometry")
     args = ap.parse_args(argv)
+    gtfs = args.gtfs
     out = WEB / "data" / args.version
     out.mkdir(parents=True, exist_ok=True)
     day = datetime.strptime(args.date, "%Y-%m-%d").date() if args.date else date.today()
 
-    routes = {r["route_id"]: r for r in rows("routes.txt") if r["route_type"] == TRAM}
+    routes = {r["route_id"]: r for r in rows("routes.txt", gtfs) if r["route_type"] == TRAM}
     lines = sorted(routes, key=lambda k: (len(k), k))
     line_at = {rid: i for i, rid in enumerate(lines)}
     print(f"{len(lines)} tram lines: {', '.join(routes[r]['route_short_name'] for r in lines)}", flush=True)
 
-    services = active_services(day)
-    trips = [t for t in rows("trips.txt") if t["route_id"] in routes and t["service_id"] in services]
+    services = active_services(day, gtfs)
+    trips = [t for t in rows("trips.txt", gtfs) if t["route_id"] in routes and t["service_id"] in services]
     print(f"service day {day}: {len(services)} calendars active, {len(trips):,} tram trips", flush=True)
 
     # ---- shapes: only the ones a trip of the day drives, in the feed's own point order
     want = {t["shape_id"] for t in trips}
     pts = {}
-    for r in rows("shapes.txt"):
+    for r in rows("shapes.txt", gtfs):
         if r["shape_id"] in want:
             pts.setdefault(r["shape_id"], []).append((int(r["shape_pt_sequence"]), float(r["shape_pt_lon"]),
                                                       float(r["shape_pt_lat"])))
@@ -165,7 +168,7 @@ def main(argv=None):
     # spreading the whole trip over the whole line at one average speed.
     from shapely.geometry import LineString, Point
     stop_xy = {}
-    for r in rows("stops.txt"):
+    for r in rows("stops.txt", gtfs):
         stop_xy[r["stop_id"]] = (float(r["stop_lon"]), float(r["stop_lat"]))
     shapely_line = {}
     for s in shape_ids:
@@ -178,19 +181,19 @@ def main(argv=None):
         if h not in headsign_at:
             headsign_at[h] = len(headsigns)
             headsigns.append(h)
-    for r in rows("stops.txt"):
+    for r in rows("stops.txt", gtfs):
         n = (r.get("stop_name") or "").strip()
         if n not in name_at:
             name_at[n] = len(stop_names)
             stop_names.append(n)
     by_trip = {}
-    with open(GTFS / "stop_times.txt", encoding="utf-8-sig", newline="") as fh:
+    with open(gtfs / "stop_times.txt", encoding="utf-8-sig", newline="") as fh:
         for r in csv.DictReader(fh):
             by_trip.setdefault(r["trip_id"], []).append((int(r["stop_sequence"]), r["arrival_time"],
                                                          r["departure_time"], r["stop_id"]))
     rec, stop_rec, trip_ids = [], [], []
     dist_cache = {}
-    stop_name_of = {r["stop_id"]: (r.get("stop_name") or "").strip() for r in rows("stops.txt")}
+    stop_name_of = {r["stop_id"]: (r.get("stop_name") or "").strip() for r in rows("stops.txt", gtfs)}
     for t in trips:
         st = sorted(by_trip.get(t["trip_id"], []))
         if not st:
@@ -222,30 +225,39 @@ def main(argv=None):
     print(f"trips {len(rec):,}, stop calls {len(stop_rec):,}", flush=True)
 
     # ---- rails: the mapped railway=tram ways, which is what a tram actually runs on
-    try:
-        import pyogrio
-        from shapely.geometry import LineString
-        ln = pyogrio.read_dataframe(ROOT / "data" / "raw" / "osm" / "croatia-latest.osm.pbf", layer="lines",
-                                    bbox=(15.78, 45.61, 16.25, 45.97))
-        ln = ln[ln["railway"].isin(["tram"])].to_crs(3765)
-        rx, rz, rindex = [], [], []
-        for geom in ln.geometry.to_numpy():
-            if not isinstance(geom, LineString) or len(geom.coords) < 2:
-                continue
-            c = np.asarray(geom.coords, dtype="float64")
-            x, z = c[:, 0] - ORIGIN[0], -(c[:, 1] - ORIGIN[1])
-            rindex.append({"offset": len(rx), "count": len(x)})
-            rx.extend(np.asarray(x, dtype="float32").tolist())
-            rz.extend(np.asarray(z, dtype="float32").tolist())
-        rarr = np.empty((len(rx) * 2,), dtype="<f4")
-        rarr[0::2] = np.asarray(rx, dtype="<f4")
-        rarr[1::2] = np.asarray(rz, dtype="<f4")
-        (out / "trams_rails.bin.gz").write_bytes(gzip.compress(rarr.tobytes(), 6))
-        rails = {"ways": len(rindex), "points": len(rx), "index": rindex}
-        print(f"rails {len(rindex):,} ways, {len(rx):,} points", flush=True)
-    except Exception as e:
-        rails = {"ways": 0, "points": 0, "index": [], "note": f"rails skipped: {e}"}
-        print("rails: skipped", e, flush=True)
+    if args.rails_from:
+        previous = json.loads(args.rails_from.read_text(encoding="utf-8"))
+        rails = previous.get("rails", {})
+        if not rails.get("ways"):
+            raise ValueError(f"no mapped rails in {args.rails_from}")
+        rails_file = args.rails_from.parent / "trams_rails.bin.gz"
+        (out / "trams_rails.bin.gz").write_bytes(rails_file.read_bytes())
+        print(f"rails {rails['ways']:,} ways: reused from {args.rails_from}", flush=True)
+    else:
+        try:
+            import pyogrio
+            from shapely.geometry import LineString
+            ln = pyogrio.read_dataframe(ROOT / "data" / "raw" / "osm" / "croatia-latest.osm.pbf", layer="lines",
+                                        bbox=(15.78, 45.61, 16.25, 45.97))
+            ln = ln[ln["railway"].isin(["tram"])].to_crs(3765)
+            rx, rz, rindex = [], [], []
+            for geom in ln.geometry.to_numpy():
+                if not isinstance(geom, LineString) or len(geom.coords) < 2:
+                    continue
+                c = np.asarray(geom.coords, dtype="float64")
+                x, z = c[:, 0] - ORIGIN[0], -(c[:, 1] - ORIGIN[1])
+                rindex.append({"offset": len(rx), "count": len(x)})
+                rx.extend(np.asarray(x, dtype="float32").tolist())
+                rz.extend(np.asarray(z, dtype="float32").tolist())
+            rarr = np.empty((len(rx) * 2,), dtype="<f4")
+            rarr[0::2] = np.asarray(rx, dtype="<f4")
+            rarr[1::2] = np.asarray(rz, dtype="<f4")
+            (out / "trams_rails.bin.gz").write_bytes(gzip.compress(rarr.tobytes(), 6))
+            rails = {"ways": len(rindex), "points": len(rx), "index": rindex}
+            print(f"rails {len(rindex):,} ways, {len(rx):,} points", flush=True)
+        except Exception as e:
+            rails = {"ways": 0, "points": 0, "index": [], "note": f"rails skipped: {e}"}
+            print("rails: skipped", e, flush=True)
 
     meta = {
         "day": day.isoformat(),
