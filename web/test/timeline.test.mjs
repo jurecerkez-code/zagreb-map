@@ -1,6 +1,23 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { placeLabels, labelAt, stepYear } from '../timeline.js';
+import { placeLabels, labelAt, stepYear, filmYear, filmOrbit } from '../timeline.js';
+
+test('the film turns twenty degrees and honors reduced motion', () => {
+  assert.equal(filmOrbit(0, false), 0);
+  assert.ok(Math.abs(filmOrbit(0.5, false) - Math.PI / 18) < 1e-10);
+  assert.equal(filmOrbit(1, false), Math.PI / 9);
+  for (const t of [0, 0.5, 1]) assert.equal(filmOrbit(t, true), 0);
+});
+
+
+test('filmYear keeps the full interval monotonic, with exact endpoints', () => {
+  const histogram = { 1100: [4, 0], 1500: [20, 0], 1900: [500, 0], 2026: [1200, 0] };
+  assert.equal(filmYear(0, histogram, 1200, 2026), 1200);
+  assert.equal(filmYear(1, histogram, 1200, 2026), 2026);
+  const samples = [0, 0.2, 0.5, 0.75, 1].map(t => filmYear(t, histogram, 1200, 2026));
+  for (let i = 1; i < samples.length; i++) assert.ok(samples[i] >= samples[i - 1]);
+});
+
 
 const xOf = y => (y - 1100) / (2026 - 1100) * 1000;     // a 1000 px timeline from 1100 to Today
 const measure = s => s.length * 6;
@@ -42,4 +59,30 @@ test('stepYear follows the slider keys and stays within its bounds', () => {
   assert.equal(stepYear('End', s), 2025);
   assert.equal(stepYear('ArrowUp', { ...s, value: 2025 }), 2025);
   assert.equal(stepYear('Enter', s), null);
+});
+
+test('filmYear reserves the explicit early-history time floors', () => {
+  const histogram = { 1200: [4, 0], 1800: [8, 0], 2026: [1000, 0] };
+  const at = year => {
+    for (let i = 0; i <= 1000; i++) {
+      if (filmYear(i / 1000, histogram, 1200, 2026) >= year) return i / 1000;
+    }
+    assert.fail(`The film never reaches ${year}`);
+  };
+  assert.ok(at(1500) >= 0.1, 'the first 300 years get at least 3 seconds per century');
+  assert.ok(at(1700) >= 0.5, 'all five centuries before 1700 get at least 3 seconds per century');
+  assert.ok(at(1850) >= 0.15, 'the pre-1850 story gets at least 15% of the film');
+});
+
+test('the early-history floor is not capped for a different start year', () => {
+  const samples = [0.1, 0.3, 0.5, 0.7, 0.9, 1];
+  const years = samples.map(t => filmYear(t, { 1900: [100, 0] }, 1000, 2026));
+  years.forEach((year, i) => assert.ok(year >= years[i - 1] || i === 0));
+  for (let i = 0; i < 1000; i++) {
+    if (filmYear(i / 1000, { 1900: [100, 0] }, 1000, 2026) >= 1700) {
+      assert.ok(i / 1000 >= 0.7);
+      return;
+    }
+  }
+  assert.fail('The film never reaches 1700');
 });
