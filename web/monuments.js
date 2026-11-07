@@ -7,6 +7,8 @@
 // Sizes: the tagged height (OSM or Wikidata P2048), else a typical height for the kind (pipeline side).
 // The timeline: a monument shows from its year (unveiling), and not in a `removed` span ([[1947, 1989]] for Jelačić);
 // one without a year always shows. Colours: bronze, stone and metal per look (MATERIALS), lit by the map's sun.
+import { DISPLAY_FOG_GLSL } from './display-fog.js';
+
 export const MONUMENTS_KEY = 'hfh-monuments';
 export const monumentsOnFrom = stored => stored !== 'off';   // on by default
 
@@ -156,6 +158,7 @@ export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, render
   const mat = new THREE.ShaderMaterial({
     uniforms: { uYear: uniforms.uYear, uSun: uniforms.uSun, uSunCol: uniforms.uSunCol, uSkyCol: uniforms.uSkyCol,
       uNight: uniforms.uNight, uFog: uniforms.uFog, uFogColor: uniforms.uFogColor,
+      uFogDisplay: uniforms.uFogDisplay,
       uYearMax: { value: yearMax }, uStone: { value: new THREE.Color() }, uFig: { value: [new THREE.Color(), new THREE.Color(), new THREE.Color()] },
       uWater: { value: new THREE.Color() }, uGold: { value: new THREE.Color() } },
     side: THREE.DoubleSide,
@@ -177,6 +180,7 @@ export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, render
       uniform vec3 uSun, uSunCol, uSkyCol, uFogColor, uStone, uFig[3], uWater, uGold;
       uniform float uNight;
       uniform vec2 uFog;
+      ${DISPLAY_FOG_GLSL}
       varying vec3 vN; varying float vPart, vMat, vDEye, vY;
       void main() {
         vec3 n = normalize(vN) * (gl_FrontFacing ? 1.0 : -1.0);
@@ -186,11 +190,11 @@ export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, render
         vec3 ambient = uSkyCol * (mix(0.6, 1.0, n.y * 0.5 + 0.5) * 0.55);
         c = c * (direct + ambient) + spec;
         c = mix(c, c * vec3(0.30, 0.36, 0.56), uNight);
-        c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, vDEye));
         gl_FragColor = vec4(c, 1.0);
         // #24: the display transform is the renderer's own tail
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
+        gl_FragColor.rgb = displayFog(gl_FragColor.rgb, vDEye, 1.0);
       }`,
   });
   // One InstancedMesh per kind.

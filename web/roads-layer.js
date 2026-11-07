@@ -8,6 +8,7 @@
 // points, lamps.bin.gz the 5,821 mapped street lamps lit at night.
 import { gunzip } from './veg.js';
 import { TILE, KERB, EDGE_W, LIFT, CLASSES, PAVEMENT } from './roads-worker.js';
+import { DISPLAY_FOG_GLSL } from './display-fog.js';
 
 // The class palette: asphalt greys for the carriageway, warmer greys for the pavements: measured off Zagreb
 // (#4f5450 asphalt, #8d908e kerb side pavement), the motorway the darkest, a service lane the lightest. The row
@@ -56,6 +57,7 @@ export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt
   const myUniforms = {
     uFog: uniforms.uFog,
     uFogColor: uniforms.uFogColor,
+    uFogDisplay: uniforms.uFogDisplay,
     uNight: uniforms.uNight,
     uRelief: uniforms.uRelief,
     uCutK: uniforms.uCutK,
@@ -82,6 +84,7 @@ export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt
       uniform vec2 uFog;
       uniform float uNight;
       uniform vec3 uCls[${CLASSES.length}], uSide, uEdge;
+      ${DISPLAY_FOG_GLSL}
       varying float vU, vHalf, vCls, vDepth;
       void main() {
         vec3 c = uCls[int(vCls + 0.5)];
@@ -95,11 +98,11 @@ export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt
         c = mix(c, uEdge, kerb * (1.0 - pave));
         c = mix(c, uSide, side * (1.0 - pave));
         c = mix(c, c * ${NIGHT_TINT}, uNight);
-        c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, vDepth));
         gl_FragColor = vec4(c, 1.0);
         // #24: the display transform is the renderer's own tail
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
+        gl_FragColor.rgb = displayFog(gl_FragColor.rgb, vDepth, 1.0);
       }`,
     polygonOffset: true,             // the terrain writes its own depth at the same height: pull the street forward
     polygonOffsetFactor: -2,

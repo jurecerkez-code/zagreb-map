@@ -56,6 +56,7 @@ import { makeRoofYears, roofYearsOnFrom, ROOF_YEARS_KEY } from './roofyears.js';
 import { makeMonuments, monumentsOnFrom, monumentCard, MONUMENTS_KEY } from './monuments.js';
 import { makeVeg } from './veg.js';
 import { makePosterPass, posterInks, posterColours, posterYear, nearestIndex } from './poster.js';
+import { DISPLAY_FOG_GLSL, syncDisplaySky } from './display-fog.js';
 
 // #24: authored sRGB becomes the renderer's working space. Every texture the city photographs (the roof and ground
 // bytes, the trees, the roads' taper, the labels) carries its space on the texture; every uniform colour is a
@@ -685,6 +686,8 @@ const uniforms = {
   uForce: { value: -1 },                           // the building picked from search: drawn whatever hides it
   uBlind: { value: 0 },
   uFogColor: { value: col(THEME.sky) },
+  // #24: display-space partner to the working colour. syncDisplaySky updates both sky paths.
+  uFogDisplay: { value: new THREE.Vector3() },
   uFog: { value: new THREE.Vector2(9000, 26000) },
   // Terrain: one texture of (true metres, terrace cut) per grid node, read with texelFetch, and the edge fade;
   // 1 x 1 placeholders until loadTerrain replaces them. uSun is the one sun buildings and ground share (themes.js
@@ -1023,6 +1026,7 @@ const FRAG = /* glsl */`
   ${WEATHER_GLSL}
   ${LIGHT_GLSL}
   ${SHADOW_GLSL}
+  ${DISPLAY_FOG_GLSL}
   in vec3 vColor;
   in vec3 vWorld;
   in float vRel;
@@ -1127,15 +1131,15 @@ const FRAG = /* glsl */`
         float lie = uSnow * ${glf(SNOW.roof)} * flatTop * step(-0.5, vLit) * mix(${glf(SNOW.patch)}, 1.0, drift(vWorld.xz));
         c = mix(c, mix(uSnowInk, uHoverTo, 0.35 * max(vLit, 0.0)), lie);
       }
-      c = mix(uFogColor, c, mix(1.0, fadeAt(vWorld.xz), uEdgeBuildings));   // ?edgebuildings=1: they fade at the edge too
-      c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, d));
-      // Night, after the fog so the whole frame cools together: the walls go with the ground.
-      c = mix(c, c * vec3(0.30, 0.36, 0.56), uNight);
       outColor = vec4(c, 1.0);
       // #24: filmic output, the renderer's own curve; GLSL3 names its out, so the chunks' gl_FragColor is this one.
       #define gl_FragColor outColor
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
+      // Only the material takes the night tint. The dimmed sRGB background must not be darkened again.
+      outColor.rgb = mix(outColor.rgb, outColor.rgb * vec3(0.30, 0.36, 0.56), uNight);
+      // The background is unlit sRGB. Join it here, not in the pre-film working colour.
+      outColor.rgb = displayFog(outColor.rgb, d, mix(1.0, fadeAt(vWorld.xz), uEdgeBuildings));
     #endif
   }
 `;
@@ -1715,6 +1719,7 @@ const TERRAIN_FRAG = /* glsl */`
   ${WEATHER_GLSL}
   ${LIGHT_GLSL}
   ${SHADOW_GLSL}
+  ${DISPLAY_FOG_GLSL}
   ${WAVE_GLSL}
   in vec3 vWorld;
   in vec3 vNormal;
@@ -1755,15 +1760,14 @@ const TERRAIN_FRAG = /* glsl */`
         c = shimmer(c, vWorld.xz, length(vWorld - cameraPosition));   // the water's ripples (WAVE_GLSL)
         c *= lighting(vec3(0.0, 1.0, 0.0), sunShadow(vWorld));   // #24: flat water in the same light as flat ground
       }
-      c = mix(uFogColor, c, fadeAt(vWorld.xz));
-      c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, length(vWorld - cameraPosition)));
-      // Night, after the fades: everything cools together, the sky included.
-      c = mix(c, c * vec3(0.30, 0.36, 0.56), uNight);
       outColor = vec4(c, 1.0);
       // #24: filmic output; the pick pass renders to a target and stays raw on its own.
       #define gl_FragColor outColor
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
+      // Only the material takes the night tint. The city's separately dimmed sky stays exact.
+      outColor.rgb = mix(outColor.rgb, outColor.rgb * vec3(0.30, 0.36, 0.56), uNight);
+      outColor.rgb = displayFog(outColor.rgb, length(vWorld - cameraPosition), fadeAt(vWorld.xz));
     #endif
   }
 `;
@@ -4193,6 +4197,7 @@ function applySky() {
   const sky = skyNow();
   renderer.setClearColor(sky);
   uniforms.uFogColor.value.set(sky);
+  syncDisplaySky(THREE, uniforms);
 }
 // Night: the sky's light gone, the fog with it, and the page's own ground (the canvas is transparent, the sky behind it
 // is --bg). Kept out of skyNow and applySky, which web/test/weather.test.mjs holds to their exact shape.
@@ -4205,6 +4210,7 @@ function applyNightSky(night) {
     const dark = dimSrgb(THEME.sky, 0.14);
     renderer.setClearColor(dark, 1);
     uniforms.uFogColor.value.set(dark);
+    syncDisplaySky(THREE, uniforms);
     document.documentElement.style.setProperty('--bg', dark);
   } else if (THEME?.ui?.['--bg']) {
     document.documentElement.style.setProperty('--bg', THEME.ui['--bg']);

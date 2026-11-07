@@ -10,6 +10,9 @@ const src = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const lines = (...ls) => new RegExp(ls.map(l => l.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('(?:\\s|//[^\\n]*)*'));
 const glsl = {};
 for (const [, name, body] of src.matchAll(/const (\w+) = \/\* glsl \*\/`([\s\S]*?)`;/g)) glsl[name] = body;
+// Shared shader helpers are imported modules too. Expand them before checking the final GPU source.
+glsl.DISPLAY_FOG_GLSL = readFileSync(new URL('../display-fog.js', import.meta.url), 'utf8')
+  .match(/export const DISPLAY_FOG_GLSL = \/\* glsl \*\/`([\s\S]*?)`;/)[1];
 
 test('buildings stand on their ground: the lift, skirts down the slope, a base-relative foot and hatch, lifted boxes', () => {
   // the lift comes last, after the unknown-year sinking, a layer's rise and the fly-in, so a building sinks into its own ground
