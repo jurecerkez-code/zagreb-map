@@ -2,7 +2,7 @@
 // timetable now, and ZET's live vehicles from /rt where the feed puts them. Every tram is a TMK 2200 at true size
 // (data/<version>/trams.json vehicle: 32 m long, 2.3 m wide, 3.4 m high) in ZET's own livery — blue body, black
 // window band, grey roof, a sloped windshield on both cabs (it runs double-ended), a single-arm pantograph — built
-// in three sections that follow the shape independently, because one rigid 32 m block reads wrong on every bend.
+// in five sections that follow the shape independently, with wheelsets and open door frames.
 // One InstancedMesh per part keeps the whole day at a handful of draw calls.
 //
 // app.js calls step() every frame while the trams show (at Today only, like the boats): the timetable is read from
@@ -15,6 +15,7 @@
 // mounted a second time with web/trams.js tramHtml.
 import { parseTrams, makeNet, tramClock, tramInfo, tramHtml } from './trams.js';
 import { gunzip } from './veg.js';   // the same gzip in transit, inflated here: no library either way
+import { BODY_PARTS, BELLOWS_WIDTH, BELLOWS_CENTRES, SECTION_LENGTH, SECTION_CENTRES, vehicleDimensions, makeDoorFrame, makeVehicleParts, sideOffset, setVehicleNight } from './tram-model.js';
 
 const LIVE_MS = 15000;      // ZET refreshes its feed about once a minute; a quarter of that keeps the map current
 const NIGHT = 0.36;         // the same hand darkening the trees get: an unlit material does not dim at night
@@ -71,12 +72,11 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
   liftRails();
 
   // ---- the vehicles: a TMK 2200 as the fleet actually runs them. ZET blue (#0e63b8) over black windows and a
-  // grey roof; the cab's big windshield tilts back, the doors sit inside the window band, and the half-diamond
-  // pantograph reads as two bars at map zoom. Three sections per tram, each placed on the shape itself: the
-  // bellows between them are where the tram bends on a curve, exactly like the street.
-  const v = trams.vehicle;
-  const L = v.length || 32, W = v.width || 2.3, H = v.height || 3.4;
-  const ZET = '#0e63b8', GLASS = '#171a1e', ROOF = '#c9cdd2', DARK = '#22262b', SIGN = '#e8b33f';
+  // grey roof; the cab's big windshield tilts back. Five sections per tram, each placed on the shape itself:
+  // four bellows, wheelsets and door outlines read at street level, not another blue cuboid.
+  const dimensions = vehicleDimensions(trams.vehicle);
+  const L = dimensions.length, W = dimensions.width, H = dimensions.height;
+  const ROOF = '#c9cdd2', DARK = '#22262b';
   const geoOf = c => shadedBox(THREE, 1, 1, 1, c);   // unit cube, scaled per instance; the shading rides along
   const bodyMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
   const winMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
@@ -86,8 +86,13 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
   // (a coloured base colour would multiply the vertices' own, and the pantograph would go twice as dark).
   const pantMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
   const signMat = new THREE.MeshBasicMaterial({ color: 0xffffff, vertexColors: true });
+  // These geometries carry no vertex-colour attribute, so their actual material colour must stand alone.
+  const doorMat = new THREE.MeshBasicMaterial({ color: ROOF, side: THREE.DoubleSide });
+  const wheelMat = new THREE.MeshBasicMaterial({ color: DARK });
+  const doorGeo = makeDoorFrame(THREE).geometry;
+  const wheelGeo = new THREE.CylinderGeometry(0.33, 0.33, 1.78, 8); // octagonal tyres are enough at map scale
+  wheelGeo.rotateX(Math.PI / 2);   // axle across the tram, not along its track
 
-  const SEC_LEN = [9.6, 11.2, 9.6], SEC_OFF = [-11.2, 0, 11.2];   // three sections, two 0.8 m bellows between
   const TILT = 0.42;                                              // the windshield's lean-back, in radians
 
   const schedCap = net.peakRunning();          // no second of the day puts more trams on the street than this
@@ -100,19 +105,12 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
     m.name = name;
     return m;
   };
-  // Caps are per section where a part exists per section; the cab parts exist twice per tram.
-  const parts = (tag, cap) => ({
-    body: make(cap * 3, geoOf(ZET), bodyMat, `${tag}-body`),
-    win: make(cap * 3, geoOf(GLASS), winMat, `${tag}-windows`),
-    roof: make(cap * 3, geoOf(ROOF), roofMat, `${tag}-roof`),
-    face: make(cap * 2, geoOf(GLASS), faceMat, `${tag}-cab`),
-    pant: make(cap * 2, geoOf(DARK), pantMat, `${tag}-pant`),
-    sign: make(cap * 2, geoOf(SIGN), signMat, `${tag}-sign`),
-    cap,
-  });
+  // Cab parts exist twice per tram. Body parts are five, and door frames and axles are five on each visible side.
+  const parts = (tag, cap) => makeVehicleParts({ make, geoOf, tag, cap,
+    bodyMat, winMat, roofMat, doorGeo, doorMat, wheelGeo, wheelMat, faceMat, pantMat, signMat });
   const sched = parts('tram', schedCap);
   const live = parts('tram-live', liveCap);
-  for (const p of [sched, live]) group.add(p.body, p.win, p.roof, p.face, p.pant, p.sign);
+  for (const p of [sched, live]) group.add(p.body, p.win, p.roof, p.bellows, p.doors, p.wheels, p.face, p.pant, p.sign);
 
   const M = new THREE.Matrix4(), Q = new THREE.Quaternion(), QT = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0),
     ZAX = new THREE.Vector3(0, 0, 1), P = new THREE.Vector3(), S = new THREE.Vector3(1, 1, 1);
@@ -129,31 +127,47 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
     mesh.setMatrixAt(i, M);
   }
 
-  // A whole tram: three sections bent on the shape, cab ends with their windshields, the pantograph's two bars.
+  // Five body sections follow the shape. Two wheelsets and two outlined door frames per section
+  // are actual geometry, so the TMK reads as a tram from street level instead of a cuboid.
   function putVehicle(p, k, trip, d, x, y, z, heading) {
     const shape = trip != null ? net.trips[trip * 5] : null;
     const sLen = trip != null ? net.trips[trip * 5 + 2] : 0;
-    const i3 = k * 3, i2 = k * 2;
-    for (let s = 0; s < 3; s++) {
+    const iBody = k * BODY_PARTS, iDetail = k * BODY_PARTS * 2, i2 = k * 2;
+    for (let s = 0; s < BODY_PARTS; s++) {
       if (shape != null && d != null) {
-        const dd = Math.max(0, Math.min(sLen, d + SEC_OFF[s]));
-        const pt = net.pointAt(shape, dd, dd);
-        const yy = surfaceAt(pt.x, pt.z);
-        instance(p.body, i3 + s, pt.x, yy + LIFT + H / 2, pt.z, pt.heading, SEC_LEN[s], H, W);
-        instance(p.win, i3 + s, pt.x, yy + LIFT + 1.98, pt.z, pt.heading, SEC_LEN[s] * 0.94, 1.25, W + 0.04);
-        instance(p.roof, i3 + s, pt.x, yy + LIFT + H + 0.05, pt.z, pt.heading, SEC_LEN[s] * 0.98, 0.1, W * 0.94);
-        if (s === 1) {   // the pantograph lives on the middle section
+        const dd = Math.max(0, Math.min(sLen, d + SECTION_CENTRES[s]));
+        const pt = net.pointAt(shape, dd, dd), yy = surfaceAt(pt.x, pt.z);
+        instance(p.body, iBody + s, pt.x, yy + LIFT + H / 2, pt.z, pt.heading, SECTION_LENGTH, H, W);
+        instance(p.win, iBody + s, pt.x, yy + LIFT + 1.98, pt.z, pt.heading, SECTION_LENGTH * 0.94, 1.25, W + 0.04);
+        instance(p.roof, iBody + s, pt.x, yy + LIFT + H + 0.05, pt.z, pt.heading, SECTION_LENGTH * 0.98, 0.1, W * 0.94);
+        for (const side of [-1, 1]) {
+          const index = iDetail + s * 2 + (side === 1 ? 1 : 0), offset = side * (W / 2 + 0.035);
+          const lateral = sideOffset(pt.heading, offset), dx = lateral.x, dz = lateral.z;
+          instance(p.doors, index, pt.x + dx, yy + LIFT + 1.25, pt.z + dz, pt.heading, 1, 1, 1);
+          const axleD = Math.max(0, Math.min(sLen, dd + side * 0.65));
+          const axle = net.pointAt(shape, axleD, axleD), axleY = surfaceAt(axle.x, axle.z);
+          instance(p.wheels, index, axle.x, axleY + 0.33, axle.z, axle.heading, 1, 1, 1);
+        }
+        if (s === Math.floor(BODY_PARTS / 2)) {   // the pantograph lives on the middle section
           const bx = Math.cos(pt.heading) * 0.4, bz = -Math.sin(pt.heading) * 0.4;
           instance(p.pant, i2, pt.x - bx, yy + LIFT + H + 1.05, pt.z - bz, pt.heading, 0.11, 1.9, 0.11, -0.9);
           instance(p.pant, i2 + 1, pt.x + bx, yy + LIFT + H + 1.05, pt.z + bz, pt.heading, 0.11, 1.9, 0.11, 0.9);
         }
       } else {
-        instance(p.body, i3 + s, x, y + LIFT + H / 2, z, heading, SEC_LEN[s], H, W);
-        instance(p.win, i3 + s, x, y + LIFT + 1.98, z, heading, SEC_LEN[s] * 0.94, 1.25, W + 0.04);
-        instance(p.roof, i3 + s, x, y + LIFT + H + 0.05, z, heading, SEC_LEN[s] * 0.98, 0.1, W * 0.94);
+        instance(p.body, iBody + s, x, y + LIFT + H / 2, z, heading, SECTION_LENGTH, H, W);
+        instance(p.win, iBody + s, x, y + LIFT + 1.98, z, heading, SECTION_LENGTH * 0.94, 1.25, W + 0.04);
+        instance(p.roof, iBody + s, x, y + LIFT + H + 0.05, z, heading, SECTION_LENGTH * 0.98, 0.1, W * 0.94);
       }
     }
-    if (shape != null && d != null) {   // both cabs: the TMK 2200 runs double-ended, so both ends get a windshield
+    if (shape != null && d != null) {
+      // Real geometry at each of the four joints, not just an empty gap between five boxes.
+      for (let s = 0; s < BELLOWS_CENTRES.length; s++) {
+        const jd = Math.max(0, Math.min(sLen, d + BELLOWS_CENTRES[s]));
+        const joint = net.pointAt(shape, jd, jd), jy = surfaceAt(joint.x, joint.z);
+        instance(p.bellows, k * BELLOWS_CENTRES.length + s, joint.x, jy + LIFT + H / 2, joint.z,
+          joint.heading, BELLOWS_WIDTH, H * 0.94, W * 0.9);
+      }
+      // Both cabs: the TMK 2200 runs double-ended, so both ends get a windshield.
       const dF = Math.min(sLen, d + L / 2 - 0.35), dR = Math.max(0, d - L / 2 + 0.35);
       const pF = net.pointAt(shape, dF, dF), yF = surfaceAt(pF.x, pF.z);
       const pR = net.pointAt(shape, dR, dR), yR = surfaceAt(pR.x, pR.z);
@@ -296,9 +310,11 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
 
     for (const p of [sched, live]) {
       const n = p === sched ? drawnSched.length : drawnLive.length;
-      p.body.count = p.win.count = p.roof.count = n * 3;
+      p.body.count = p.win.count = p.roof.count = n * BODY_PARTS;
+      p.bellows.count = n * BELLOWS_CENTRES.length;
+      p.doors.count = p.wheels.count = n * BODY_PARTS * 2;
       p.face.count = p.pant.count = p.sign.count = n * 2;
-      for (const mesh of [p.body, p.win, p.roof, p.face, p.pant, p.sign]) mesh.instanceMatrix.needsUpdate = true;
+      for (const mesh of [p.body, p.win, p.roof, p.bellows, p.doors, p.wheels, p.face, p.pant, p.sign]) mesh.instanceMatrix.needsUpdate = true;
       // The raycast culls against the instances' own bounds first, and they are empty until the matrices hold
       // something: computed here, every frame, since the trams move all over the city. Without it hitAt never hits.
       p.body.computeBoundingSphere();
@@ -320,7 +336,7 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
     const hit = ray.intersectObjects([live.body, sched.body], false)[0];
     if (!hit || hit.instanceId === undefined) return null;
     const set = hit.object === live.body ? drawnLive : drawnSched;
-    const d = set[Math.floor(hit.instanceId / 3)];   // three body sections stand consecutive for one drawn tram
+    const d = set[Math.floor(hit.instanceId / BODY_PARTS)];   // five body sections per drawn tram
     if (!d) return null;
     const depth = hit.distance * ray.ray.direction.dot(camera.getWorldDirection(F));
     return { ...d, depth };
@@ -331,7 +347,7 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
   function setNight(v) {
     nightOn = !!v;
     const k = nightOn ? NIGHT : 1;
-    for (const m of [bodyMat, winMat, roofMat, faceMat, pantMat, signMat]) m.color.setScalar(k);
+    for (const p of [sched, live]) setVehicleNight(p, nightOn, NIGHT);
   }
 
   scene.add(group);
