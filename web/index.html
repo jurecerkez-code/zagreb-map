@@ -4,19 +4,35 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Zagreb, building by building</title>
-<meta name="description" content="Zagreb, building by building: every building in Zagreb, coloured by when it was built.">
+<meta name="description" content="Zagreb, building by building: known and unknown years.">
+<link rel="canonical" href="https://jurecerkez-code.github.io/zagreb-map/">
+<meta name="theme-color" content="#d9dfe3">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Zagreb, building by building">
-<meta property="og:description" content="Every building in Zagreb, coloured by the year it was built.">
-
-
-<meta property="og:image" content="og.png">
+<meta property="og:description" content="Every building in Zagreb, with known and unknown years clearly distinguished.">
+<meta property="og:url" content="https://jurecerkez-code.github.io/zagreb-map/">
+<meta property="og:image" content="https://jurecerkez-code.github.io/zagreb-map/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:locale" content="en_GB">
-<meta property="og:locale:alternate" content="sv_SE">
+<meta property="og:locale" content="hr_HR">
+<meta property="og:locale:alternate" content="en_GB">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context": "https://schema.org", "@type": "WebApplication", "name": "Zagreb, building by building", "alternateName": "Zagreb, zgradu po zgradu", "description": "Every building in Zagreb, coloured by the year it was built.", "inLanguage": ["en", "hr"], "applicationCategory": "ReferenceApplication", "operatingSystem": "Any (web browser with WebGL)", "isAccessibleForFree": true, "about": {"@type": "City", "name": "Zagreb"}, "isBasedOn": {"@type": "SoftwareSourceCode", "name": "Amsterdam, building by building", "codeRepository": "https://github.com/alexbarakov/amsterdam-by-building"}}</script>
+<script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Zagreb, building by building",
+  "alternateName": "Zagreb, zgradu po zgradu",
+  "description": "Every building in Zagreb, with known and unknown years clearly distinguished.",
+  "url": "https://jurecerkez-code.github.io/zagreb-map/",
+  "image": "https://jurecerkez-code.github.io/zagreb-map/og.png",
+  "inLanguage": ["en", "hr"],
+  "applicationCategory": "ReferenceApplication",
+  "operatingSystem": "Any (web browser with WebGL)",
+  "isAccessibleForFree": true,
+  "about": {"@type": "City", "name": "Zagreb"},
+  "sameAs": "https://github.com/jurecerkez-code/zagreb-map",
+  "isBasedOn": {"@type": "SoftwareSourceCode", "name": "Amsterdam, building by building", "codeRepository": "https://github.com/alexbarakov/amsterdam-by-building"}
+}</script>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <!-- three.js is the first thing app.js imports, and three.module.js asks for three.core.js in turn: name both here so the
@@ -28,7 +44,7 @@
 <link rel="stylesheet" href="scene-player.css">
 </head>
 <body>
-<noscript><p class="noscript">Zagreb, building by building is a 3D map of every building in Zagreb (a port of Hus för hus), coloured by the year it was built. It needs JavaScript and WebGL. The code and data sources: <a href="https://github.com/amirelion/husforhus">github.com/amirelion/husforhus</a>.</p></noscript>
+<noscript><p class="noscript">Zagreb, building by building is a 3D map of Zagreb, with known and unknown years. It needs JavaScript and WebGL. The fork is based on Hus för hus and Amsterdam, building by building (MIT). Its code and data sources: <a href="https://github.com/jurecerkez-code/zagreb-map">github.com/jurecerkez-code/zagreb-map</a>.</p></noscript>
 <canvas id="scene" tabindex="0" aria-label="3D map of Zagreb's buildings, coloured by when they were built. Arrow keys move, + and − zoom, Enter opens the building in the middle." data-i18n-aria="ui.canvas"></canvas>
 <!-- The middle of the screen while the map has the keyboard: Enter opens the building under it (app.js). -->
 <div class="crosshair" aria-hidden="true"></div>

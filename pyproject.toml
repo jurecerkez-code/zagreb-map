@@ -1,7 +1,7 @@
 [project]
-name = "husforhus-pipeline"
+name = "zagreb-map-pipeline"
 version = "0.1.0"
-description = "Hus för hus (Stockholm, building by building): the data pipeline"
+description = "Zagreb by building: geometry and evidence pipeline"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

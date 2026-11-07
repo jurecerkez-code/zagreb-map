@@ -1,4 +1,4 @@
-"""Readers' reports the owner accepted (web/admin/, src/admin.js), as data: pipeline/contributions.csv.
+"""Accepted correction records stored in pipeline/contributions.csv.
 
 scripts/contributions.mjs `pull` writes the table from D1 (it runs `python -m pipeline.contributions resolve` for the
 uuid and the photo); the pipeline reads it keyed by uuid, so a row survives renumbered gids. Columns:

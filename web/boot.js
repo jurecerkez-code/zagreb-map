@@ -13,23 +13,24 @@ addEventListener('error', e => {
     && e.filename.startsWith(location.origin) && document.getElementById('progress')?.textContent === '0';
   if (!fetchFailed && !runFailed) return;
   el.hidden = false;
-  el.textContent = swedish()
-    ? 'Kunde inte ladda stadens data. Ladda om sidan för att försöka igen.'
+  el.textContent = croatian()
+    ? 'Podaci o gradu nisu se mogli učitati. Ponovno učitajte stranicu.'
     : 'Could not load the city data. Reload the page to try again.';
 }, true);
-// The page's language before any module has loaded: web/i18n.js pickLang's order, ?lang=, the visitor's
-// saved choice, then the browser's first Swedish or English language.
-function swedish() {
+// Croatian before English, following the same query and saved choice as the app. Storage and browser language
+// lists are advisory: an explicit ?lang= wins, then the saved choice, then a compatible browser language.
+function croatian() {
   try {
     const q = new URLSearchParams(location.search).get('lang');
-    if (q === 'sv' || q === 'en') return q === 'sv';
-    const s = localStorage.getItem('hfh-lang');
-    if (s === 'sv' || s === 'en') return s === 'sv';
-  } catch {}
-  for (const l of navigator.languages || [navigator.language]) {
-    const p = String(l || '').toLowerCase();
-    if (p === 'sv' || p.startsWith('sv-')) return true;
-    if (p === 'en' || p.startsWith('en-')) return false;
+    if (q === 'hr' || q === 'en') return q === 'hr';
+    const saved = localStorage.getItem('hfh-lang');
+    if (saved === 'hr' || saved === 'en') return saved === 'hr';
+  } catch { /* private mode still gets the browser's language below */ }
+  for (const language of navigator.languages || [navigator.language]) {
+    const locale = String(language || '').toLowerCase();
+    if (locale === 'hr' || locale.startsWith('hr-') || locale === 'bs' || locale.startsWith('bs-')
+      || locale === 'sr-latn' || locale.startsWith('sr-latn-')) return true;
+    if (locale === 'en' || locale.startsWith('en-')) return false;
   }
   return false;
 }
