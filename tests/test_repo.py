@@ -38,7 +38,7 @@ def test_amsterdam_modules_live_in_reference():
 
 def test_pyproject():
     data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    assert data["project"]["name"] == "husforhus-pipeline"
+    assert data["project"]["name"] == "zagreb-map-pipeline"
     assert data["project"]["requires-python"] == ">=3.12"
     assert any(d.startswith("pyyaml") for d in data["project"]["dependencies"])
     dev = data["dependency-groups"]["dev"]
@@ -65,7 +65,7 @@ def test_gitignore_and_nvmrc():
 
 
 def test_one_canonical_address():
-    # www.husforhus.se serves the same page; search engines are pointed at the bare domain
+    # GitHub Pages is the public mirror: the canonical URL points there, never to a retired upstream host
     html = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
-    assert '<link rel="canonical" href="https://husforhus.se/">' in html
-    assert '<meta property="og:url" content="https://husforhus.se/">' in html
+    assert '<link rel="canonical" href="https://jurecerkez-code.github.io/zagreb-map/">' in html
+    assert '<meta property="og:url" content="https://jurecerkez-code.github.io/zagreb-map/">' in html

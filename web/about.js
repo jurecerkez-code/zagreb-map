@@ -10,10 +10,19 @@ const AREA = ['raa_area', 'zg_area', 'zg_tipo'];
 const SOURCE_ROWS = ['curated', 'kd', 'zg_her', 'zg_facade', 'zbsm', 'raa', 'raa_old', 'wikidata', 'osm', 'reader', 'raa_area', 'zg_area', 'zg_tipo', 'estimate', 'none'];
 const AMSTERDAM = 'https://github.com/alexbarakov/amsterdam-by-building';
 const PARIS = 'https://paris.bogachev.fr/';
-const REPO = 'https://github.com/amirelion/husforhus';
+const REPO = 'https://github.com/jurecerkez-code/zagreb-map';
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const link = (href, text) => `<a href="${esc(href)}" target="_blank" rel="noopener">${esc(text)}</a>`;
+
+export function contactLink(value) {
+  const text = String(value ?? '').trim();
+  if (!text) return '';
+  if (text.startsWith('https://')) return link(text, text.slice(8).replace(/\/$/, ''));
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)) return link(`mailto:${text}`, text);
+  return '';
+}
+
 const sum = a => a.reduce((x, y) => x + y, 0);
 // The summary's four kinds as the source table's rows (pipeline/report_accuracy.py KIND_SOURCES).
 const KIND_SOURCES = [RECORD, AREA, ['estimate'], ['none']];
@@ -85,8 +94,8 @@ export function aboutTokens(config, T) {
     check_new: num(ext.from_1990?.n_all || 0), area_n: num(area.n || 0), area_right: pct(area.right_period || 0, T.lang, 0),
     cal_n: num(acc.calibration?.dated?.n || 0),
     snapshot, gamla_n: num(a.gamla?.n || 0), gamla_dated: num(a.gamla?.dated || 0), floors_osm: num(s.floorsOsm || 0),
-    rare: esc(a.rareArchitect ?? ''), maker: esc(a.maker || ''), contact: a.contact ? link(`mailto:${a.contact}`, a.contact) : '',
-    repo: link(REPO, 'github.com/amirelion/husforhus'), version: esc(config.version || ''), date: v ? `${v[1]}-${v[2]}-${v[3]}` : '',
+    rare: esc(a.rareArchitect ?? ''), maker: esc(a.maker || ''), contact: contactLink(a.contact),
+    repo: link(REPO, 'github.com/jurecerkez-code/zagreb-map'), version: esc(config.version || ''), date: v ? `${v[1]}-${v[2]}-${v[3]}` : '',
     // The terrain (stockholm.json `terrain`): the default relief, the Hills slider's top, where the heights
     // come from. T.num formats them in the page's language, so Swedish writes a decimal comma ("2,5"), English a point
     // ("2.5"); a whole number has no decimals ("2", not "2.0" or "2,0").
