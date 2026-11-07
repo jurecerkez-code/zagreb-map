@@ -22,8 +22,9 @@ import { makeMetroLayer } from './metro-layer.js';
 import { BOATS_KEY, boatsOnFrom, boatsShown, parseFerries, boatInfo, boatHtml } from './ferries.js';
 import { makeFerries } from './ferries-layer.js';
 import { makeTrams } from './trams-layer.js';
+import { advanceRideAim } from './ride-camera.js';
 import { makeRoads } from './roads-layer.js';
-import { tramInfo, tramHtml, tramClock } from './trams.js';
+import { tramInfo, tramHtml, tramClock, tramsDataPath } from './trams.js';
 import { makeRideHud } from './ride-hud.js';
 import { mountBoatTip } from './boat-tip.js';
 import { estimateTone, inkOn, rgba, luma, rgb, unknownFill } from './tone.js';
@@ -161,7 +162,8 @@ const extraUi = { title: () => T('ui.explore.title'), items: () => !layerUi.read
 const switcher = mountSwitcher({ button: document.querySelector('.look-open'), panel: document.getElementById('look'), looks, t,
   relief: reliefUi, layers: layerUi, extras: extraUi });
 const pageLookOnly = looks.subscribe(applyPageLook);
-const { version } = await getJson('data/current.json', { cache: 'no-cache' }).catch(halt);
+const current = await getJson('data/current.json', { cache: 'no-cache' }).catch(halt);
+const { version } = current;
 // Which commit the page was built from (pages.yml stamps it). Console log and __dbg.__build, so "is it live?"
 // answers itself: a stale tab names its stale build instead of impersonating today's deploy.
 getJson('build.json', { cache: 'no-store' }).then(b => {
@@ -169,6 +171,7 @@ getJson('build.json', { cache: 'no-store' }).then(b => {
   if (b?.sha) console.info(`build ${String(b.sha).slice(0, 7)} · ${b.date}`);
 }).catch(() => {});
 const DATA = `data/${version}/`;
+const TRAMS_DATA = tramsDataPath(current);
 // Load order: config, then pack0 (see Tiles). The other packs follow the first tile; land, water and labels follow the
 // first frame with buildings. The hot attributes come last, once the map stands: nothing on the first screen reads them.
 // The strings (web/i18n): both languages, a few KB, so the language switches without a reload.
@@ -3943,14 +3946,16 @@ function stepRide(dt, now = performance.now()) {
   const sway = (!calm.matches && !chase) ? Math.sin(now / 1000 * Math.PI * 2 * 1.3) * 0.03 : 0;
   ridePos.set(p.x, Math.max(g1, surfaceAt(p.x, p.z)) + (chase ? RIDE_CHASE_UP : RIDE_UP) + sway, p.z);
   rideAim.set(a.x, Math.max(g1, g2) + (chase ? RIDE_UP : RIDE_LOOK_UP), a.z);
-  // Spring on the aim ONLY: a bend is where the eyes go, a lurch never where the body stands.
-  const k = calm.matches ? 1e9 : 2 * Math.PI * 0.8;
-  const ax = (rideAim.x - ride.aim.x) * k * k, ay = (rideAim.y - ride.aim.y) * k * k, az = (rideAim.z - ride.aim.z) * k * k;
-  ride.aimV.x += (ax - 2 * k * ride.aimV.x) * dt;
-  ride.aimV.y += (ay - 2 * k * ride.aimV.y) * dt;
-  ride.aimV.z += (az - 2 * k * ride.aimV.z) * dt;
-  if (calm.matches) ride.aim.copy(rideAim);
-  else ride.aim.addScaledVector(ride.aimV, dt);
+  // The exact critical spring stays bounded at the actual frame interval rather than
+  // diverging after a slow frame (k * dt > 2 in the previous explicit Euler integration).
+  if (calm.matches) {
+    ride.aim.copy(rideAim);
+    ride.aimV.set(0, 0, 0);
+  } else {
+    const next = advanceRideAim({ position: ride.aim, velocity: ride.aimV, target: rideAim, dt });
+    ride.aim.copy(next.position);
+    ride.aimV.copy(next.velocity);
+  }
   ride.pos.lerp(ridePos, calm.matches ? 1 : 1 - Math.exp(-dt / 0.35));
   camera.position.copy(ride.pos);
   controls.target.copy(ride.aim);
@@ -4283,7 +4288,7 @@ makeVeg({ THREE, base: DATA, scene, uniforms, on: new URLSearchParams(location.s
 const tramsOn = new URLSearchParams(location.search).get('tram') !== '0';
 const tramsShown = () => !!trams && boatsShown({ on: tramsOn, year: uniforms.uYear.value, yearMax: config.yearMax, playing,
   story: document.body.classList.contains('scene-on') });
-makeTrams({ THREE, base: DATA, scene, camera, surfaceAt, on: tramsOn })
+makeTrams({ THREE, base: TRAMS_DATA, scene, camera, surfaceAt, on: tramsOn })
   .then(t => {
     trams = t;
     window.__trams = () => t;          // a dev hook: what the layer drew and what is under a point, for probes

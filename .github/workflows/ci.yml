@@ -49,6 +49,10 @@ jobs:
             echo "no leak rules in this copy"
           fi
 
+      # Font packages' own metadata is part of the unit checks, so installation comes first.
+      - name: Install node dependencies
+        run: npm ci
+
       # scripts/web-tests.mjs runs the same suite with the tests still written for Stockholm skipped and counted
       # (web/test/legacy_upstream.json), so this gate means what it says.
       - name: Web unit tests
@@ -58,9 +62,6 @@ jobs:
       # Two sentries for that: a static audit that every file a fetch names is tracked, and a headless boot.
       - name: Fetched files committed
         run: uv run python scripts/checks/site_fetches.py
-
-      - name: Install node dependencies
-        run: npm ci
 
       - name: Chromium for the boot smoke
         run: npx playwright install --with-deps chromium
