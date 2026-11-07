@@ -117,6 +117,21 @@ def test_dist_holds_the_app_and_only_the_current_version(bd, web, tmp_path):
     assert json.loads((out / "data" / "current.json").read_text())["version"] == VERSION
 
 
+def test_dist_ships_the_separate_versioned_tram_schedule(bd, web, tmp_path):
+    trams_version = "v20990108-t12345678"
+    write(web / "data" / "current.json", json.dumps({
+        "version": VERSION, "trams_version": trams_version,
+    }))
+    write(web / "data" / trams_version / "trams.json")
+    write(web / "data" / trams_version / "trams_rails.bin.gz")
+
+    out = build(bd, web, tmp_path)
+    assert f"data/{trams_version}/trams.json" in files(out)
+    assert f"data/{trams_version}/trams_rails.bin.gz" in files(out)
+    cache_rules = rules((out / "_headers").read_text())
+    assert headers_for(cache_rules, f"/data/{trams_version}/trams.json")["Cache-Control"] == [bd.IMMUTABLE]
+
+
 def test_dev_files_stay_out(bd, web, tmp_path):
     got = files(build(bd, web, tmp_path))
     assert not [f for f in got if f.startswith("test/")]

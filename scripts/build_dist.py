@@ -61,7 +61,7 @@ REVALIDATE = "public, max-age=0, must-revalidate"
 WEEK = "public, max-age=604800"
 
 
-def headers(version: str, *, release: bool) -> str:
+def headers(version: str, *, release: bool, trams_version: str | None = None) -> str:
     """The _headers file. Every request gets the security headers (and noindex on a preview); each path gets
     Cache-Control from exactly one rule, because Cloudflare joins a header two matching rules both set.
 
@@ -74,11 +74,12 @@ def headers(version: str, *, release: bool) -> str:
         everywhere.append("X-Robots-Tag: noindex")
     blocks = [
         ("/*", everywhere),
-        # versioned data never changes under its name: a new build is a new vYYYYMMDD folder; a photo's name is its
-        # Commons file's sha1, so it never changes either
-        (f"/data/{version}/*", [f"Cache-Control: {IMMUTABLE}"]),
+        # City and timetable versions never change under their own names.
+        *(item for v in dict.fromkeys((version, trams_version or version)) for item in [
+            (f"/data/{v}/*", [f"Cache-Control: {IMMUTABLE}"]),
+            (f"/data/{v}/*.gz", ["Content-Type: application/octet-stream"]),
+        ]),
         ("/data/photos/*", [f"Cache-Control: {IMMUTABLE}"]),
-        (f"/data/{version}/*.gz", ["Content-Type: application/octet-stream"]),
         # the pointer to the current version, and the app's unversioned files (no build step), revalidate each time
         ("/data/current.json", ["Cache-Control: no-cache"]),
         ("/", [f"Cache-Control: {REVALIDATE}"]),
@@ -99,16 +100,22 @@ def headers(version: str, *, release: bool) -> str:
     return text
 
 
-def current_version(web: Path) -> str:
+def named_version(web: Path, key: str = "version") -> str | None:
     current = web / "data" / "current.json"
     if not current.is_file():
         raise SystemExit(f"build_dist: {current} is missing: build the data first (uv run python -m pipeline.run)")
-    version = json.loads(current.read_text(encoding="utf-8")).get("version")
+    version = json.loads(current.read_text(encoding="utf-8")).get(key)
+    if version is None and key == "trams_version":
+        return None
     if not isinstance(version, str) or not VERSION_RE.fullmatch(version):
-        raise SystemExit(f"build_dist: {current} names version {version!r}, which is not a vYYYYMMDD folder name")
+        raise SystemExit(f"build_dist: {current} names {key} {version!r}, not a safe version folder name")
     if not (web / "data" / version).is_dir():
         raise SystemExit(f"build_dist: {current} names {version}, but {web / 'data' / version} is missing")
     return version
+
+
+def current_version(web: Path) -> str:
+    return named_version(web)
 
 
 def gate(version_dir: Path, data: Path, release: bool) -> list[str]:
@@ -233,8 +240,11 @@ def build(out: Path = DIST, *, web: Path = WEB, data: Path = DATA, release: bool
         raise SystemExit("build_dist: uncommitted changes to what ships; commit them first (or --allow-dirty for a "
                          f"local look, never a deploy):{listed}")
     version = current_version(web)
-    prints = fingerprint(web / "data" / version)
-    check_unchanged(version, prints, web)
+    trams_version = named_version(web, "trams_version")
+    versions = tuple(dict.fromkeys((version, trams_version or version)))
+    prints = {v: fingerprint(web / "data" / v) for v in versions}
+    for v in versions:
+        check_unchanged(v, prints[v], web)
     errors = gate(web / "data" / version, Path(data), release)
     if errors:
         print(f"build_dist: the release gate (s99_validate{' --release' if release else ''}) failed for {version}; "
@@ -263,17 +273,19 @@ def build(out: Path = DIST, *, web: Path = WEB, data: Path = DATA, release: bool
         raise SystemExit(f"build_dist: {web / 'index.html'} is missing")
     (out / "data").mkdir()
     shutil.copy2(web / "data" / "current.json", out / "data" / "current.json")
-    shutil.copytree(web / "data" / version, out / "data" / version, ignore=shutil.ignore_patterns(".*"))
+    for v in versions:
+        shutil.copytree(web / "data" / v, out / "data" / v, ignore=shutil.ignore_patterns(".*"))
     if photos:
         (out / "data" / "photos").mkdir()
     for key in photos:
         shutil.copy2(web / "data" / "photos" / key, out / "data" / "photos" / key)
-    (out / "_headers").write_text(headers(version, release=release), encoding="utf-8")
+    (out / "_headers").write_text(headers(version, release=release, trams_version=trams_version), encoding="utf-8")
 
     n, total, largest, size = check_limits(out)
-    remember(version, prints)
+    for v in versions:
+        remember(v, prints[v])
     print(f"build_dist: {out}: {n} files, {mb(total)}; largest {largest.as_posix()} ({mb(size)}); "
-          f"commit {head}{' plus uncommitted changes' if dirty else ''}, data {version}")
+          f"commit {head}{' plus uncommitted changes' if dirty else ''}, data {', '.join(versions)}")
 
 
 def main(argv: list[str] | None = None) -> None:
