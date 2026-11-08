@@ -35,14 +35,15 @@ import numpy as np
 import pandas as pd
 
 from . import city, io
-from .addresses import number_key
+from .addresses import number_identity, number_key
 from .s03_tiles import DATA, N_CARD_SHARDS, load, load_places, out_dir, shown_addresses
-from .textfold import fold
+from .textfold import fold, street_variants
 
 SHARD_KEY = re.compile(r"[a-z0-9]")
 TRASH = Path("temp_trash")
 OCCUPANTS = Path("data/occupants.json")
-EXAMPLE = re.compile(r"^(.*\S)\s+(\d+\s*[a-zA-Z]?)$")
+EXAMPLE = re.compile(r"^(.*\D)\s+(\d{1,4})(?:\s*([a-z]{1,3}))?$")
+REVERSE_EXAMPLE = re.compile(r"^(\d{1,4})(?:\s*([a-z]{1,3}))?\s+(.+\D)$")
 
 
 def shard_key(street: str) -> str:
@@ -140,11 +141,15 @@ def resolves(example: str, index: dict, shards: dict[str, dict]) -> bool:
     """An example the empty field suggests must find something exactly: a street and its number, a building, a
     stadsdel or an everyday district name."""
     f = fold(example)
-    m = EXAMPLE.match(example)
-    if m:
-        street = next((s for s in index["streets"] if fold(s[0]) == fold(m.group(1))), None)
-        number = re.sub(r"\s+", "", m.group(2)).upper()
-        if street and any(p[0] == number for p in shards.get(street[3], {}).get(street[0], [])):
+    m = EXAMPLE.fullmatch(f)
+    reverse = None if m else REVERSE_EXAMPLE.fullmatch(f)
+    if m or reverse:
+        asked = re.sub(r" (?:nr|no)$", "", m.group(1) if m else reverse.group(3))
+        number = number_identity((m.group(2) if m else reverse.group(1))
+                                 + ((m.group(3) if m else reverse.group(2)) or ""))
+        if any(set(street_variants(asked)).intersection(street_variants(s[0]))
+               and any(number_identity(p[0]) == number
+               for p in shards.get(s[3], {}).get(s[0], [])) for s in index["streets"]):
             return True
     names = ([b[0] for b in index["buildings"]] + [d[0] for d in index["districts"]] + [a[0] for a in index["aliases"]]
              + [a[0] for a in index.get("baliases", [])])

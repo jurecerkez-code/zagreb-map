@@ -141,6 +141,24 @@ def test_resolves_without_the_shard_and_with_a_name_that_ends_in_a_number():
     assert s14_search.resolves("Hornsgatan 30", index, {"h": {"Hornsgatan": [["30", 0, 0]]}})
 
 
+def test_examples_resolve_croatian_aliases_and_alphanumeric_suffixes():
+    index = {"streets": [["Ulica Đakovačka", 1, [0], "u"], ["Cesta Grgura Ninskog", 1, [0], "c"]],
+             "buildings": [], "districts": [], "aliases": []}
+    shards = {"u": {"Ulica Đakovačka": [["18aa", 4, 0], ["23/1", 5, 0]]},
+              "c": {"Cesta Grgura Ninskog": [["7", 6, 0]]}}
+    assert s14_search.resolves("Dakovacka 18AA", index, shards)
+    assert s14_search.resolves("ul. Đakovačka 18ab", index, shards) is False
+    assert s14_search.resolves("Đakovačka 23/1", index, shards) is False  # no slash syntax is invented as an exact match
+    assert s14_search.resolves("Grgura Ninskog 7", index, shards)
+    split = {"streets": [["Adamičeva ulica", 1, [0], "a"], ["Adamičeva", 1, [0], "a"]],
+             "buildings": [], "districts": [], "aliases": []}
+    addresses = {"a": {"Adamičeva ulica": [["13", 10, 0]], "Adamičeva": [["5", 20, 0]]}}
+    assert s14_search.resolves("Adamiceva 5", split, addresses)
+    assert s14_search.resolves("Adamiceva 13", split, addresses)
+    assert s14_search.resolves("ul. Adamičeva 13", split, addresses)
+    assert s14_search.resolves("13 Adamiceva", split, addresses)
+
+
 def test_a_shard_trashed_twice_keeps_both_copies(tmp_path):
     # never delete: a second stale q.json under the same version must not overwrite the first one in temp_trash
     out, trash = tmp_path / "web" / "data" / "v1", tmp_path / "temp_trash"

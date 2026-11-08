@@ -48,6 +48,18 @@ def test_numbers_reads_numbers_letters_ranges_and_lists(raw, want):
 
 def test_number_key_sorts_as_people_count():
     assert sorted(["12", "2", "10B", "10", "10A"], key=addresses.number_key) == ["2", "10", "10A", "10B", "12"]
+    assert addresses.number_key("12a") == addresses.number_key("12A")
+    assert addresses.number_key("012") == addresses.number_key("12")
+    assert addresses.number_key("12AA") < addresses.number_key("12AB") < addresses.number_key("12B")
+    assert addresses.number_key("23/1") < addresses.number_key("24")
+    assert "12AA" not in addresses.numbers("12AA")                    # parsing and sort tolerance stay separate
+    assert addresses.number_identity("012 ab") == "12AB"
+    assert addresses.number_identity("23/1") == ""
+
+
+def test_number_identity_normalises_only_the_unambiguous_alphanumeric_suffix():
+    assert [addresses.number_identity(n) for n in ("12", "012", "12a", "12 A", "12AB", "12-AB")] == [
+        "12", "12", "12A", "12A", "12AB", ""]
 
 
 def test_load_dedupes_across_tiles_and_takes_nodes_ways_and_relations(tmp_path):

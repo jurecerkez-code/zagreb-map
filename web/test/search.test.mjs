@@ -113,6 +113,32 @@ test('streetsFor: exact, then prefix, then a word inside, never a match in the m
   assert.deepEqual(streetsFor(P, 'gatan').map(s => s.name), []);
 });
 
+test('croatian street forms and alphanumeric house numbers resolve without merging semantic streets', async () => {
+  const index = { ...INDEX, streets: [['Ulica Đakovačka', 1, [0], 'u'], ['Cesta Grgura Ninskog', 1, [0], 'c']],
+    buildings: [], baliases: [] };
+  const shards = { u: { 'Ulica Đakovačka': [['18aa', 4, 0], ['23/1', 5, 0]] },
+    c: { 'Cesta Grgura Ninskog': [['7', 6, 0]] } };
+  const p = prepare(index), load = async k => shards[k];
+  assert.deepEqual((await search(p, 'Dakovacka 18AA', load)).rows.map(r => [r.label, r.gid, r.near]),
+    [['Ulica Đakovačka 18aa', 4, null]]);
+  assert.deepEqual((await addressRows(p, parse('ul. Đakovačka 18ab'), load)).map(r => [r.gid, r.near]), [[4, '18AB']]);
+  assert.deepEqual((await addressRows(p, parse('Grgura Ninskog 7'), load)).map(r => r.gid), [6]);
+  assert.deepEqual((await addressRows(p, parse('Dakovacka 23/1'), load)).map(r => [r.gid, r.near]), [[5, '23']]);
+  assert.equal(findNumber([['12a', 4, 0]], '12', 'A').near, null);
+  assert.equal(findNumber([['12ab', 4, 0]], '12', 'AB').near, null);
+  assert.equal(findNumber([['23/1', 4, 0]], '23', '').near, '23');
+});
+
+test('split real street spellings both resolve and number-first queries are read', async () => {
+  const split = prepare({ ...INDEX, streets: [['Adamičeva ulica', 1, [0], 'a'], ['Adamičeva', 1, [0], 'a']] });
+  const both = { a: { 'Adamičeva ulica': [['13', 10, 0]], Adamičeva: [['5', 20, 0]] } };
+  assert.deepEqual((await addressRows(split, parse('Adamiceva 5'), async k => both[k])).map(r => r.gid), [20]);
+  assert.deepEqual((await addressRows(split, parse('Adamiceva 13'), async k => both[k])).map(r => r.gid), [10]);
+  assert.deepEqual((await addressRows(split, parse('ul. Adamičeva 13'), async k => both[k])).map(r => r.gid), [10]);
+  assert.deepEqual(parse('25 Ilica'), { kind: 'address', f: '25 ilica', street: 'ilica', number: '25', letter: '' });
+  assert.deepEqual(parse('25a Ilica').letter, 'A');
+});
+
 test('findNumber: with its letter, the bare number, the nearest on the same side, the nearest', () => {
   const pairs = SHARDS.h.Hornsgatan;
   assert.deepEqual(findNumber(pairs, '30', 'A'), { pair: ['30A', 13, 1], near: null });

@@ -14,6 +14,36 @@ Paths are relative to `CODE university/PROJEKTI/zagreb-by-building/`. Run comman
 
 Overpass is not reachable from this laptop; the Geofabrik PBF replaces it.
 
+### Address coverage, source evidence and search
+
+- `pipeline/address_sources.py` measures the table and/or the actual address shards without rebuilding the city. It also
+  optionally joins a **licensed local** RPJ GeoJSON. It never downloads addresses or guesses their reuse rights:
+
+  ```bash
+  uv run python -m pipeline.address_sources --buildings data/buildings.parquet \
+    --addresses data/addresses.parquet --search web/data/v20261103-fix/search/addr
+  uv run python -m pipeline.address_sources --buildings data/buildings.parquet \
+    --addresses data/addresses.parquet --rpj ../data/raw/addresses/rpj.geojson \
+    --out data/addresses.parquet --audit data/address_evidence.parquet --report data/address_report.json
+  ```
+
+- For the full city pipeline, set `SOURCE["rpj_addresses"]` to that local source only after confirming its licence and
+  documenting it in `sources.yml`. The accessible public ArcGIS schema is not itself a publication licence. DGU access,
+  source capabilities, timestamps and the unresolved permission are in `docs/research/addresses.md`.
+- New point attribution accepts only a point covered by exactly one footprint (`unique_covered_by`), with explicit CRS
+  conversion. No nearest/smallest-overlap assignment: outside and ambiguous points do not get an address. Candidates
+  and zero-metre coverage evidence are logged locally in `data/address_evidence.parquet`, not copied to the web.
+  Source ranges/slashes are not expanded. Existing direct ZBSM and tagged-building rows retain their old joins and are
+  not mislabeled as newly measured geometry matches.
+- `withheld` is a privacy/takedown flag, while `source` identifies OSM, `grad_zagreb_rpj`, or another record source;
+  neither replaces the other. Merging cannot undo an existing takedown. Coverage is computed from distinct real gids
+  in valid non-withheld rows, not address-string tallies. A full build writes `data/address_report.json`, a machine
+  report including coverage, unmatched source-point reasons, and the remaining gap.
+- Search folds Croatian diacritics (including đ), `ul.`/descriptive street aliases, plain alphanumeric suffixes and
+  number-first queries in Python and browser code identically. These aliases do not canonical-merge `Ulica` and
+  `Cesta` or infer that a range/slash value is another house number. Split aliases are still working shards; the
+  canonical-name acceptance gate is not claimed as solved.
+
 ## 2. Build (about 3.5 min)
 
 ```bash

@@ -1,7 +1,7 @@
 // Search: what a query finds in search/index.json and the address shards
 // (pipeline/s14_search.py), ranked, and the words each row and state shows. Pure, so node --test checks
 // it (web/test/search.test.mjs); app.js draws the list and flies to a pick.
-import { fold } from './fold.js';
+import { fold, streetVariants } from './fold.js';
 
 const KIND_ORDER = { district: 0, building: 1, occupant: 1.5, street: 2 };
 
@@ -12,7 +12,8 @@ export function prepare(index) {
     districts: index.districts.map(([name, n, box], i) => ({ kind: 'district', name, n, box, i, f: fold(name) })),
     aliases: index.aliases.map(([name, ds]) => ({ name, ds, f: fold(name) })),
     outside: index.outside.map(name => ({ name, f: fold(name) })),
-    streets: index.streets.map(([name, n, ds, shard], i) => ({ kind: 'street', name, n, ds, shard, i, f: fold(name) })),
+    streets: index.streets.map(([name, n, ds, shard], i) => ({ kind: 'street', name, n, ds, shard, i, f: fold(name),
+      fv: streetVariants(name) })),
     buildings: index.buildings.map(([name, gid, d, en]) => ({ kind: 'building', name, gid, d, en, f: fold(name),
       fe: en ? fold(en) : '' })),
     // the names people use for the best-known buildings ("Slottet", "Royal Palace"), each pointing at a card's name
@@ -31,12 +32,16 @@ export function parse(q, min = 2) {
   if (f.replace(/ /g, '').length < min) return { kind: 'short', f };
   const y = f.match(/^(\d{4})(?: ?(?:s|tal|talet))?$/);
   if (y && +y[1] >= 1000 && +y[1] <= 2100) return { kind: 'year', f, year: +y[1] };
-  if (/^\d{1,4}(?: \d{1,4})?( ?[a-z])?$/.test(f)) return { kind: 'number', f };
-  const m = f.match(/^(.*\D) (\d{1,4})(?: \d{1,4}(?: ?[a-z])?| ?([a-z]))?(?: \d{1,2} ?(?:tr|trappa|trappor))?$/);
+  if (/^\d{1,4}(?: \d{1,4})?( ?[a-z]{1,3})?$/.test(f)) return { kind: 'number', f };
+  const address = f.replace(/ \d{1,2} ?(?:tr|trappa|trappor)$/, '');
+  const m = address.match(/^(.*\D) (\d{1,4})(?: \d{1,4}(?: ?[a-z]{1,3})?| ?([a-z]{1,3}))?$/);
   if (m) {
     return { kind: 'address', f, street: m[1].trim().replace(/ (?:nr|no)$/, ''), number: String(+m[2]),
       letter: (m[3] || '').toUpperCase() };
   }
+  const reverse = address.match(/^(\d{1,4})(?: ?([a-z]{1,3}))? (.+\D)$/);
+  if (reverse) return { kind: 'address', f, street: reverse[3].trim(), number: String(+reverse[1]),
+    letter: (reverse[2] || '').toUpperCase() };
   return { kind: 'text', f };
 }
 
@@ -64,6 +69,16 @@ function cap(rows, { max_rows: maxRows = 8, max_per_kind: perKind = 4 } = {}) {
     if (per[r.kind] <= perKind && out.length < maxRows) out.push(r);
   }
   return out;
+}
+
+// A generic Croatian street descriptor is a lookup alias, never a reason to combine two semantic streets.
+function streetScore(st, q) {
+  const queries = streetVariants(q);
+  const best = Math.min(...st.fv.flatMap((name, i) => queries.map((query, j) => {
+    const s = score(name, query);
+    return s < 0 ? Infinity : s + (i + j) * 0.25;
+  })));
+  return Number.isFinite(best) ? best : -1;
 }
 
 // Text: stadsdelar (by their own name or an everyday one), named buildings (by their Swedish name, English label or
@@ -106,7 +121,7 @@ export function textRows(P, q, raw = '') {
     add({ kind: 'occupant', label: o.sv, sv: o.sv, en: o.en, building: b.name, gid: o.gid, d: b.d }, best,
       best === s ? o.sv : best === se ? o.en : '');
   }
-  for (const st of P.streets) add({ kind: 'street', label: st.name, n: st.n, ds: st.ds, shard: st.shard, street: st.name }, score(st.f, q), st.name);
+  for (const st of P.streets) add({ kind: 'street', label: st.name, n: st.n, ds: st.ds, shard: st.shard, street: st.name }, streetScore(st, q), st.name);
   // a stadsdel found by its everyday name and by its own, or buildings of one name in one stadsdel: once, the better match
   const best = new Map();
   for (const r of rows) {
@@ -118,39 +133,55 @@ export function textRows(P, q, raw = '') {
 
 // Up to four streets for the street part of an address: exact, then prefix, then the start of a word inside.
 export function streetsFor(P, q, n = 4) {
-  return P.streets.map(st => ({ st, s: score(st.f, q) })).filter(x => x.s >= 0 && x.s <= 2)
+  return P.streets.map(st => ({ st, s: streetScore(st, q) })).filter(x => x.s >= 0 && x.s <= 2)
     .sort((a, b) => a.s - b.s || b.st.n - a.st.n || a.st.name.localeCompare(b.st.name, 'sv')).slice(0, n).map(x => x.st);
 }
 
-const num = s => { const m = String(s).match(/^(\d+)([A-Z]?)$/); return m ? [+m[1], m[2]] : [0, '']; };
+// num reads a numeric prefix for ordering/parity only. identity accepts just a number plus its alphanumeric suffix:
+// slash forms and ranges never collapse onto another address during exact lookup.
+const num = value => {
+  const m = String(value).trim().match(/^0*(\d{1,4})(?:\s*([a-z]{1,3}))?/i);
+  return m ? [Number(m[1]), (m[2] || '').toUpperCase()] : [0, ''];
+};
+const identity = value => {
+  const m = String(value).trim().match(/^0*(\d{1,4})(?:\s*([a-z]{1,3}))?$/i);
+  return m ? `${Number(m[1])}${(m[2] || '').toUpperCase()}` : '';
+};
 
-// On one street's numbers ([[number, gid, stadsdel], ...]): the number with its letter, else the bare number (or any
-// letter of it), else the nearest on the same side (same parity), else the nearest at all. `near` says the asked
-// number (with its letter) is not in the list: "no. 5B isn't in our list" when only 5 is.
+// An exact (case/space-insensitive) alphanumeric number comes first. Any other same-base or neighbouring record is
+// explicitly marked `near`, including a slash/range form that is not the requested identity.
 export function findNumber(pairs, number, letter = '') {
   if (!pairs?.length) return null;
-  const want = +number;
-  const own = pairs.find(p => p[0] === number + letter);
+  const want = +number, requested = number + letter;
+  const own = pairs.find(p => identity(p[0]) === requested);
   if (own) return { pair: own, near: null };
-  const exact = pairs.find(p => p[0] === number) || pairs.find(p => num(p[0])[0] === want);
-  if (exact) return { pair: exact, near: letter ? number + letter : null };
+  const sameBase = pairs.filter(p => num(p[0])[0] === want);
+  if (sameBase.length) {
+    const exactBase = sameBase.find(p => identity(p[0]) === String(want)) || sameBase[0];
+    return { pair: exactBase, near: requested };
+  }
   const dist = p => Math.abs(num(p[0])[0] - want);
   const by = list => list.slice().sort((a, b) => dist(a) - dist(b) || num(a[0])[0] - num(b[0])[0])[0];
   const same = pairs.filter(p => num(p[0])[0] % 2 === want % 2);
-  return { pair: by(same.length ? same : pairs), near: String(want), side: same.length > 0 };
+  return { pair: by(same.length ? same : pairs), near: requested, side: same.length > 0 };
 }
 
 // Address mode: one row per street that has the number (or a near one), at most four.
 export async function addressRows(P, parsed, loadShard) {
-  const rows = [];
+  const rows = [], groups = new Map(), queries = streetVariants(parsed.street);
   for (const st of streetsFor(P, parsed.street)) {
     const shard = await loadShard(st.shard);
     const hit = findNumber(shard?.[st.name], parsed.number, parsed.letter);
     if (!hit) continue;
     const [n, gid, d] = hit.pair;
-    rows.push({ kind: 'address', label: `${st.name} ${n}`, gid, d, street: st.name, near: hit.near, side: hit.side });
+    const row = { kind: 'address', label: `${st.name} ${n}`, gid, d, street: st.name, near: hit.near, side: hit.side };
+    rows.push(row);
+    groups.set(row, queries.find(q => st.fv.includes(q)) || st.f);
   }
-  return rows.slice(0, 4);
+  // Suppress nearest-number noise only within one shared alias group. An exact Hornsbruksgatan 2 must not hide a
+  // nearest result on different Hornsgatan; Adamičeva and Adamičeva ulica do share the latter's lookup group.
+  const exact = new Set(rows.filter(row => row.near === null).map(row => groups.get(row)));
+  return rows.filter(row => row.near === null || !exact.has(groups.get(row))).slice(0, 4);
 }
 
 // Levenshtein distance, giving up past `max`.
