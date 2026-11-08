@@ -25,6 +25,8 @@ import geopandas as gpd
 import numpy as np
 import shapely
 
+from . import compact
+
 DATA = Path("data")
 VEG = Path("../data/veg")
 WEB = Path("web") / "data"
@@ -54,6 +56,18 @@ class Terrain:
         h = self.h
         return ((h[j0, i0] * (1 - fi) + h[j0, i0 + 1] * fi) * (1 - fj) +
                 (h[j0 + 1, i0] * (1 - fi) + h[j0 + 1, i0 + 1] * fi) * fj)
+
+
+def write_compact(out, points_xyz, meta):
+    """18-byte tree records. Scale/width are display properties; this OSM source has no species or observation year."""
+    points = np.asarray(points_xyz, dtype=np.float64)
+    if points.ndim != 2 or points.shape[1] != 3 or not len(points):
+        raise ValueError("veg2 needs a non-empty Nx3 xyz array")
+    scale = 0.88 + ((np.arange(len(points)) * 7) % 11) * 0.028
+    doc = compact.write_veg2(out, points, scale=scale, width=scale * 11.8, year=np.zeros(len(points), np.uint16),
+                             species=np.full(len(points), -1), kind="trees", meta=meta)
+    compact.write_compact_config(out, "veg2", "veg2.json")
+    return doc
 
 
 def main(argv=None) -> int:
@@ -179,6 +193,7 @@ def main(argv=None) -> int:
         "source": "OpenStreetMap natural=tree, natural=tree_row, landuse/leisure/natural green polygons",
     }
     (out / "veg.json").write_text(json.dumps(meta, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    write_compact(out, tree_arr, meta)
     print(f"trees {len(tree_arr):,} ({len(trees):,} mapped nodes, the rest row fill and woodland symbols); "
           f"green mask {mw}x{mh} at {MASK_CELL:.0f} m = {int((mask > 0).sum()):,} cells "
           f"({int((mask > 0).sum()) * MASK_CELL ** 2 / 1e6:.1f} km2) from {len(g):,} polygons -> {out}", flush=True)

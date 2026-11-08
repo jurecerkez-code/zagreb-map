@@ -59,6 +59,7 @@ import { makeVeg } from './veg.js';
 import { makePosterPass, posterInks, posterColours, posterYear, nearestIndex } from './poster.js';
 import { makeStartupQueue, buildInfoAllowed } from './startup-load.js';
 import { makeMapUpdateMonitor, makeMapUpdateChip } from './cache-update.js';
+import { loadOrthoData } from './ortho-img.js';
 
 // Colours are authored in sRGB and drawn as they are.
 THREE.ColorManagement.enabled = false;
@@ -1751,21 +1752,16 @@ async function loadPhotoColours() {
   if (photoTried) return;
   photoTried = true;
   try {
-    const [rb, gb] = await Promise.all([fetch(DATA + 'roof_rgb.bin'), fetch(DATA + 'ground_rgb.bin')]);
-    if (!rb.ok || !gb.ok) return;
-    const roofB = new Uint8Array(await rb.arrayBuffer());
-    const groundB = new Uint8Array(await gb.arrayBuffer());
-    const dims = b => { const v = new DataView(b.buffer, b.byteOffset, 8); return [v.getUint32(0, true), v.getUint32(4, true)]; };
-    const mk = (b, w, h) => {
-      const t = new THREE.DataTexture(b.subarray(8), w, h, THREE.RGBAFormat, THREE.UnsignedByteType);
+    const photos = await loadOrthoData(DATA, config);
+    const mk = ({ rgba, w, h }) => {
+      const t = new THREE.DataTexture(rgba, w, h, THREE.RGBAFormat, THREE.UnsignedByteType);
       t.colorSpace = THREE.SRGBColorSpace;
       t.minFilter = t.magFilter = THREE.LinearFilter;
       t.needsUpdate = true;
       return t;
     };
-    const [rw, rh] = dims(roofB), [gw, gh] = dims(groundB);
-    uniforms.uRoof.value = mk(roofB, rw, rh);
-    uniforms.uGround.value = mk(groundB, gw, gh);
+    uniforms.uRoof.value = mk(photos.roof);
+    uniforms.uGround.value = mk(photos.ground);
     uniforms.uFoto.value = looks.current === 'foto' ? 1 : 0;
     uniforms.uFotoGround.value = uniforms.uFoto.value && fotoGroundOn() ? 1 : 0;
   } catch (e) {
@@ -4224,7 +4220,8 @@ if (vegDebug) document.body.appendChild(vegDebug);
 performance.mark('veg-start');
 async function loadTrees() {
   try {
-    const v = await makeVeg({ THREE, base: DATA, scene, uniforms, on: new URLSearchParams(location.search).get('veg') !== '0' });
+    const v = await makeVeg({ THREE, base: DATA, scene, uniforms, config,
+      on: new URLSearchParams(location.search).get('veg') !== '0' });
     performance.measure('veg', 'veg-start');
     veg = v;
     v.retheme(looks.current);
@@ -4260,7 +4257,7 @@ async function startRoads(baseGrid) {
   if (roadsStarted) return;
   roadsStarted = true;
   try {
-    roads = await makeRoads({ THREE, base: DATA, baseGrid, scene, surfaceAt, uniforms });
+    roads = await makeRoads({ THREE, base: DATA, baseGrid, scene, surfaceAt, uniforms, config });
     window.__roads = () => roads;
     roads.setNight(sunMode === 'night');
     console.log('streets', roads.drawn);

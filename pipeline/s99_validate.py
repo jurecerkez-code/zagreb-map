@@ -112,7 +112,7 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 
-from . import city, codes, contributions, ferries, plaques, stadsmuseet, suppress
+from . import city, codes, compact, contributions, ferries, plaques, stadsmuseet, suppress
 from . import stadsmuseet_photos as sm_photos
 from .estimate import GROUPS
 from .geo import lonlat_to_3011
@@ -1710,6 +1710,51 @@ def check_ferries(out: Path, cfg: dict | None = None, *, release: bool = False) 
     return errors
 
 
+def check_compact(out: Path, cfg: dict) -> list[str]:
+    """The version's own config opts into v2. Validate each selected file, never an older version's leftovers."""
+    rules = {"roads2": ("roads2.json", "roads0.bin", compact.ROADS_FORMAT),
+             "veg2": ("veg2.json", "veg0.bin", compact.VEG_FORMAT),
+             "ground2": ("ground2.json", "ground0.bin", "zagreb-ground2")}
+    errors = []
+    for key, (index, chunk, fmt) in rules.items():
+        if key not in cfg:
+            continue
+        if cfg[key] != index:
+            errors.append(f"compact: {key} must name {index}")
+            continue
+        try:
+            doc = json.loads((out / index).read_text(encoding="utf-8"))
+            if doc.get("format") != fmt or doc.get("version") != 2 or doc.get("file") != chunk:
+                raise ValueError("format/version/file mismatch")
+            blob = (out / chunk).read_bytes()
+            if key == "roads2":
+                rows = compact.read_roads2(doc, blob)
+                if len(rows) != len(doc["ways"]):
+                    raise ValueError("way count mismatch")
+            elif key == "veg2":
+                rows = compact.read_veg2(doc, blob)
+                if len(rows) != doc["count"]:
+                    raise ValueError("item count mismatch")
+            else:
+                rows = compact.read_hdr18(blob)
+                w, h, n = doc["w"], doc["h"], doc["count"]
+                if len(rows) != n or n != w * h:
+                    raise ValueError("grid length/count mismatch")
+                for i, row in enumerate(rows):
+                    col, line = i % w, i // w
+                    if row["ortho"] != 1:
+                        raise ValueError("grid source palette index")
+                    if row["x"] != compact.dm(doc["x0"] + col * doc["cell"]) / 10 \
+                            or row["z"] != compact.dm(doc["z0"] + line * doc["cell"]) / 10:
+                        raise ValueError("grid coordinate/order mismatch")
+        except (OSError, ValueError, TypeError, KeyError, IndexError, struct.error) as e:
+            errors.append(f"compact: {key}: {e}")
+    for key in ("roof2", "roof_rgb2", "ground_rgb2"):
+        if key in cfg:
+            errors.append(f"compact: unsupported or unverified field {key}")
+    return errors
+
+
 def validate(out: Path, data: Path = DATA, *, release: bool = False, sources: list[dict] | None = None,
              takedowns: list[dict] | None = None) -> list[str]:
     out, data = Path(out), Path(data)
@@ -1727,6 +1772,7 @@ def validate(out: Path, data: Path = DATA, *, release: bool = False, sources: li
     cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
     errors += check_sizes(out, cfg)
     errors += check_base(out, cfg)
+    errors += check_compact(out, cfg)
     errors += check_terrain(out, cfg, data, release=release, sources=sources)
     errors += check_attribution(cfg)
     attrs_path = out / "attrs.bin.gz"

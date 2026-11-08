@@ -9,6 +9,8 @@
 //   construction. Never geometry: a kilometre-wide triangle sinks under a slope and whole forests disappear.
 // - Cable car: the mapped `aerialway=cable_car` way, drawn as its line with the terrain heights, cabins moving along
 //   it at a speed derived from the mapped trip duration, and the two mapped stations.
+import { chooseDataFile, decodeVeg2, VEG2_FORMAT } from './compact-data.js';
+
 export const VEG_COLOURS = {
   arg: {
     grass: '#93b06b', meadow: '#a0bb76', forest: '#527a3c', wood: '#4a7038', scrub: '#6f9251', grassland: '#a6bd80',
@@ -43,15 +45,36 @@ export async function gunzip(buf) {
   return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
 }
 
-export async function makeVeg({ THREE, base, scene, uniforms, on = true }) {
-  const meta = await (await fetch(`${base}veg.json`)).json();
+// The selected JSON comes from this version's config. Legacy files still use their original names and gzip stream;
+// v2 point chunks are raw little-endian bytes and need no decompression worker or JSON point list.
+export async function loadVegetationData(base, config = null) {
+  const file = chooseDataFile(config, 'veg2', 'veg.json', 'veg2.json');
+  const response = await fetch(`${base}${file}`);
+  if (!response.ok) throw new Error(`vegetation ${response.status}`);
+  const meta = await response.json();
+  const compact = meta.format === VEG2_FORMAT;
+  if (compact && meta.file !== 'veg0.bin') throw new Error('veg2: bad sibling file');
   const [treeBuf, maskBuf] = await Promise.all([
-    fetch(`${base}veg_trees.bin`).then(r => r.arrayBuffer()),
-    fetch(`${base}veg_mask.bin.gz`).then(r => r.arrayBuffer()).then(b => gunzip(b)),
+    fetch(`${base}${compact ? meta.file : 'veg_trees.bin'}`).then(r => {
+      if (!r.ok) throw new Error(`vegetation ${r.status}`);
+      return r.arrayBuffer();
+    }),
+    fetch(`${base}veg_mask.bin.gz`).then(r => {
+      if (!r.ok) throw new Error(`vegetation mask ${r.status}`);
+      return r.arrayBuffer();
+    }).then(b => gunzip(b)),
   ]);
-  const trees = new Float32Array(treeBuf);
+  if (compact) {
+    const decoded = decodeVeg2(meta, treeBuf);
+    return { meta, trees: decoded.trees, scales: decoded.scales, items: decoded.items, mask: new Uint8Array(maskBuf) };
+  }
+  return { meta, trees: new Float32Array(treeBuf), scales: null, items: null, mask: new Uint8Array(maskBuf) };
+}
+
+export async function makeVeg({ THREE, base, scene, uniforms, on = true, config = null }) {
+  const loaded = await loadVegetationData(base, config);
+  const { meta, trees, scales: packedScales, mask } = loaded;
   const nTrees = trees.length / 3;
-  const mask = new Uint8Array(maskBuf);
   const m = meta.green.mask;
   const classes = meta.green.classes;
 
@@ -138,7 +161,7 @@ export async function makeVeg({ THREE, base, scene, uniforms, on = true }) {
     offsets[i * 3] = trees[i * 3];
     offsets[i * 3 + 1] = trees[i * 3 + 1];
     offsets[i * 3 + 2] = trees[i * 3 + 2];
-    scales[i] = 0.88 + ((i * 7) % 11) * 0.028;          // the same size walk the blobs had
+    scales[i] = packedScales ? packedScales[i] : 0.88 + ((i * 7) % 11) * 0.028; // v2's persisted display scale
     const h = 0.86 + ((i * 13) % 17) * 0.0125;          // ... and the same per-tree hue
     colors[i * 3] = h; colors[i * 3 + 1] = h * 1.04; colors[i * 3 + 2] = h * 0.92;
   }

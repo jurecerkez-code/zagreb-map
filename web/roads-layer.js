@@ -8,6 +8,34 @@
 // points, lamps.bin.gz the 5,821 mapped street lamps lit at night.
 import { gunzip } from './veg.js';
 import { TILE, KERB, EDGE_W, LIFT, CLASSES, PAVEMENT } from './roads-worker.js';
+import { chooseDataFile, decodeRoads2, ROADS2_FORMAT } from './compact-data.js';
+
+async function dataJson(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`data ${response.status}: ${url}`);
+  return response.json();
+}
+
+// Name fetched here, not in a global config pointer: config belongs to this exact version. Old folders make the same
+// requests as before. A v2 index may name only roads0.bin beside itself, never a parent or another version.
+export async function loadStreetData(base, config = null) {
+  const file = chooseDataFile(config, 'roads2', 'roads.json', 'roads2.json');
+  const meta = await dataJson(`${base}${file}`);
+  const compact = meta.format === ROADS2_FORMAT;
+  if (compact && meta.file !== 'roads0.bin') throw new Error('roads2: bad sibling file');
+  const [ptsBuf, lampBuf] = await Promise.all([compact ? meta.file : 'roads.bin.gz', 'lamps.bin.gz']
+    .map(async name => {
+      const response = await fetch(`${base}${name}`);
+      if (!response.ok) throw new Error(`data ${response.status}: ${name}`);
+      const bytes = await response.arrayBuffer();
+      return name.endsWith('.gz') ? gunzip(bytes) : bytes;
+    }));
+  if (compact) {
+    const decoded = decodeRoads2(meta, ptsBuf);
+    return { meta: { ...meta, ways: decoded.ways }, pts: decoded.pts, xyz: decoded.xyz, lampPts: new Float32Array(lampBuf) };
+  }
+  return { meta, pts: new Float32Array(ptsBuf), xyz: null, lampPts: new Float32Array(lampBuf) };
+}
 
 // The class palette: asphalt greys for the carriageway, warmer greys for the pavements: measured off Zagreb
 // (#4f5450 asphalt, #8d908e kerb side pavement), the motorway the darkest, a service lane the lightest. The row
@@ -39,12 +67,8 @@ function radialTexture(THREE, stops) {
 
 // The fetch lands as early as it can (the page hands the layer in at boot); the grid lands when the terrain
 // answers. The worker starts on the later of the two.
-export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt, uniforms, on = true }) {
-  const meta = await (await fetch(`${base}roads.json`)).json();
-  const [ptsBuf, lampBuf] = await Promise.all(['roads.bin.gz', 'lamps.bin.gz']
-    .map(f => fetch(`${base}${f}`).then(r => r.arrayBuffer()).then(gunzip)));
-  const pts = new Float32Array(ptsBuf);
-  const lampPts = new Float32Array(lampBuf);
+export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt, uniforms, on = true, config = null }) {
+  const { meta, pts, lampPts } = await loadStreetData(base, config);
 
   const group = new THREE.Group();
   group.name = 'roads';
