@@ -3,6 +3,7 @@
 // 404s, and the main-thread builders (performance.measure). Optional --budget file: exits 1 when a number is over.
 import { chromium } from 'playwright';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { numericBudgetFailures } from './load-gates.mjs';
 
 const url = process.argv[2] || 'http://127.0.0.1:8643/';
 const arg = k => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : null; };
@@ -92,7 +93,8 @@ await browser.close();
 
 if (budget) {
   const get = k => k.split('.').reduce((o, p) => o?.[p], result);
-  const over = Object.entries(budget).filter(([k, v]) => get(k) != null && get(k) > v);
-  for (const [k, v] of over) console.error(`over budget: ${k} = ${get(k)} > ${v}`);
+  const measured = Object.fromEntries(Object.keys(budget).map(key => [key, get(key)]));
+  const over = numericBudgetFailures(measured, budget);
+  for (const failure of over) console.error(`over budget: ${failure}`);
   process.exit(over.length ? 1 : 0);
 }

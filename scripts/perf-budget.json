@@ -5,7 +5,8 @@
  "home.groups.veg": 400000,
  "far.groups.veg": 400000,
  "home.calls": 100,
- "bytesBeforeReveal": 45000000,
- "bytesTotal": 48000000,
+ "bytesBeforeReveal": 6000000,
+ "bytesTotal": null,
+ "bytesTotalStatus": "pending first corrected real-browser probe; no unmeasured 9 MB saving is claimed",
  "http404": 0
 }
