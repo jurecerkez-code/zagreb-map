@@ -39,6 +39,18 @@ test('the checked-in perf enforcement is 6 MB and truthful about the unmeasured 
 });
 
 
+test('the real CI and Pages commands split the bundle and run the second-load probe', async () => {
+  const pages = await readFile(new URL('../.github/workflows/pages.yml', import.meta.url), 'utf8');
+  const ci = await readFile(new URL('../.github/workflows/ci.yml', import.meta.url), 'utf8');
+  for (const workflow of [pages, ci]) {
+    assert.match(workflow, /web\/app\.js --bundle --format=esm --minify --splitting --outdir=web\/dist/);
+    assert.match(workflow, /web\/worker\.js web\/terrain-worker\.js web\/roads-worker\.js --bundle --format=esm --minify --splitting --outdir=web\/dist/);
+  }
+  assert.match(ci, /PROBE_BASE=http:\/\/127\.0\.0\.1:8684\/ npm run load:probe/);
+  assert.match(ci, /shots\/load-8684\.json/);
+  assert.match(pages, /uses: actions\/upload-pages-artifact@v3/);
+});
+
 test('performance budget skips an explicitly unmeasured total but never relaxes measured limits', () => {
   const budget = { bytesBeforeReveal: 6_000_000, bytesTotal: null, bytesTotalStatus: 'pending real probe' };
   assert.deepEqual(numericBudgetFailures({ bytesBeforeReveal: 6_000_000, bytesTotal: 48_000_000 }, budget), []);

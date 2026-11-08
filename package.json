@@ -6,6 +6,7 @@
   "scripts": {
     "test:web": "node --test web/test/*.test.mjs tests/*.test.mjs",
     "test:e2e": "playwright test",
+    "load:probe": "node scripts/load-probe.mjs",
     "dist": "uv run python scripts/build_dist.py"
   },
   "devDependencies": {
