@@ -8,6 +8,7 @@
 // points, lamps.bin.gz the 5,821 mapped street lamps lit at night.
 import { gunzip } from './veg.js';
 import { TILE, KERB, EDGE_W, LIFT, CLASSES, PAVEMENT } from './roads-worker.js';
+import { nearestStreetDirection } from './monument-forms.js';
 
 // The class palette: asphalt greys for the carriageway, warmer greys for the pavements: measured off Zagreb
 // (#4f5450 asphalt, #8d908e kerb side pavement), the motorway the darkest, a service lane the lightest. The row
@@ -45,6 +46,8 @@ export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt
     .map(f => fetch(`${base}${f}`).then(r => r.arrayBuffer()).then(gunzip)));
   const pts = new Float32Array(ptsBuf);
   const lampPts = new Float32Array(lampBuf);
+  // A card may be opened after the mesher transfers pts.buffer. Keep a small CPU copy for that later nearest-street view.
+  const nearestPts = pts.slice();
 
   const group = new THREE.Group();
   group.name = 'roads';
@@ -186,6 +189,7 @@ export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt
     group, update,
     get drawn() { return { tiles: meshes.length, triangles: drawnTris, lamps: lampPts.length / 2 }; },
     relift,   // the streets ride uRelief like the buildings; only the lamps' seats are one breath of CPU
+    nearestStreet: (x, z) => nearestStreetDirection(x, z, meta.ways, nearestPts),
     setNight(night) { lamps.visible = !!night && on; },
     setVisible(v) { group.visible = !!v && on; },
   };

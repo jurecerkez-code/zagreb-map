@@ -55,6 +55,7 @@ import { makeWeather, initialWeather, weatherHref, frameRate, WEATHER_KEY, NAMES
 import { mountPostcard } from './postcard.js';
 import { makeRoofYears, roofYearsOnFrom, ROOF_YEARS_KEY } from './roofyears.js';
 import { makeMonuments, monumentsOnFrom, monumentCard, MONUMENTS_KEY } from './monuments.js';
+import { nextMonumentMediaTab } from './monument-preview.js';
 import { makeVeg } from './veg.js';
 import { makePosterPass, posterInks, posterColours, posterYear, nearestIndex } from './poster.js';
 
@@ -1145,7 +1146,8 @@ async function loadAttrs() {
 async function loadMonuments() {
   const list = await getJson(`${DATA}monuments.json`);
   if (!Array.isArray(list) || !list.length) return;
-  monuments = makeMonuments(THREE, { list, uniforms, surfaceAt, camera, renderer, look: () => THEME_NAME, yearMax: config.yearMax });
+  monuments = makeMonuments(THREE, { list, uniforms, surfaceAt, camera, renderer, look: () => THEME_NAME, yearMax: config.yearMax,
+    streets: { nearestStreet: (x, z) => roads?.nearestStreet?.(x, z) } });
   monuments.setOn(monumentsOn);
   monuments.place();
   scene.add(monuments.group);
@@ -2346,6 +2348,34 @@ function pinMonument(m, x, y) {
   const slides = m.photo && !failedPhotos.has(m.photo.key) ? [{ ...m.photo, today: true }] : [];
   const photoHtml = photoFigure(slides, 0, T, esc, link, () => T('card.photo.alt', { name: m.name || T(`monument.type.${m.kind}`) }));
   card.innerHTML = monumentCard(m, { T, esc, link, lang: LANG, photoHtml });
+  // Both media use the same card. The rendered view is generated even when the photo is the first tab.
+  const selectMonumentTab = tab => {
+    for (const b of card.querySelectorAll('[data-monument-tab]')) {
+      const selected = b.dataset.monumentTab === tab;
+      b.setAttribute('aria-selected', String(selected)); b.tabIndex = selected ? 0 : -1;
+    }
+    for (const panel of card.querySelectorAll('[data-monument-panel]')) panel.hidden = panel.dataset.monumentPanel !== tab;
+  };
+  for (const b of card.querySelectorAll('[data-monument-tab]')) {
+    b.onclick = () => selectMonumentTab(b.dataset.monumentTab);
+    b.onkeydown = e => {
+      const current = card.querySelector('[data-monument-tab][aria-selected="true"]')?.dataset.monumentTab || 'photo';
+      const next = nextMonumentMediaTab(e.key, current);
+      if (!next) return;
+      e.preventDefault(); selectMonumentTab(next);
+      card.querySelector(`[data-monument-tab="${next}"]`)?.focus();
+    };
+  }
+  const renderMount = card.querySelector('.monument-render-mount');
+  try {
+    const preview = monuments.renderCard(m);   // synchronous offscreen target + readback, only once per monument id
+    preview.canvas.setAttribute('aria-label', T('monument.render'));
+    preview.canvas.title = `${m.name || T(`monument.type.${m.kind}`)} · ${T('monument.render')}`;
+    renderMount.replaceChildren(preview.canvas);
+  } catch (e) {
+    console.warn('The monument card render failed; no image is substituted.', e);
+    renderMount.textContent = T('monument.render.failed');
+  }
   card.classList.add('pinned', 'monument');
   card.setAttribute('role', 'dialog');
   card.setAttribute('aria-labelledby', 'card-title');

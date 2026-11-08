@@ -8,7 +8,7 @@
 // The timeline: a monument shows from its year (unveiling), and not in a `removed` span ([[1947, 1989]] for Jelačić);
 // one without a year always shows. Colours: bronze, stone and metal per look (MATERIALS), lit by the map's sun.
 import { makeFigureGeometry, monumentVariant, FIGURE_VARIANTS, FIGURE_HEIGHT } from './monument-forms.js';
-// The DOM-independent card-render seam is added with the card controller after the forms are verified.
+import { makeMonumentPreview } from './monument-preview.js';
 
 export { FIGURE_VARIANTS, monumentVariant, makeFigureGeometry, nearestStreetDirection, monumentFront } from './monument-forms.js';
 
@@ -153,7 +153,7 @@ function shapes(THREE) {
 // Pseudo-random facing for a monument without a tagged direction: stable per id.
 function hashAngle(s) { let h = 2166136261; for (const c of String(s)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return ((h >>> 0) % 360); }
 
-export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, renderer, look, yearMax }) {
+export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, renderer, look, yearMax, streets = {} }) {
   const group = new THREE.Group();
   group.name = 'monuments';
   const geos = shapes(THREE);
@@ -275,8 +275,28 @@ export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, render
     return [(a.x + 1) / 2 * renderer.domElement.clientWidth, (1 - a.y) / 2 * renderer.domElement.clientHeight];
   }
   const shownCount = () => !group.visible ? 0 : list.filter(m => shownAt(m, uniforms.uYear.value, yearMax)).length;
+  const cardPreview = makeMonumentPreview(THREE, { renderer, surfaceAt, streets });
+  // An isolated one-instance view of the actual map mesh: same form, materials, real h, ground and real facing.
+  // The source stays untouched; cloned single-instance attributes and uniforms are disposed after readback.
+  function previewMesh(m) {
+    const i = list.indexOf(m), pair = slot[i];
+    if (i < 0 || !pair) throw new Error(`monument is not in this map's list: ${m.id || m.name}`);
+    const [meshIndex, j] = pair, original = meshes[meshIndex];
+    if (original.userData.idx[j] !== i || !(original instanceof THREE.InstancedMesh)) throw new Error(`no map mesh for ${m.id}`);
+    const geometry = original.geometry.clone();
+    const span = original.geometry.getAttribute('aSpan');
+    geometry.setAttribute('aSpan', new THREE.InstancedBufferAttribute(span.array.slice(j * 4, j * 4 + 4), 4));
+    const mesh = new THREE.InstancedMesh(geometry, original.material.clone(), 1), matrix = new THREE.Matrix4();
+    original.getMatrixAt(j, matrix); mesh.setMatrixAt(0, matrix); mesh.instanceMatrix.needsUpdate = true;
+    mesh.frustumCulled = false;
+    mesh.name = `monument-card-${m.id}`;
+    mesh.userData = { kind: original.userData.kind, idx: [i] };
+    return mesh;
+  }
+  const renderCard = m => cardPreview.render(m, () => previewMesh(m));
   retheme();
-  return { group, list, place, retheme, setOn, under, screenAt, shownCount, get on() { return on; }, draws: () => meshes.length };
+  return { group, list, meshes, place, retheme, setOn, under, screenAt, shownCount, previewMesh, renderCard,
+    get on() { return on; }, draws: () => meshes.length };
 }
 
 // The monument's card: name, kind, year (unveiling; removal and return), sculptor, material, height, photo with its
@@ -296,14 +316,28 @@ export function monumentCard(m, { T, esc, link, lang, photoHtml }) {
   const excerpt = ex ? `<section class="extract" lang="${exLang}"><p>${esc(ex.t)}</p>
       <p class="credit">${T('card.extract.credit', { wikipedia: link(`https://${exLang}.wikipedia.org/w/index.php?oldid=${+ex.r}`, 'Wikipedia'),
         licence: link('https://creativecommons.org/licenses/by-sa/4.0/', 'CC BY-SA 4.0') })}</p></section>` : '';
+  const renderLabel = esc(T('monument.render'));
+  const mediaId = `monument-media-${hashAngle(m.id || m.name || 'map')}`;
+  const renderFigure = `<figure class="monument-render"><div class="monument-render-mount"></div><figcaption>${renderLabel}</figcaption></figure>`;
+  const media = photoHtml ? `<div class="monument-media">
+    <div class="monument-media-tabs" role="tablist" aria-label="${esc(T('monument.media'))}">
+      ${['photo', 'render'].map((tab, i) => `<button type="button" role="tab" id="${mediaId}-${tab}-tab" data-monument-tab="${tab}"
+        aria-controls="${mediaId}-${tab}-panel" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}">${esc(T(`monument.${tab}`))}</button>`).join('')}
+    </div>
+    <div role="tabpanel" id="${mediaId}-photo-panel" data-monument-panel="photo" aria-labelledby="${mediaId}-photo-tab">${photoHtml}</div>
+    <div role="tabpanel" id="${mediaId}-render-panel" data-monument-panel="render" aria-labelledby="${mediaId}-render-tab" hidden>${renderFigure}</div>
+  </div>` : renderFigure;
   const links = [
     ...Object.entries(m.wp || {}).map(([l, t]) => [`https://${l}.wikipedia.org/wiki/${encodeURIComponent(t.replace(/ /g, '_'))}`, `Wikipedia (${l})`]),
     m.qid && [`https://www.wikidata.org/wiki/${m.qid}`, 'Wikidata'],
+    (m.commons || m.photo?.page) && [m.commons && /^https?:\/\//.test(m.commons) ? m.commons
+      : m.commons ? `https://commons.wikimedia.org/wiki/${encodeURIComponent(m.commons.startsWith('Category:') ? m.commons : `Category:${m.commons}`)}`
+        : m.photo.page, 'Wikimedia Commons'],
     m.osm && [`https://www.openstreetmap.org/${m.osm}`, 'OpenStreetMap'],
   ].filter(Boolean);
   return `
     <button class="card-close" aria-label="${esc(T('card.close'))}">×</button>
-    ${photoHtml || ''}
+    ${media}
     <header class="card-head" style="--band:var(--panel);--band-ink:var(--ink)">
       <h3 id="card-title">${esc(m.name || kind)}</h3>
       ${m.en && lang === 'en' ? `<p class="en">${esc(m.en)}</p>` : ''}
