@@ -71,6 +71,21 @@ export function filmYear(t, histogram, from, to) {
   return to;
 }
 
+// Restore the exact paused year without charging a 1,000-step linear scan to the resumed playback clock.
+// Forty halvings keep even the steep activity transitions sub-microyear-accurate, with filmYear as the only pacing curve.
+export function filmTimeAtYear(year, histogram, from, to) {
+  if (year <= from || to <= from) return 0;
+  if (year >= to) return 1;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (filmYear(mid, histogram, from, to) < year) lo = mid;
+    else hi = mid;
+  }
+  // hi is the first bound known to reach the requested year: even the last floating-point bit cannot rewind playback.
+  return hi;
+}
+
 // The camera's orbit is an angle, not a duty cycle. Shortened films still turn the same twenty degrees.
 export const filmOrbit = (t, reducedMotion) => reducedMotion ? 0 : Math.PI / 9 * t;
 

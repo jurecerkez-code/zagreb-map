@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { placeLabels, labelAt, stepYear, filmYear, filmOrbit, countDatedAt } from '../timeline.js';
 
+const { filmTimeAtYear } = await import('../timeline.js');
+
 test('the film turns twenty degrees and honors reduced motion', () => {
   assert.equal(filmOrbit(0, false), 0);
   assert.ok(Math.abs(filmOrbit(0.5, false) - Math.PI / 18) < 1e-10);
@@ -18,6 +20,46 @@ test('filmYear keeps the full interval monotonic, with exact endpoints', () => {
   for (let i = 1; i < samples.length; i++) assert.ok(samples[i] >= samples[i - 1]);
 });
 
+
+const inverseHistogram = {
+  1200: [4, 0], 1300: [8, 0], 1600: [30, 0], 1700: [10, 0],
+  1800: [900, 0], 1900: [1000, 0], 2026: [1200, 0],
+};
+const inverse = year => filmTimeAtYear?.(year, inverseHistogram, 1200, 2026);
+
+test('filmTimeAtYear clamps to exact film endpoints', () => {
+  assert.equal(inverse(1100), 0);
+  assert.equal(inverse(1200), 0);
+  assert.equal(inverse(2026), 1);
+  assert.equal(inverse(2100), 1);
+});
+
+test('filmTimeAtYear is monotonic across activity and century stops', () => {
+  const years = [1200.25, 1299.75, 1300, 1300.25, 1613.5, 1699.75, 1700, 1700.25,
+    1850, 1850.5, 1976.6, 2025.75];
+  const times = years.map(inverse);
+  for (let i = 1; i < times.length; i++) {
+    assert.ok(times[i] >= times[i - 1], `${years[i]} must not resume before ${years[i - 1]}`);
+  }
+});
+
+test('filmTimeAtYear recovers fractional years to sub-microyear accuracy', () => {
+  for (const year of [1200.25, 1300, 1613.5, 1700, 1850.5, 1976.6, 2025.75]) {
+    const restored = filmYear(inverse(year), inverseHistogram, 1200, 2026);
+    assert.ok(restored >= year, `${year} must not resume backwards at ${restored}`);
+    assert.ok(Math.abs(restored - year) < 1e-6, `${year} restored as ${restored}`);
+  }
+});
+
+test('filmTimeAtYear uses a bounded number of curve evaluations', () => {
+  let evaluations = 0;
+  const observed = new Proxy(inverseHistogram, {
+    ownKeys(target) { evaluations++; return Reflect.ownKeys(target); },
+  });
+  filmTimeAtYear?.(1613.5, observed, 1200, 2026);
+  assert.ok(evaluations > 0, 'the inverse must evaluate the film curve');
+  assert.ok(evaluations <= 40, `expected a bounded binary inverse, got ${evaluations} evaluations`);
+});
 
 test('the dated film count includes exact and bounded years up to the floor of the current year', () => {
   const histogram = { 1200: [2, 1], 1899: [3, 0], 1900: [4, 0] };

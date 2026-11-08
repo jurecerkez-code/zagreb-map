@@ -34,7 +34,7 @@ import { mountSwitcher } from './switcher.js';
 import { initialCollapsed, LEGEND_KEY, photoOnlyFrom, photoOnlyHref, markPhotos, plaquesOnFrom, plaquesHref, PLAQUE_KEY,
   questsOnFrom, QUESTS_KEY } from './panel.js';
 import { cityCount, layerCount, tallyTitle, tallyFromAttrs, periodCounts } from './count.js';
-import { placeLabels, labelAt, stepYear, filmYear, filmOrbit, filmOrbitProgress, countDatedAt } from './timeline.js';
+import { placeLabels, labelAt, stepYear, filmYear, filmTimeAtYear, filmOrbit, filmOrbitProgress, countDatedAt } from './timeline.js';
 import { unknownShown, readPref, writePref, prefAfterClick, unknownHint, easeShown } from './unknown.js';
 import { makeGround, cutFactor, levelAt, LOD_TOL, parsePolygons, fadeWidth, fadeAtGrid, askWorker, withTimeout,
   FETCH_TIMEOUT_MS } from './terrain.js';
@@ -3533,7 +3533,7 @@ for (const [which, el] of Object.entries(grips)) {
 }
 
 // Play: the whole story from 1200 to today. Shift-click or a long press keeps the handle-based start.
-let playing = false, playT0 = 0, playStart = 0, pausedFilmYear = null, filmOrbitFrame = null;
+let playing = false, playT0 = 0, playStart = 0, pausedFilm = null, filmOrbitFrame = null;
 const playBtn = document.getElementById('play');
 const playIcon = document.getElementById('play-icon');
 const DURATION = (+new URLSearchParams(location.search).get('film') || 30) * 1000; // ?film=6 for a short film
@@ -3557,41 +3557,41 @@ function showFilmArrival() {
   arrivalTimer = setTimeout(() => { filmNote.hidden = true; }, 3000);
 }
 function startPlay(fromHandles = false) {
-  const resume = !fromHandles && pausedFilmYear !== null && uniforms.uYear.value === pausedFilmYear;
-  if (!resume) {
-    pausedFilmYear = null;
-    if (!fromHandles) {
-      setHandle('uYearFrom', FROM_REST);
-      uniforms.uYear.value = T0;
-    } else if (uniforms.uYear.value >= config.yearMax) {
-      // Preserve the old power-user behaviour: below Today, start at the current handle; from Today,
-      // start again just after the from-handle.
-      uniforms.uYear.value = Math.max(T0, uniforms.uYearFrom.value + 1);
-    }
+  const paused = !fromHandles && pausedFilm !== null &&
+    (uniforms.uYear.value === pausedFilm.year || uniforms.uYear.value === Math.floor(pausedFilm.year)) ? pausedFilm : null;
+  if (paused) uniforms.uYear.value = paused.year;
+  else if (!fromHandles) {
+    setHandle('uYearFrom', FROM_REST);
+    uniforms.uYear.value = T0;
+  } else if (uniforms.uYear.value >= config.yearMax) {
+    // Preserve the old power-user behaviour: below Today, start at the current handle; from Today,
+    // start again just after the from-handle.
+    uniforms.uYear.value = Math.max(T0, uniforms.uYearFrom.value + 1);
   }
+  pausedFilm = null;
   playing = true;
   // An idle frame sets frameDue to Infinity. Wake the scheduler, or Play stays at its first year forever.
   frameDue = -1;
-  playStart = performance.now();
-  playT0 = 0;
-  while (playT0 < 1 && playYear(playT0) < uniforms.uYear.value) playT0 += 0.001;
-  const resumedOrbit = resume ? filmOrbitFrame : null;
+  playT0 = filmTimeAtYear(uniforms.uYear.value, config.histogram, T0, config.yearMax);
+  const resumedOrbit = paused ? filmOrbitFrame : null;
   const dx = camera.position.x - controls.target.x, dz = camera.position.z - controls.target.z;
   filmOrbitFrame = {
     azimuth: resumedOrbit?.azimuth ?? controls.getAzimuthalAngle() - filmOrbit(playT0, calm.matches),
     horizontal: Math.hypot(dx, dz),
-    orbitT0: resumedOrbit?.orbitT ?? playT0,
-    orbitT: resumedOrbit?.orbitT ?? playT0,
+    orbitT0: paused?.orbitT ?? playT0,
+    orbitT: paused?.orbitT ?? playT0,
   };
   playIcon.setAttribute('d', 'M4 2.5h3v11H4zM9 2.5h3v11H9z');
   uniforms.uPlaying.value = 1;
   playBtn.setAttribute('aria-label', T('ui.pause'));
   playBtn.title = T('ui.film.playHint');
   drawHist();
+  // Never charge synchronous inversion or initialization to resumed film time.
+  playStart = performance.now();
 }
 function stopPlay(exactYear = false) {
-  if (playing) pausedFilmYear = uniforms.uYear.value < config.yearMax
-    ? (exactYear ? uniforms.uYear.value : Math.round(uniforms.uYear.value)) : null;
+  pausedFilm = exactYear && playing && uniforms.uYear.value < config.yearMax
+    ? { year: uniforms.uYear.value, orbitT: filmOrbitFrame?.orbitT ?? playT0 } : null;
   playing = false;
   // A manual pause keeps the exact orbit state for resume; every other stop resets the next film's camera arc.
   if (!exactYear) filmOrbitFrame = null;
@@ -3602,12 +3602,19 @@ function stopPlay(exactYear = false) {
   if (!exactYear) uniforms.uYear.value = Math.round(uniforms.uYear.value);
   clearTimeout(arrivalTimer);
   filmNote.hidden = true;
-  // Redraw the displayed year at once, also before the next frame. A manual pause keeps its exact resume year;
-  // the title and count describe the buildings actually standing at that time.
   drawHist();
   playIcon.setAttribute('d', 'M4 2.5v11l9-5.5z');
   playBtn.setAttribute('aria-label', T('ui.play'));
   playBtn.title = T('ui.film.playHint');
+  const paused = pausedFilm;
+  if (paused) queueMicrotask(() => {
+    if (playing || pausedFilm !== paused) return;
+    // The snapshot, not this display-only floor, owns resume time and orbit. Deferring the uniform change also lets
+    // the pause click finish at its sampled year; wake one idle frame to render the settled display.
+    uniforms.uYear.value = Math.floor(paused.year);
+    frameDue = -1;
+    drawHist();
+  });
 }
 playBtn.onclick = event => {
   if (longPressArmed) { event.preventDefault(); longPressArmed = false; return; }
@@ -4549,7 +4556,7 @@ const scenePlayer = mountScenePlayer({ THREE, scene: storyGroup, faint: setFaint
 
 window.__dbg = { get veg() { return veg; }, get facts() { return facts; }, pinFact, setFacts, setSun,
   get sun() { return sunState; }, applySunMode, get sunMode() { return sunMode; },
-  get monuments() { return monuments; }, pinMonument, setMonuments, scenePlayer, renderer, stats, goHome, viewAt, pick, uniforms, camera, controls, setLayer, layers, pinCard, showCard, building, attrTally, setHideEst, setPhotoOnly, setPlaques, get plaquesOn() { return plaquesOn; }, setMetro, get metroOn() { return metroOn; }, get storyLayers() { return [...storyLayers]; }, metroLayer,
+  get monuments() { return monuments; }, pinMonument, setMonuments, scenePlayer, renderer, stats, goHome, viewAt, pick, uniforms, camera, controls, setLayer, layers, pinCard, showCard, building, get attrTally() { return attrTally; }, setHideEst, setPhotoOnly, setPlaques, get plaquesOn() { return plaquesOn; }, setMetro, get metroOn() { return metroOn; }, get storyLayers() { return [...storyLayers]; }, metroLayer,
   get ferries() { return ferries; }, setBoats, get boatTip() { return boatTip.shown; }, get boatsOn() { return boatsOn; }, pinStation, plaqueGroup, get photoGids() { return photoGids; }, meshes, labelGroup, get labels() { return labels; }, flyTo, faceNorth, startPlay, questClick, startQuest, get quests() { return quests; },
   get trams() { return trams; }, get tramTip() { return tramTip.shown; }, tramOver,
   get riding() { return ride ? ride.trip : null; }, startRide, endRide,
@@ -4565,4 +4572,4 @@ window.__dbg = { get veg() { return veg; }, get facts() { return facts; }, pinFa
   rendered: () => renderer.info.render.frame,
   northAzimuth: () => controls.getAzimuthalAngle(),
   treeCount: () => veg?.trees,   // the veg build's own count, not a scene walk
-  playState: () => ({ playing, year: uniforms.uYear.value, playT0, playStart, now: performance.now() }) };
+  playState: () => ({ playing, year: !playing && pausedFilm ? pausedFilm.year : uniforms.uYear.value, playT0, playStart, now: performance.now() }) };
