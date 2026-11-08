@@ -97,7 +97,7 @@ def contribution_row(issue: dict) -> dict | None:
         or number < 1
     ):
         return None
-    expected = f"https://github.com/amirelion/husforhus/issues/{number}"
+    expected = f"https://github.com/jurecerkez-code/zagreb-map/issues/{number}"
     if issue["html_url"] != expected:
         return None
     # The public source and explanation stay inspectable; no silent trimming or synthetic note.

@@ -37,7 +37,7 @@ ISSUE = {
     "state": "open",
     "pull_request": None,
     "labels": [{"name": "contributions"}, {"name": "accepted"}, {"name": "needs-human"}],
-    "html_url": "https://github.com/amirelion/husforhus/issues/427",
+    "html_url": "https://github.com/jurecerkez-code/zagreb-map/issues/427",
     "body": BODY,
 }
 
@@ -97,12 +97,12 @@ def test_issue_to_csv_roundtrip_is_validated_and_idempotent(tmp_path):
     again = crowd.integrate([ISSUE], path)
     assert again.added == [] and again.skipped_existing == ["HFH-427"]
     assert len(contributions.read(path)) == 1
-    duplicate = dict(ISSUE, number=428, html_url="https://github.com/amirelion/husforhus/issues/428")
+    duplicate = dict(ISSUE, number=428, html_url="https://github.com/jurecerkez-code/zagreb-map/issues/428")
     result = crowd.integrate([duplicate], path)
     assert result.added == [] and result.rejected[0]["number"] == 428
     assert len(contributions.read(path)) == 1
     # freshness: an accepted issue for an already accepted gid cannot silently replace the earlier one.
-    mismatch = dict(duplicate, html_url="https://github.com/amirelion/husforhus/issues/999")
+    mismatch = dict(duplicate, html_url="https://github.com/jurecerkez-code/zagreb-map/issues/999")
     assert crowd.integrate([mismatch], path).rejected
 
 

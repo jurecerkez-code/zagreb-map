@@ -1,4 +1,4 @@
-export const YEAR_ISSUE_REPO = 'amirelion/husforhus';
+export const YEAR_ISSUE_REPO = 'jurecerkez-code/zagreb-map';
 
 // GitHub owns the submission/review transport. The card sends the user to its public issue form,
 // not to a retired Worker endpoint or to a guessed replacements API.
