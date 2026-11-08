@@ -44,7 +44,7 @@ for (const [name, th] of Object.entries(THEMES)) {
     assert.ok(typeof th.font === 'string' && th.font.length > 0, 'font');
     assert.deepEqual(Object.keys(th.ui).sort(), ['--accent', '--bg', '--ink', '--line', '--muted', '--panel']);
     for (const v of Object.values(th.ui)) assert.match(v, HEX);
-    assert.equal(th.periods.length, 12);
+    assert.equal(th.periods.length, 6, 'Zagreb keeps six date bands');
     th.periods.forEach(c => assert.match(c, HEX));
     assert.notEqual(th.unknown, th.maquette);
     if ('unknownHatch' in th) assert.match(th.unknownHatch, HEX, 'unknownHatch');
@@ -73,11 +73,10 @@ for (const [name, th] of Object.entries(THEMES)) {
   });
 }
 
-// Ärg draws "Year unknown" pale with a fine diagonal hatch (unknownHatch, the hatch line's colour); the other
-// looks draw it flat.
-test('Ärg hatches "Year unknown"; the other looks do not', () => {
+// Patina, Foto and Zagreb Lab distinguish "Year unknown" with a dedicated hatch.
+test('Patina, Foto and Lab hatch "Year unknown"; the other looks do not', () => {
   for (const [name, th] of Object.entries(THEMES)) {
-    assert.equal('unknownHatch' in th, name === 'arg', name);
+    assert.equal('unknownHatch' in th, name === 'arg' || name === 'foto' || name === 'lab', name);
   }
 });
 
@@ -128,7 +127,7 @@ for (const [name, th] of Object.entries(THEMES)) {
 
 // The Stockholm looks are launch candidates, so they must read for colour-blind viewers and pass text contrast.
 // paper is upstream's palette, kept for comparison: it fails deuteranopia (p4/p7 ΔE 2.4) and would need fixing.
-for (const name of ['arg', 'kalk', 'blatimme']) {
+for (const name of ['arg', 'kalk', 'blatimme', 'lab']) {
   const th = THEMES[name];
   test(`${name}: every two periods stay at least ΔE 4.5 apart, in normal and colour-blind vision`, () => {
     for (const kind of VISION) {

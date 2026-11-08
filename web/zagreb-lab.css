@@ -1,0 +1,609 @@
+/*
+ * Zagreb Lab — scoped worksheet chrome over the current map.
+ * References: jurecerkez-code/pieeg-home-lab/page/assets/style.css and
+ * jurecerkez-code/calliope/src/app.css (see docs/zagreb-lab.md).
+ * This sheet contains no external URLs, reference JS or telemetry.
+ */
+/* Inter's local latin and latin-ext faces are declared once in styles.css. */
+
+:root {
+  --sky: #0b0d33;
+  --radius-chip: 999px;
+  --radius-ctrl: 10px;
+  --tablk: "tnum" 1, "tabl" 1, "zero" 1, "cv08" 1, "cv10" 1, "ss01" 1;
+  --surface-overlay: rgba(236, 235, 247, 0.22);
+}
+:root[data-ui="lab"] {
+  --bg: #0b0d33;
+  --panel: #11144a;
+  --ink: #ecebf7;
+  --muted: #9a9ccc;
+  --accent: #d8b55a;
+  --link: #8f96ff;
+  --line: #2b3170;
+}
+:root[data-ui="paper"] {
+  --bg: #F4EFE6;
+  --panel: #FAF7F1;
+  --ink: #171717;
+  --muted: #77716A;
+  --accent: #FE2A00;
+  --link: #2F5FAE;
+  --line: #E5DED2;
+  --surface-overlay: rgba(23, 23, 23, 0.14);
+  --muted-content: #665f58;
+  --accent-content: #a82009;
+}
+
+.lab-spec { display: none; }
+.lab-control-label,
+.lab-secondary-label { pointer-events: none; }
+
+[data-ui="lab"] body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font), Inter, Arial, sans-serif;
+}
+[data-ui="lab"] :focus-visible { outline-color: var(--accent); }
+[data-ui="lab"] a { color: var(--link); }
+[data-ui="lab"] .loading { background: var(--bg); color: var(--ink); }
+
+/* A small printed title and an explicit, static registration/spec row. The
+   numbers and colours are design tokens, never live measurements. */
+[data-ui="lab"] .masthead { pointer-events: none; }
+[data-ui="lab"] .masthead h1 {
+  display: inline-flex;
+  margin: 0 0 5px;
+  padding: 4px 8px 3px;
+  border-radius: 2px;
+  background: var(--ink);
+  color: var(--bg);
+  font: 750 11px/1.2 Inter, Arial, sans-serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+[data-ui="lab"] .masthead .dek {
+  margin: 0;
+  color: var(--ink);
+  font: 500 11px/1.45 Inter, Arial, sans-serif;
+}
+[data-ui="lab"] .lab-spec {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  max-width: min(560px, 55vw);
+  margin-top: 7px;
+  color: var(--muted);
+  font: 500 9px/1.5 "Courier New", monospace;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+[data-ui="lab"] .lab-spec > span:first-child { color: var(--accent); }
+[data-ui="lab"] .lab-spec b { font-weight: 400; }
+[data-ui="lab"] .lab-spec code { color: var(--ink); font: inherit; }
+
+/* One dock. Secondary actions move into the native dialog; each keeps its
+   original DOM node/listener and returns home for the Paper chrome. */
+[data-ui="lab"] .corner [hidden] { display: none !important; }
+[data-ui="lab"] .corner .buttons {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 4px;
+  overflow: visible;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+  background: var(--panel);
+  box-shadow: none;
+  color: var(--ink);
+}
+[data-ui="lab"] .corner .buttons > button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-width: 38px;
+  min-height: 38px;
+  margin: 0;
+  padding: 0 11px;
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+  font: 650 10px/1 Inter, Arial, sans-serif;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+[data-ui="lab"] .corner .buttons > button:hover { background: var(--surface-overlay); }
+[data-ui="lab"] .corner .buttons > button[aria-expanded="true"] { background: var(--ink); color: var(--bg); }
+[data-ui="lab"] .corner .buttons > button svg {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.45;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+[data-ui="lab"] .corner .buttons > .search-open:not([hidden]),
+[data-ui="lab"] .corner .buttons > .layers-open:not([hidden]),
+[data-ui="lab"] .corner .buttons > .lab-more-open:not([hidden]) { display: inline-flex; }
+[data-ui="lab"] .corner .buttons > .look-open { width: auto; }
+[data-ui="lab"] .corner .buttons > .look-open::after,
+[data-ui="lab"] .corner .buttons > .look-open::before { display: none; }
+[data-ui="lab"] .corner .buttons > .sun-mode > span:first-child { font-size: 18px; line-height: 1; }
+[data-ui="lab"] .corner .buttons > .lab-more-open { padding: 0 12px; font-size: 22px; line-height: 0; }
+[data-ui="lab"] .corner .buttons .north-open::after,
+[data-ui="lab"] .corner .buttons .postcard-open::after,
+[data-ui="lab"] .corner .buttons .search-open::after { inset: -12px; }
+/* Within the existing fixed corner, the tally is a quiet instrument frame. Its eight gradients are
+   decorative edges: no new DOM, click target, canvas effect, sensor or animation. */
+[data-ui="lab"] .corner { z-index: 12; }
+[data-ui="lab"] .corner .tally {
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(760px, calc(100vw - 2 * var(--gutter)));
+  padding: 12px 16px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--radius-ctrl);
+  background:
+    linear-gradient(var(--ui-gold), var(--ui-gold)) left top / 12px 1px no-repeat,
+    linear-gradient(var(--ui-gold), var(--ui-gold)) left top / 1px 12px no-repeat,
+    linear-gradient(var(--ui-gold), var(--ui-gold)) right top / 12px 1px no-repeat,
+    linear-gradient(var(--ui-gold), var(--ui-gold)) right top / 1px 12px no-repeat,
+    linear-gradient(var(--ui-gold), var(--ui-gold)) left bottom / 12px 1px no-repeat,
+    linear-gradient(var(--ui-gold), var(--ui-gold)) left bottom / 1px 12px no-repeat,
+    linear-gradient(var(--ui-gold), var(--ui-gold)) right bottom / 12px 1px no-repeat,
+    linear-gradient(var(--ui-gold), var(--ui-gold)) right bottom / 1px 12px no-repeat,
+    var(--ui-glass);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  color: var(--ui-fg);
+  pointer-events: none;
+}
+[data-ui="lab"] [data-registration]::before {
+  display: block;
+  color: var(--ui-gold);
+  font: 400 12px/1.4 var(--mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  content: attr(data-registration);
+}
+[data-ui="lab"] .tally [data-registration]::before {
+  display: block;
+  margin: 0 0 6px;
+  color: var(--ui-gold);
+  font: 400 12px/1.4 var(--mono);
+  letter-spacing: 0.16em;
+  white-space: normal;
+}
+[data-ui="lab"] .corner .tally-year {
+  color: var(--ui-gold);
+  font: 200 clamp(48px, 5vw, 84px)/0.98 var(--display), system-ui, sans-serif;
+  font-feature-settings: var(--tablk);
+  letter-spacing: -0.035em;
+}
+[data-ui="lab"] .corner .tally-year.named {
+  max-width: 24rem;
+  font-size: clamp(24px, 2.6vw, 36px);
+  line-height: 1.06;
+}
+[data-ui="lab"] .corner .tally-count {
+  display: block;
+  margin-top: 8px;
+  /* Small text stays #ECEBF7 here: muted on 72% glass over bright Foto is only 3.385:1. */
+  color: var(--ui-fg);
+  font: 400 12px/1.5 var(--font), system-ui, sans-serif;
+  font-feature-settings: var(--tablk);
+}
+[data-ui="lab"] #count {
+  color: var(--ui-gold);
+  font: 400 clamp(28px, 4vw, 56px)/1 var(--mono);
+  font-feature-settings: var(--tablk);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* Paper chips: global transparency only where the map already supplies a
+   ground. No late-cascade white block is placed behind the panels. */
+[data-ui="lab"] .modes {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-chip);
+  background: var(--bg);
+  box-shadow: none;
+  color: var(--muted);
+}
+[data-ui="lab"] .modes::before {
+  content: "048 · PRIKAZ / VIEW";
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  color: var(--muted);
+  font: 500 8px/1 "Courier New", monospace;
+  letter-spacing: 0.07em;
+}
+[data-ui="lab"] .modes button {
+  min-height: 34px;
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--muted);
+  font: 650 10px/1 Inter, Arial, sans-serif;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+[data-ui="lab"] .modes button[aria-pressed="true"],
+:root[data-ui="paper"] .modes button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+[data-ui="lab"] .modes button::after { display: none; }
+
+[data-ui="lab"] .timeline {
+  border: 0;
+  border-radius: var(--radius-ctrl);
+  background: var(--bg);
+  box-shadow: none;
+  color: var(--ink);
+  font-family: Inter, Arial, sans-serif;
+  font-feature-settings: var(--tablk);
+}
+[data-ui="lab"] .timeline::before {
+  position: absolute;
+  right: 10px;
+  bottom: calc(100% + 4px);
+  width: auto;
+  pointer-events: none;
+}
+[data-ui="lab"] .timeline .play { color: var(--accent); }
+[data-ui="lab"] .timeline .grip { border-color: var(--ink); }
+[data-ui="lab"] .panel {
+  border: 0;
+  border-radius: var(--radius-ctrl);
+  background: var(--bg);
+  box-shadow: none;
+  color: var(--ink);
+}
+[data-ui="lab"] .panel::before { margin: 0 0 7px; }
+[data-ui="lab"] .panel.collapsed::before { display: none; }
+[data-ui="lab"] .panel h2,
+[data-ui="lab"] .panel .layer-title {
+  color: var(--ink);
+  font: 650 12px/1.35 Inter, Arial, sans-serif;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+[data-ui="lab"] .panel .swatches { gap: 6px; }
+[data-ui="lab"] .panel .swatch {
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  outline: 0;
+  font-family: Inter, Arial, sans-serif;
+}
+[data-ui="lab"] .panel .swatch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+[data-ui="lab"] .panel .swatch[aria-pressed="true"] { background: var(--surface-overlay); color: var(--ink); }
+/* Counts must follow the selected chip too: muted ink fails 4.5:1 on the prescribed 22% light overlay. */
+[data-ui="lab"] .panel .swatch[aria-pressed="true"] .n { color: var(--ink); }
+[data-ui="lab"] .panel .swatch .n { font-feature-settings: var(--tablk); }
+[data-ui="lab"] .panel .swatch.unknown::after {
+  content: "#22265A";
+  grid-column: 1 / -1;
+  justify-self: start;
+  color: var(--muted);
+  font: 500 8px/1.3 "Courier New", monospace;
+  letter-spacing: 0.08em;
+}
+:root[data-theme="arg"] .panel .swatch.unknown::after { content: "#C9C6C0"; }
+:root[data-theme="kalk"] .panel .swatch.unknown::after { content: "#CACED3"; }
+:root[data-theme="blatimme"] .panel .swatch.unknown::after { content: "#4C5666"; }
+:root[data-theme="paper"] .panel .swatch.unknown::after { content: "#C3C6C8"; }
+:root[data-theme="foto"] .panel .swatch.unknown::after { content: "#C9C6C0"; }
+[data-ui="lab"] .panel .note,
+[data-ui="lab"] .panel p { color: var(--muted); }
+[data-ui="lab"] .panel .sheet-handle,
+[data-ui="lab"] .panel .back,
+[data-ui="paper"] .panel .back {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: 650 10px/1.3 Inter, Arial, sans-serif;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+[data-ui="lab"] .switch .toggle { border-color: var(--line); }
+[data-ui="lab"] .switch[aria-pressed="true"] .toggle { background: var(--accent); }
+
+/* Search stays the established combobox and focus trap, presented as a Lab
+   worksheet at every width rather than a second desktop pill beside modes. */
+[data-ui="lab"] .search:not(.open) { display: none; }
+[data-ui="lab"] .search.open {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100dvh;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  overflow: auto;
+  background: var(--bg);
+}
+[data-ui="lab"] .search.open .search-box {
+  position: relative;
+  inset: auto;
+  display: flex;
+  box-sizing: border-box;
+  width: min(680px, 100%);
+  max-width: none;
+  min-height: 52px;
+  margin: 0 auto;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-ctrl);
+  background: var(--panel);
+  box-shadow: none;
+  color: var(--ink);
+}
+[data-ui="lab"] .search.open:focus-within .search-box { box-shadow: 0 0 0 2px var(--accent); }
+[data-ui="lab"] .search.open input { min-width: 0; color: var(--ink); font-family: Inter, Arial, sans-serif; }
+[data-ui="lab"] .search.open input::placeholder { color: var(--muted); opacity: 1; }
+[data-ui="lab"] .search.open .search-cancel { display: inline-flex; color: var(--accent); text-transform: uppercase; }
+[data-ui="lab"] .search.open .search-key { display: none; }
+[data-ui="lab"] .search.open .search-list,
+[data-ui="lab"] .search.open .search-msg,
+[data-ui="lab"] .search.open .search-status {
+  position: static;
+  box-sizing: border-box;
+  width: min(680px, 100%);
+  max-width: none;
+  margin: 8px auto 0;
+  border-color: var(--line);
+  border-radius: var(--radius-ctrl);
+  background: var(--panel);
+  box-shadow: none;
+  color: var(--ink);
+}
+[data-ui="lab"] .search.open .search-li,
+[data-ui="lab"] .search.open [role="option"] { color: var(--ink); }
+[data-ui="lab"] .search.open [role="option"][aria-selected="true"] { background: var(--surface-overlay); }
+[data-ui="lab"] .search.open .sub,
+[data-ui="lab"] .search.open .search-msg { color: var(--muted); }
+
+/* Native dialog semantics provide focus containment and Escape. On a phone it
+   docks to the safe-area bottom; on a desktop it is a small right-hand sheet. */
+[data-ui="lab"] .lab-more {
+  position: fixed;
+  inset: 94px 24px auto auto;
+  box-sizing: border-box;
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(72dvh, 640px);
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-ctrl);
+  background: var(--panel);
+  box-shadow: none;
+  color: var(--ink);
+  font-family: Inter, Arial, sans-serif;
+}
+[data-ui="lab"] .lab-more::backdrop { background: rgba(11, 13, 51, 0.58); }
+[data-ui="lab"] .lab-more-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+[data-ui="lab"] .lab-more-head h2 {
+  margin: 0;
+  color: var(--accent);
+  font: 650 11px/1.3 Inter, Arial, sans-serif;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+[data-ui="lab"] .lab-more-close {
+  min-width: 44px;
+  min-height: 44px;
+  margin: -8px -8px -8px 0;
+  border: 0;
+  border-radius: var(--radius-chip);
+  background: transparent;
+  color: var(--accent);
+  font-size: 24px;
+}
+[data-ui="lab"] .lab-more-items { display: grid; gap: 5px; margin-top: 8px; }
+[data-ui="lab"] .lab-more-items > button,
+[data-ui="lab"] .lab-more-items > .lang > button,
+[data-ui="lab"] .lab-more-items .sp-tour-open,
+[data-ui="lab"] .lab-more-items .sp-stories button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--ink);
+  font: 600 11px/1.3 Inter, Arial, sans-serif;
+  letter-spacing: 0.035em;
+  text-align: left;
+  text-transform: uppercase;
+}
+[data-ui="lab"] .lab-more-items > button:hover,
+[data-ui="lab"] .lab-more-items > .lang > button:hover { background: var(--surface-overlay); }
+[data-ui="lab"] .lab-more-items .north-open svg,
+[data-ui="lab"] .lab-more-items .postcard-open svg { width: 18px; height: 18px; fill: none; stroke: currentColor; }
+[data-ui="lab"] .lab-more-items .north-open .needle-n { fill: currentColor; }
+[data-ui="lab"] .lab-more-items > .lang { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; }
+[data-ui="lab"] .lab-more-items > .lang .about-open { flex: 1 1 100%; }
+[data-ui="lab"] .lab-more-items > .lang [data-lang] { flex: 1; justify-content: center; }
+[data-ui="lab"] .lab-more-items > .lang [data-lang][aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+[data-ui="lab"] .lab-more-items .news-dot { margin-left: auto; background: var(--accent); }
+[data-ui="lab"] .lab-more-items .sp-stories {
+  position: static;
+  width: auto;
+  max-height: 260px;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+[data-ui="lab"] .lab-more-items .sp-stories button { padding-left: 20px; border: 0; }
+
+/* The worksheet card uses the same radius and registration language. */
+[data-ui="lab"] .card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-ctrl);
+  background: var(--panel);
+  box-shadow: none;
+  color: var(--ink);
+}
+[data-ui="lab"] #card::before { position: absolute; top: 9px; left: 16px; pointer-events: none; }
+[data-ui="lab"] .card .close,
+[data-ui="lab"] .card .card-close,
+[data-ui="lab"] .card .card-done,
+[data-ui="lab"] .card .pin,
+[data-ui="lab"] .card .share,
+[data-ui="lab"] .card [data-share],
+[data-ui="lab"] .card [role="tab"] {
+  background: var(--bg);
+  color: var(--accent);
+  font-family: Inter, Arial, sans-serif;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+[data-ui="lab"] .card h1,
+[data-ui="lab"] .card h2 { color: var(--ink); font-family: Inter, Arial, sans-serif; }
+[data-ui="lab"] .card .photo figcaption,
+[data-ui="lab"] .card.fact .photo figcaption,
+[data-ui="lab"] .sp-photo figcaption {
+  padding: 5px 10px;
+  background: var(--ink);
+  color: var(--bg);
+  font: 500 10px/1.4 "Courier New", monospace;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+[data-ui="lab"] .card .photo figcaption a,
+[data-ui="lab"] .sp-photo figcaption a { color: inherit; }
+[data-ui="lab"] .about,
+[data-ui="lab"] .look {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-ctrl);
+  background: var(--panel);
+  box-shadow: none;
+  color: var(--ink);
+}
+[data-ui="lab"] .about h1,
+[data-ui="lab"] .about h2,
+[data-ui="lab"] .look h2,
+[data-ui="lab"] .look h3 { font-family: Inter, Arial, sans-serif; }
+[data-ui="lab"] .about p,
+[data-ui="lab"] .look p { color: var(--muted); }
+[data-ui="lab"] .about .tabs button[aria-selected="true"] { background: var(--surface-overlay); color: var(--ink); text-decoration: none; }
+[data-ui="lab"] .about .about-close,
+[data-ui="lab"] .look .look-close { background: var(--bg); color: var(--accent); }
+[data-ui="lab"] .look .look-name { font-family: Inter, Arial, sans-serif; font-feature-settings: var(--tablk); }
+[data-ui="lab"] .look button[aria-pressed="true"] { background: var(--surface-overlay); }
+[data-ui="lab"] .look input[type="range"] { accent-color: var(--accent); }
+
+[data-ui="paper"] .lab-control-label,
+[data-ui="paper"] .lab-secondary-label,
+[data-ui="paper"] #lab-layers,
+[data-ui="paper"] #lab-more-button { display: none !important; }
+[data-ui="paper"] .lab-more { display: none; }
+/* Paper is the quiet alternative, with no glass blur or gold corner frame. */
+[data-ui="paper"] .corner { z-index: 3; }
+[data-ui="paper"] .corner .tally {
+  border-color: var(--ui-line);
+  background: var(--ui-surface);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+[data-ui="paper"] .tally [data-registration]::before { display: none; }
+[data-ui="paper"] .corner .tally-year { color: var(--ui-fg); }
+[data-ui="paper"] .corner .tally-year,
+[data-ui="paper"] #count { font-family: var(--font), system-ui, sans-serif; font-weight: 300; }
+
+
+/* Read-only reference accents stay exact; text on Paper uses the AA additions. */
+[data-ui="paper"] .corner .tally-count,
+[data-ui="paper"] .panel .note,
+[data-ui="paper"] .panel p,
+[data-ui="paper"] .panel .swatch,
+[data-ui="paper"] .panel .unknown-hint,
+[data-ui="paper"] .card .dating,
+[data-ui="paper"] .card .credit,
+[data-ui="paper"] .look p,
+[data-ui="paper"] .about p { color: var(--muted-content); }
+[data-ui="paper"] .panel .back,
+[data-ui="paper"] .panel .sheet-handle,
+[data-ui="paper"] .card .card-close,
+[data-ui="paper"] .card .card-done,
+[data-ui="paper"] .about .about-close { color: var(--accent-content); }
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-ui="lab"] .lab-more[open],
+  [data-ui="lab"] .look[open],
+  [data-ui="lab"] .pane,
+  [data-ui="lab"] .card { animation: zagreb-lab-fade 180ms ease-out; }
+  @keyframes zagreb-lab-fade { from { opacity: 0; } to { opacity: 1; } }
+}
+
+@media (max-width: 720px) {
+  [data-ui="lab"] .masthead { top: max(10px, env(safe-area-inset-top)); left: 12px; right: 12px; }
+  [data-ui="lab"] .masthead h1 { margin-bottom: 4px; font-size: 10px; }
+  [data-ui="lab"] .masthead .dek { max-width: calc(100vw - 24px); font-size: 10px; }
+  [data-ui="lab"] .lab-spec { gap: 1px 8px; max-width: calc(100vw - 24px); margin-top: 5px; font-size: 8px; line-height: 1.35; }
+  [data-ui="lab"] .corner { top: 104px; right: 10px; max-width: calc(100vw - 20px); }
+  [data-ui="lab"] .corner .tally {
+    max-width: calc(100vw - 20px);
+    padding: 10px 12px;
+    text-align: right;
+  }
+  [data-ui="lab"] .tally [data-registration]::before { margin-bottom: 4px; font-size: 9px; }
+  [data-ui="lab"] .corner .tally-year { font-size: clamp(28px, 8vw, 48px); }
+  [data-ui="lab"] .corner .tally-year.named { font-size: clamp(20px, 6vw, 28px); }
+  [data-ui="lab"] .corner .tally-count { margin-top: 6px; font-size: 12px; }
+  [data-ui="lab"] #count { font-size: clamp(28px, 8vw, 40px); }
+  [data-ui="lab"] .corner .buttons { align-self: flex-end; max-width: calc(100vw - 20px); padding: 3px; }
+  [data-ui="lab"] .corner .buttons > button { min-width: 40px; min-height: 44px; padding: 0 8px; gap: 4px; font-size: 9px; }
+  [data-ui="lab"] .corner .buttons > button svg { width: 14px; height: 14px; }
+  [data-ui="lab"] .modes { top: 204px; max-width: calc(100vw - 20px); }
+  [data-ui="lab"] .modes button { min-height: 44px; }
+  [data-ui="lab"] .modes::before { display: none; }
+  [data-ui="lab"] .panel { max-height: 52dvh; overflow: auto; }
+  [data-ui="lab"] .panel .sheet-handle { min-height: 44px; }
+  [data-ui="lab"] .lab-more {
+    inset: auto 0 0;
+    width: 100%;
+    max-width: none;
+    max-height: min(76dvh, 620px);
+    padding: 16px 14px max(16px, env(safe-area-inset-bottom));
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: var(--radius-ctrl) var(--radius-ctrl) 0 0;
+  }
+  [data-ui="lab"] .timeline { max-width: calc(100vw - 20px); }
+  [data-ui="lab"] .search.open { padding-right: 12px; padding-left: 12px; }
+  [data-ui="lab"] .search.open .search-box { min-height: 48px; }
+}
+
+@media (max-width: 380px) {
+  [data-ui="lab"] .corner .buttons > button { min-width: 44px; padding: 0 10px; }
+  [data-ui="lab"] .corner .buttons .lab-control-label { display: none; }
+}
