@@ -1753,7 +1753,8 @@ def _independent_roads(raw, doc):
         cls = raw[20 + wi]
         if cls >= len(doc.get("classes", [])):
             raise ValueError("ZGR2 class index")
-        out.append({"offset": offset, "cls": doc["classes"][cls], "w": raw[20 + nw + wi] / 4,
+        width = doc.get("classWidths", {}).get(doc["classes"][cls], raw[20 + nw + wi] / 4)
+        out.append({"offset": offset, "cls": doc["classes"][cls], "w": float(width),
                     "points": np.asarray(points, dtype="<f4")})
         offset += int(count)
     if at != len(raw) or offset != np_ or not all(np.isfinite(w["points"]).all() for w in out):

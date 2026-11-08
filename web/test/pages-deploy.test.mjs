@@ -26,7 +26,9 @@ test('deployed rewrite fixes only the deployed entry and external vendor paths',
 });
 
 test('generated dist resolves and executes the dynamic fflate fallback', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'issue29-dist-gzip-'));
+  const scratch = join(process.env.LOCALAPPDATA || tmpdir(), 'hermes', 'cache', 'scratch');
+  await mkdir(scratch, { recursive: true });
+  const root = await mkdtemp(join(scratch, 'issue29-dist-gzip-'));
   const web = join(root, 'web'), dist = join(web, 'dist');
   await mkdir(dist, { recursive: true });
   await writeFile(join(web, 'index.html'), '<script type="module" src="app.js"></script>');

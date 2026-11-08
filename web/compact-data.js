@@ -104,7 +104,9 @@ export function decodeRoads2(doc, bytes) {
   for (let w = 0; w < nWays; w++) {
     const n = v.getUint16(countAt + w * 2, true);
     if (n < 1) throw new RangeError('ZGR2 empty way');
-    ways[w] = { o: pointOffset, c: n, w: v.getUint8(widthAt + w) / 4, cls: v.getUint8(clsAt + w) };
+    const cls = v.getUint8(clsAt + w);
+    const metres = doc.classWidths?.[doc.classes[cls]] ?? v.getUint8(widthAt + w) / 4;
+    ways[w] = { o: pointOffset, c: n, w: metres, cls };
     if (ways[w].cls >= doc.classes.length) throw new RangeError('ZGR2 class');
     const need = size => { if (at + size > v.byteLength) throw new RangeError('ZGR2 truncated absolute/delta pair'); };
     let x, z;

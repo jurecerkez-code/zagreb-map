@@ -41,6 +41,14 @@ def test_roads2_exact_shared_little_endian_fixture():
         assert np.array_equal(points["points"][:, [0, 2]], expected)  # exact escapes, no tolerance
 
 
+def test_nonquarter_legacy_class_width_is_preserved_without_changing_the_measurement():
+    xyz = np.array([[[0, 999, 0]]], dtype='<f4')
+    doc, raw = compact.pack_roads2([{'id': 1, 'name': None, 'cls': 'footway', 'w': 1.8}], [xyz[0]], ['footway'])
+    assert raw[21] == 7  # nearest quarter metre in the required w4 byte (1.75 m)
+    assert doc['classWidths'] == {'footway': 1.8}
+    assert compact.read_roads2(doc, raw)[0]['w'] == 1.8
+
+
 def test_roads2_rejects_bad_count_and_truncated_escape():
     doc, raw = compact.pack_roads2(road_ways(), road_points(), classes=ROAD_CLASSES)
     bad = bytearray(raw)

@@ -103,12 +103,18 @@ def pack_roads2(ways, points_xyz, classes, names=()):
         raise ValueError("roads: point count exceeds uint32")
     classes = list(classes)
     indices = [classes.index(w["cls"]) for w in ways]
-    widths = []
+    widths, class_widths = [], {}
     for way in ways:
-        encoded = round(float(way["w"]) * 4)
-        if not 0 <= encoded <= 255 or not math.isclose(float(way["w"]), encoded / 4, abs_tol=1e-9):
+        original = float(way["w"])
+        encoded = round(original * 4)
+        if not 0 <= encoded <= 255:
             raise ValueError("roads: width is not an unsigned quarter-metre value")
         widths.append(encoded)
+        if not math.isclose(original, encoded / 4, abs_tol=1e-9):
+            # OSM's footways/cycleways are 1.8 m. Keep their real class width in metadata instead of changing it.
+            if class_widths.setdefault(way["cls"], original) != original:
+                raise ValueError("roads: nonquarter widths differ within one class")
+            class_widths[way["cls"]] = original
     origin = (0.0, 0.0)
     out = bytearray(struct.pack("<4sIIff", b"ZGR2", len(ways), count, *origin))
     out += bytes(indices)
@@ -136,7 +142,7 @@ def pack_roads2(ways, points_xyz, classes, names=()):
                 previous = np.array([x, z], dtype=np.float32)
     doc = {"version": 2, "format": ROADS_FORMAT, "file": "roads2.bin.gz",
            "encoding": "ZGR2/u8-cls/u8-quarter-m/u16-count/i16-delta+absolute-f32-escape",
-           "classes": classes, "count": count, "nWays": len(ways), "origin": list(origin)}
+           "classes": classes, "classWidths": class_widths, "count": count, "nWays": len(ways), "origin": list(origin)}
     return doc, bytes(out)
 
 
@@ -222,7 +228,9 @@ def read_roads2(doc, blob):
         class_index = int(cls[i])
         if class_index >= len(doc["classes"]):
             raise ValueError("roads2: class index outside its table")
-        out.append({"id": i, "name": -1, "cls": doc["classes"][class_index], "w": int(w4[i]) / 4,
+        cls_name = doc["classes"][class_index]
+        width = float(doc.get("classWidths", {}).get(cls_name, int(w4[i]) / 4))
+        out.append({"id": i, "name": -1, "cls": cls_name, "w": width,
                     "points": np.asarray(points, dtype="<f4")})
         offset += n
     if at != len(raw) or offset != n_points:
