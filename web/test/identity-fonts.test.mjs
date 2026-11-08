@@ -39,9 +39,9 @@ test('every look has real latin-ext fonts and the exact package ranges', () => {
   assert.deepEqual(errors, []);
 });
 
-test('@zagreb-lab Inter Display and JetBrains Mono are real bundled latin/latin-ext variables', () => {
+test('@zagreb-lab Inter and JetBrains Mono are real bundled latin/latin-ext variables', () => {
   const required = [
-    ['Inter Display', 'inter', 'opsz', 'inter-latin-opsz-normal.woff2', 'inter-latin-ext-opsz-normal.woff2', '100 900'],
+    ['Inter', 'inter', 'opsz', 'inter-latin-opsz-normal.woff2', 'inter-latin-ext-opsz-normal.woff2', '100 900'],
     ['JetBrains Mono', 'jetbrains-mono', 'wght', 'jetbrains-mono-latin-wght-normal.woff2', 'jetbrains-mono-latin-ext-wght-normal.woff2', '100 800'],
   ];
   for (const [family, dir, axis, latin, extended, weights] of required) {

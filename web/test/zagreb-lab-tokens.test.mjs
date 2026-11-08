@@ -9,22 +9,22 @@ const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const styles = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 const required = {
   '--ui-bg': '#0b0d33',
-  '--ui-glass': 'rgba(11,13,51,.66)',
-  '--ui-surface': '#161a78',
-  '--ui-line': 'rgba(92,92,255,.16)',
-  '--ui-line-strong': 'rgba(92,92,255,.24)',
+  '--ui-glass': 'rgba(11,13,51,.72)',
+  '--ui-surface': '#11144a',
+  '--ui-line': '#2b3170',
+  '--ui-line-strong': '#3d4390',
   '--ui-fg': '#ecebf7',
   '--ui-muted': '#9a9ccc',
-  '--ui-faint': '#6b6fa8',
+  '--ui-faint': '#5d6199',
   '--ui-gold': '#d8b55a',
-  '--ui-gold-light': '#edd18f',
+  '--ui-gold-light': '#e3c46f',
   '--ui-link': '#8f96ff',
   '--ui-ok': '#6ee7a8',
   '--ui-bad': '#ff6b81',
   '--paper': '#F4EFE6', '--red': '#FE2A00',
   '--step': '8px',
-  '--display': '"Inter Display",sans-serif',
-  '--mono': '"JetBrains Mono",ui-monospace,monospace',
+  '--display': '"Inter",system-ui,sans-serif',
+  '--mono': '"JetBrains Mono",ui-monospace,Menlo,monospace',
 };
 const contrast = (a, b) => {
   const [hi, lo] = [a, b].map(hex => rgb(hex).map(lin).reduce((y, c, i) => y + c * [0.2126, 0.7152, 0.0722][i], 0)).sort((x, y) => y - x);

@@ -23,12 +23,16 @@ export const THEMES = {
   // Inter and all UI surfaces are local; no reference-page JavaScript or telemetry is loaded.
   lab: {
     name: 'Zagreb Lab',
-    sky: '#0b0d33', land: '#11144a', water: '#1f3f61', maquette: '#11144a',
-    unknown: '#2b3170', unknownHatch: '#6272c0', quay: '#4c4a4b', reliefShade: 0.35,
+    // Reference water #161a78 fails the slope test at dE 7.0. Raising only blue by
+    // 12 levels preserves its navy identity and clears every ground/vision check.
+    sky: '#0b0d33', land: '#11144a', water: '#161a84', maquette: '#11144a',
+    // Reference hatch #3d4390 insufficiently separates from the unknown ground.
+    // +4 green and +1 blue gives at least dE 8.23 in every colour-vision mode.
+    unknown: '#2b3170', unknownHatch: '#3d4791', quay: '#4c4a4b', reliefShade: 0.35,
     labelInk: '#ecebf7', labelHalo: 'rgba(11,13,51,0.85)', waterInk: '#b6bbff',
     estimateTo: '#000000', hoverTo: '#ecebf7', font: 'Inter',
-    // A violet-to-gold ramp, tuned for all CVD and estimate pairs below.
-    periods: ['#2d1b49', '#583870', '#4e3db9', '#655ac8', '#aba5e1', '#ddd1b2'],
+    // Deep violet through the specified #5c5cff and #8f96ff to the metallic gold.
+    periods: ['#2d1b49', '#583870', '#4e3db9', '#5c5cff', '#8f96ff', '#d8b55a'],
     floors: ['#536eaa', '#849cc5', '#bfc8df', '#fff1cf'],
     ui: {
       '--bg': '#0b0d33', '--ink': '#ecebf7', '--muted': '#9a9ccc', '--panel': '#11144a',

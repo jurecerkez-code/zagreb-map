@@ -67,12 +67,12 @@ test('@zagreb-lab new theme keeps the six period/gateway slot shape', () => {
     assert.ok(Object.hasOwn(THEMES.lab, slot), slot);
   assert.equal(THEMES.lab.sky, '#0b0d33');
   assert.equal(THEMES.lab.land, '#11144a');
-  assert.equal(THEMES.lab.water, '#1f3f61');
+  assert.equal(THEMES.lab.water, '#161a84');
   assert.equal(THEMES.lab.maquette, '#11144a');
   assert.equal(THEMES.lab.unknown, '#2b3170');
-  assert.equal(THEMES.lab.unknownHatch, '#6272c0');
+  assert.equal(THEMES.lab.unknownHatch, '#3d4791');
   assert.equal(THEMES.lab.quay, '#4c4a4b');
-  assert.deepEqual(THEMES.lab.periods, ['#2d1b49', '#583870', '#4e3db9', '#655ac8', '#aba5e1', '#ddd1b2']);
+  assert.deepEqual(THEMES.lab.periods, ['#2d1b49', '#583870', '#4e3db9', '#5c5cff', '#8f96ff', '#d8b55a']);
   assert.deepEqual(THEMES.lab.floors, ['#536eaa', '#849cc5', '#bfc8df', '#fff1cf']);
   assert.notDeepEqual(THEMES.lab.periods, THEMES.foto.periods, 'Lab has an accessible violet-to-gold map identity');
   assert.notDeepEqual(THEMES.lab.floors, THEMES.foto.floors);
@@ -91,7 +91,7 @@ test('@zagreb-lab static integration is real, local, labelled, and bilingual', (
     assert.ok(en[key], `English ${key}`);
     assert.ok(hr[key], `Croatian ${key}`);
   }
-  assert.match(css, /\[data-ui="lab"\][^{]*\.timeline[^\{]*\{[^}]*background:\s*var\(--bg\)/s);
+  94|  assert.match(css, /\[data-ui="lab"\][^{]*\.timeline[^\{]*\{[^}]*background:\s*var\(--ui-glass\)/s);
   assert.match(css, /prefers-reduced-motion:\s*no-preference/);
   const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   const sky = app.slice(app.indexOf('function applySky()'), app.indexOf('\n}\n', app.indexOf('function applySky()')));
