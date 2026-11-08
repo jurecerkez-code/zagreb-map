@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import shapely
 
-from . import city, codes, terrain
+from . import city, codes, contributions, terrain
 from . import zagreb_city as zc
 from . import zagreb_heritage as zh
 from . import zagreb_sat as zs
@@ -100,6 +100,12 @@ def main_city(src: dict, helpers) -> None:
     # estimate tier (cross-validated), then the privacy rule
     # Trained and tested on the record years only (EXACT/RANGE/LONG); area and typology years (AREA) never enter it.
     accuracy = zc.run_estimate(b, kategori, height_max, district, y)
+    # On Zagreb's own footprints, apply accepted GitHub-issue years from pipeline/contributions.csv
+    # after every other tier (they neither train nor test the estimate) and before the privacy mark.
+    # The existing contributor loader checks the marker against this actual build's gids.
+    reader = contributions.reader_years(contributions.read(contributions.PATH), b)
+    readers = contributions.apply_years(reader, pd.Series(np.arange(n), index=b.gid), y["year"], y["y_from"],
+                                        y["y_to"], y["ysrc"], y["yflag"])
     period, private = zc.privacy(y, kategori == "house")
     log(t0, f"estimate: {accuracy['result']}; cells estimating: "
             f"{[(c['group'], c['era'], c['inner'], c.get('right_period'), c.get('band')) for c in accuracy['cells'] if c['status'] == 'estimate']}")
@@ -292,7 +298,7 @@ def main_city(src: dict, helpers) -> None:
                                                        ("unknown", codes.UNKNOWN))},
         "heritage": her_info, "heritage_reads": {f"{a}: {b_}": int(c) for (a, b_), c in her_reads.items()},
         "satellite": {"after_1990": int((sat.sat == 1990).sum()), "after_2000": int((sat.sat == 2000).sum())},
-        "private_houses": int((kategori == "house").sum()), "private_dated": int(private.sum()),
+        "private_houses": int((kategori == "house").sum()), "private_dated": int(private.sum()), "reader_years": readers,
         "periods": np.bincount(period[yf != codes.UNKNOWN], minlength=len(city.PERIODS)).tolist(),
         "addresses": int(len(addr)), "street_label_candidates": len(cands), "water_pieces": len(water),
     }

@@ -1,0 +1,66 @@
+name: Accepted building years
+
+on:
+  schedule:
+    # Monday, separate from other repository work. GitHub can delay scheduled workflows.
+    - cron: "13 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: read
+  pull-requests: write
+
+concurrency:
+  group: accepted-building-years
+  cancel-in-progress: false
+
+jobs:
+  candidates:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+      - name: Install the pinned project dependencies
+        run: uv sync --locked
+      - name: Read the accepted, contribution-labelled issues
+        run: >-
+          gh api --paginate --slurp --method GET repos/${{ github.repository }}/issues
+          -F state=open -F "labels=accepted,contributions" -F per_page=100 > "$RUNNER_TEMP/year-accepted.json"
+      - name: Do not duplicate an already pending contribution PR
+        run: |
+          count=$(gh pr list --head crowd/building-years --state open --json number --jq 'length')
+          test "$count" -eq 0 || {
+            echo 'An earlier crowd/building-years PR is still open; merge it before proposing another batch.'
+            exit 0
+          }
+          test -s "$RUNNER_TEMP/year-accepted.json"
+      - name: Convert only fully evidenced issues into candidate rows
+        run: uv run python scripts/year_contributions.py --issues-json "$RUNNER_TEMP/year-accepted.json"
+      - name: Do not open a PR without a new validated candidate row
+        id: rows
+        run: |
+          if git diff --quiet -- pipeline/contributions.csv; then
+            echo 'No new valid rows. Existing and rejected issues stay with the maintainer; nothing was published.'
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            uv run python -m pipeline.contributions check
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Propose the contribution change for review
+        if: steps.rows.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: crowd/building-years
+          delete-branch: true
+          title: "data(years): accepted building-year contributions"
+          commit-message: "data(years): accept reviewed building-year contributions"
+          labels: contributions
+          body: |
+            Created from accepted, fully evidenced `year.yml` issues by the weekly workflow.
+            Source URL and public explanation are in each CSV row. Review this PR and merge it before the next batch.
+            This proposal does not change web/data/current.json and does not mark an issue resolved or publish a data version.

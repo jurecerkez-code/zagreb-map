@@ -1,0 +1,49 @@
+name: Building year evidence
+description: Tell us when an undated Zagreb building was constructed, with a source we can check.
+title: "[year] "
+labels: [contributions, needs-human]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Public building information only, please: no owner's or resident's name, email address, or phone number.
+        A maintainer will check the source before adding `accepted`. Leave `needs-human` in place while review is pending.
+  - type: input
+    id: gid
+    attributes:
+      label: Building ID (gid)
+      description: The number in the map's building card / prefilled link, not a parcel UUID.
+      placeholder: "42"
+    validations:
+      required: true
+  - type: input
+    id: address
+    attributes:
+      label: Address (if public)
+      description: Street and house number, if the public card already shows one. Do not add a private resident's details.
+    validations:
+      required: false
+  - type: input
+    id: year
+    attributes:
+      label: Construction year
+      description: One four-digit year, 1000–2026. Do not submit an estimate as a measured year.
+      placeholder: "1938"
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: Source URL
+      description: A publicly inspectable HTTPS source (permit, official register, archive page, not a private share link).
+      placeholder: https://example.org/permit/42
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: How do you know?
+      description: What does that source say? A short factual explanation, not personal details or a guessed year.
+      placeholder: The building permit on this page is dated 1938.
+    validations:
+      required: true

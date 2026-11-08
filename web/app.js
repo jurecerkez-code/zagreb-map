@@ -48,6 +48,7 @@ import { aboutHtml, aboutTarget } from './about.js';
 import { tabsHtml, newsHtml, showDot, newestDate, nextTab, NEWS_KEY } from './news.js';
 import { buildingRef } from './report.js';
 import { reportDialog } from './report-form.js';
+import { yearIssueUrl } from './crowd-year.js';
 import { cornerHtml, cornerParts } from './credits.js';
 import { mountScenePlayer } from './scene-player.js';
 import { makeWeather, initialWeather, weatherHref, frameRate, WEATHER_KEY, NAMES as WEATHER_NAMES, SNOW, WET, SHIMMER,
@@ -2116,10 +2117,12 @@ function cardHtml(gid, pinned) {
   //. s03 already leaves them out of the card of every non-curated building in PRIVATE_HOUSE_KATEGORI;
   // cardLinks is a second guard for the RAÄ link.
   const links = cardLinks(more, b, T, config.links);
+  const yearCta = unknown && pinned ? `<section class="year-cta"><h3>${esc(T('card.year.cta'))}</h3><p>${yearIssueUrl(gid, more.addr || '')
+    ? `<a href="${esc(yearIssueUrl(gid, more.addr || ''))}" target="_blank" rel="noopener">${esc(T('card.year.link'))}</a>` : ''}</p></section>` : '';
   const picked = gid === forcedGid && hiddenByMap(b) ? `<p class="picked">${esc(T('card.picked'))}</p>` : '';
   return `
     <button class="card-close" aria-label="${esc(T('card.close'))}">×</button>
-    ${photo || ''}${head}${dating}${rebuiltHtml}${picked}
+    ${photo || ''}${head}${dating}${yearCta}${rebuiltHtml}${picked}
     <section><dl>${facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
       ${b.rating ? `<p class="why">${esc(T('card.rating.why'))}</p>` : ''}</section>
     ${plaquesOn ? plaqueSection(plaquesOf.get(gid), T, esc) : ''}
