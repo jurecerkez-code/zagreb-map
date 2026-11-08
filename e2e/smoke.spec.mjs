@@ -280,7 +280,8 @@ test('buildings without a year stand at "Today" and leave whenever the map shows
 // Flipped on while the film hides them: they come back and stay at every year, and the choice is remembered.
 test('the switch flipped on during Play keeps buildings without a year at every year, and is remembered', async ({ page }) => {
   const errors = watchErrors(page);
-  await page.goto('/');
+  // Keep Play running through keyboard activation even while a full-city software WebGL run loads and lays out.
+  await page.goto('/?film=120');
   await expect(page.locator('#loading')).toBeHidden({ timeout: 60_000 });
   const config = await cityConfig(page);
   const title = page.locator('#year'), play = page.locator('#play');
@@ -295,7 +296,8 @@ test('the switch flipped on during Play keeps buildings without a year at every 
   await page.keyboard.press('Space');
   await expect(sw).toHaveAttribute('aria-pressed', 'true');
   await expect(sw).toBeFocused(); // switched in place, not rebuilt
-  await expect.poll(() => standing(page)).toBe(1);
+  // Software WebGL can hold the first map-state response just past the default five-second poll deadline.
+  await expect.poll(() => standing(page), { timeout: 10_000 }).toBe(1);
   expect(await stored(page)).toBe('show');
   await expect(page.locator(HINT)).toHaveText('Your choice is remembered.');
   // The film goes on, and they stay.
