@@ -17,7 +17,7 @@ export async function rewriteDeployedPages(webRoot) {
   for (const name of await readdir(dist)) {
     if (!name.endsWith('.js')) continue;
     const path = join(dist, name), source = await readFile(path, 'utf8');
-    const rewritten = source.replace(/(from\s*|import\s*)(["'])\.\/vendor\//g, '$1$2../vendor/');
+    const rewritten = source.replace(/(from\s*|import\s*\(\s*|import\s*)(["'])\.\/vendor\//g, '$1$2../vendor/');
     await writeFile(path, rewritten);
   }
 }

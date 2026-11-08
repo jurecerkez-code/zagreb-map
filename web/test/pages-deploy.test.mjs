@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, cp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { gzipSync } from 'node:zlib';
+import { build } from 'esbuild';
 import { join } from 'node:path';
 import { rewriteDeployedPages } from '../../scripts/pages-dist.mjs';
 
@@ -21,6 +24,31 @@ test('deployed rewrite fixes only the deployed entry and external vendor paths',
   assert.ok(app.includes('"../vendor/three.module.js"'));
   assert.ok(app.includes('"../vendor/three.core.js"'));
 });
+
+test('generated dist resolves and executes the dynamic fflate fallback', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'issue29-dist-gzip-'));
+  const web = join(root, 'web'), dist = join(web, 'dist');
+  await mkdir(dist, { recursive: true });
+  await writeFile(join(web, 'index.html'), '<script type="module" src="app.js"></script>');
+  await cp(fileURLToPath(new URL('../vendor', import.meta.url)), join(web, 'vendor'), { recursive: true });
+  await build({ entryPoints: { app: fileURLToPath(new URL('../gz.js', import.meta.url)) }, bundle: true,
+    format: 'esm', splitting: true, minify: true, outdir: dist, external: ['./vendor/*'], logLevel: 'silent' });
+  const before = await readFile(join(dist, 'app.js'), 'utf8');
+  assert.match(before, /import\(["']\.\/vendor\/fflate\.js["']\)/, 'this fixture must exercise the dynamic import');
+  await rewriteDeployedPages(web);
+  const emitted = await readFile(join(dist, 'app.js'), 'utf8');
+  assert.match(emitted, /import\(["']\.\.\/vendor\/fflate\.js["']\)/);
+  const native = globalThis.DecompressionStream;
+  try {
+    globalThis.DecompressionStream = undefined;
+    const { gunzip } = await import(pathToFileURL(join(dist, 'app.js')).href);
+    const decoded = await gunzip(gzipSync(Buffer.from('actual generated dist fallback')));
+    assert.equal(Buffer.from(decoded).toString(), 'actual generated dist fallback');
+  } finally {
+    globalThis.DecompressionStream = native;
+  }
+});
+
 
 test('local module paths and every Pages bundle entry are explicit', async () => {
   const [index, app, roads, workflow] = await Promise.all([

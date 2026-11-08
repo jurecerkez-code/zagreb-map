@@ -38,6 +38,8 @@ function workerContext({ current = 'v20261108-live', currentFails = false, scope
         return Response.json({ version: current });
       }
       if (offline) throw new Error('offline');
+      if (url.endsWith('/zagreb.json')) return Response.json({ version: current, revealPacks: 4,
+        packs: ['pack0.bin.gz', 'pack1.bin.gz', 'pack2.bin.gz', 'pack3.bin.gz', 'pack4.bin.gz', 'pack5.bin.gz'] });
       return new Response('from network', { status: responseStatus });
     },
   };
@@ -95,6 +97,26 @@ test('only same-origin GET data files are intercepted; unsuccessful and partial 
   }
   assert.equal(c.writes.length, 0);
 });
+
+test('install precaches config and reveal packs so the next navigation is offline-ready', async () => {
+  const c = workerContext();
+  let installing;
+  c.events.install({ waitUntil: promise => { installing = promise; } });
+  await installing;
+  const cached = ['zagreb.json', 'pack0.bin.gz', 'pack1.bin.gz', 'pack2.bin.gz', 'pack3.bin.gz']
+    .map(name => `https://example.test/map/data/v20261108-live/${name}`);
+  assert.deepEqual(c.writes.map(row => row.url).sort(), cached.toSorted());
+  c.setOffline(true);
+  const beforeSecondNavigation = c.requests.length;
+  for (const url of cached) {
+    const response = await c.fetchEvent(new Request(url));
+    if (url.endsWith('/zagreb.json')) assert.equal((await response.json()).version, 'v20261108-live');
+    else assert.equal(await response.text(), 'from network');
+  }
+  assert.equal(c.requests.length, beforeSecondNavigation, 'second navigation must hit the installed cache, not network');
+  assert.equal(c.writes.some(row => row.url.endsWith('pack4.bin.gz')), false, 'noncritical packs do not hold install');
+});
+
 
 test('activation reads current.json with no-store and deletes only old map-version caches', async () => {
   const c = workerContext();
