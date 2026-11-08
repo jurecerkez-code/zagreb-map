@@ -29,6 +29,7 @@ import { makeRideHud } from './ride-hud.js';
 import { mountBoatTip } from './boat-tip.js';
 import { estimateTone, inkOn, rgba, luma, rgb, unknownFill } from './tone.js';
 import { THEMES, SHADING } from './themes.js';
+import { chromeKind, chromeTokens, labSpecification, mountLabChrome } from './zagreb-lab.js';
 import { createLooks } from './look.js';
 import { mountSwitcher } from './switcher.js';
 import { initialCollapsed, LEGEND_KEY, photoOnlyFrom, photoOnlyHref, markPhotos, plaquesOnFrom, plaquesHref, PLAQUE_KEY,
@@ -61,23 +62,31 @@ import { makePosterPass, posterInks, posterColours, posterYear, nearestIndex } f
 // Colours are authored in sRGB and drawn as they are.
 THREE.ColorManagement.enabled = false;
 
-// Looks (web/themes.js), chosen in web/look.js: ?theme=arg|kalk|blatimme|paper, else the viewer's last choice, else
-// Ärg. THEME is the look on now (THEME.unknown: buildings with no year yet, a neutral grey apart from the maquette).
+// Looks (web/themes.js), chosen in web/look.js: ?theme=lab|arg|kalk|blatimme|paper|foto, else the viewer's
+// last choice, else Foto under Lab chrome. THEME owns the scene; zagreb-lab.js owns the page's Lab/Paper chrome.
 // applyLook (see Looks below) re-applies a switch to everything drawn in the look's colours. The page's own colours
 // and font are set here already, before the city loads, so the loading line is drawn in the look.
 const looks = createLooks();
-let THEME_NAME, THEME, FONT;
+let THEME_NAME, THEME, FONT, labChrome;
 function applyPageLook(name) {
   THEME_NAME = name;
   THEME = THEMES[name];
   FONT = `"${THEME.font}"`;
-  for (const [k, v] of Object.entries(THEME.ui)) document.documentElement.style.setProperty(k, v);
-  document.documentElement.style.setProperty('--font', FONT);
+  const ui = chromeTokens(name);
+  for (const [k, v] of Object.entries(ui)) document.documentElement.style.setProperty(k, v);
+  document.documentElement.style.setProperty('--sky', THEME.sky);
+  // Map lettering keeps the scene font; the chrome independently uses Lab Inter or Paper typography.
+  document.documentElement.style.setProperty('--font', `"${THEMES[chromeKind(name)].font}"`);
   document.documentElement.dataset.theme = name;
-  // Native surfaces (scrollbars, form controls, the dialog's own surface) follow the look's ground, dark or light.
-  document.documentElement.style.colorScheme = luma(rgb(THEME.ui['--bg'])) < 0.5 ? 'dark' : 'light';
+  document.documentElement.dataset.ui = chromeKind(name);
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME.sky);
+  // Native surfaces (scrollbars, form controls, the dialog's own surface) follow the shared chrome tokens.
+  document.documentElement.style.colorScheme = luma(rgb(ui['--bg'])) < 0.5 ? 'dark' : 'light';
+  labChrome?.sync(chromeKind(name));
 }
 applyPageLook(looks.current);
+labChrome = mountLabChrome(document);
+labChrome.sync(chromeKind(looks.current));
 const GROUP_COLORS = ['#ec0000', '#1f4e8c', '#d99a12', '#2e8b57', '#7b3fa0', '#00909a', '#8c5a2b', '#d6336c'];
 const MAX_GROUPS = GROUP_COLORS.length;
 const ATTR_W = 256;
@@ -1252,7 +1261,7 @@ const sunButton = (() => {
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'sun-mode';
-  b.innerHTML = '<span aria-hidden="true">☀</span>';
+  b.innerHTML = '<span aria-hidden="true">☀</span><span class="lab-control-label" data-i18n="ui.lab.sun">Sun</span>';
   b.addEventListener('click', () => {
     applySunMode(sunMode === 'live' ? 'day' : sunMode === 'day' ? 'night' : 'live');
   });
@@ -2064,9 +2073,10 @@ function cardHtml(gid, pinned) {
   const place = placeLine({ ...more, dist: districtOf(gid) }, T);   // the first address and the stadsdel
   const head = `
     <header class="card-head" style="--band:${unknown ? unknownFill(THEME) : band};--band-ink:${inkOn(band)}">
+      <p class="lab-kicker" aria-hidden="true">${esc(T('ui.lab.record'))}</p>
+      ${place || (pinned && !b.private) ? `<p class="place" id="card-place">${place ? `<span>${esc(place)}</span>` : ''}${pinned && !b.private ? mapsPin(b) : ''}</p>` : ''}
       ${more.name ? `<h3 id="card-title">${esc(more.name)}</h3>` : ''}
       ${more.en && LANG === 'en' ? `<p class="en">${esc(more.en)}</p>` : ''}
-      ${place || (pinned && !b.private) ? `<p class="place" id="card-place">${place ? `<span>${esc(place)}</span>` : ''}${pinned && !b.private ? mapsPin(b) : ''}</p>` : ''}
       <div class="when"><span class="y" ${more.name ? '' : 'id="card-title"'}>${approx(yearLine(b, label, T))}</span>
         ${unknown || b.yflag === YFLAG.PERIOD ? '' : `<span class="period">${esc(label)}</span>`}</div>
     </header>`;
@@ -2553,7 +2563,7 @@ searchRoot.hidden = !FEATURES.search;
 searchOpen.hidden = !FEATURES.search;
 const searchBox = FEATURES.search ? mountSearch({
   root: searchRoot, openButton: searchOpen, getJson, base: `${DATA}search/`, T: () => T, onPick: pickResult,
-  buildings: config.stats.buildings, isPhone: () => phone.matches, focusMap: () => canvas.focus?.({ preventScroll: true }),
+  buildings: config.stats.buildings, isPhone: () => phone.matches || chromeKind(THEME_NAME) === 'lab', focusMap: () => canvas.focus?.({ preventScroll: true }),
   swatch: gid => { const b = building(gid); return b.yflag === YFLAG.UNKNOWN ? unknownFill(THEME) : isEstimate(b) ? estColors[b.period] : periods[b.period].color; },
 }) : null;
 // On a wide desktop the pill sits just right of the modes, whose width changes with the language.
@@ -2562,7 +2572,10 @@ const searchBox = FEATURES.search ? mountSearch({
 // calls this too (the final review's F6).
 function placeSearch() {
   searchRoot.style.top = '';
-  if (searchRoot.hidden || innerWidth <= 1100) { searchRoot.style.left = searchRoot.style.maxWidth = ''; return; }
+  if (searchRoot.hidden || chromeKind(THEME_NAME) === 'lab' || innerWidth <= 1100) {
+    searchRoot.style.left = searchRoot.style.maxWidth = '';
+    return;
+  }
   const modes = document.querySelector('.modes').getBoundingClientRect();
   const left = modes.right + 10, room = document.querySelector('.corner').getBoundingClientRect().left - 10 - left;
   if (room >= 180) {
@@ -3384,14 +3397,30 @@ function drawHist() {
       }
     }
   }
-  hctx.globalAlpha = 1;
-  hctx.fillStyle = THEME.ui['--muted'];
-  hctx.font = `500 11px ${FONT}, sans-serif`;
+  const histUi = chromeTokens(THEME_NAME);
+  hctx.fillStyle = histUi['--muted'];
+  const histFont = chromeKind(THEME_NAME) === 'lab'
+    ? getComputedStyle(document.documentElement).getPropertyValue('--mono').trim() || '"JetBrains Mono", ui-monospace, monospace'
+    : `${FONT}, sans-serif`;
+  hctx.font = `400 11px ${histFont}`;
   const step = w < 500 ? 200 : 100;
   for (let y = Math.ceil(T0 / step) * step; y <= T1; y += step) hctx.fillText(y, Math.min(w - 28, Math.max(0, xOf(y) - 13)), h - 4);
-  hctx.fillStyle = THEME.ui['--ink'];
+  const ui = chromeTokens(THEME_NAME);
+  hctx.fillStyle = chromeKind(THEME_NAME) === 'lab' ? ui['--ui-gold'] : ui['--ink'];
   hctx.fillRect(xOf(Y) - 1, 0, 2, plotH);
-  if (Yf > FROM_REST) { hctx.fillStyle = THEME.ui['--muted']; hctx.fillRect(xOf(Yf) - 0.5, 0, 1, plotH); }
+  if (Yf > FROM_REST) { hctx.fillStyle = ui['--muted']; hctx.fillRect(xOf(Yf) - 0.5, 0, 1, plotH); }
+  if (chromeKind(THEME_NAME) === 'lab') {
+    const label = String(Math.floor(Y)), cx = xOf(Y), badgeW = hctx.measureText(label).width + 12;
+    const badgeX = Math.max(0, Math.min(w - badgeW, cx - badgeW / 2));
+    hctx.fillStyle = ui['--ui-surface'];
+    hctx.fillRect(badgeX, plotH - 18, badgeW, 16);
+    hctx.strokeStyle = ui['--ui-gold']; hctx.lineWidth = 1;
+    hctx.strokeRect(badgeX + 0.5, plotH - 17.5, badgeW - 1, 15);
+    hctx.fillStyle = ui['--ui-gold'];
+    hctx.textAlign = 'center'; hctx.textBaseline = 'middle';
+    hctx.fillText(label, badgeX + badgeW / 2, plotH - 10);
+    hctx.textAlign = 'start'; hctx.textBaseline = 'alphabetic';
+  }
   drawLandmarks(w);
   placeGrips();
   if (uniforms.uMode.value === MODE.period) syncLegendCounts();
@@ -3957,6 +3986,8 @@ addEventListener('resize', resize);
 function applyStaticText() {
   document.documentElement.lang = LANG;
   document.querySelector('.dek').textContent = config.subtitle?.[LANG] || config.subtitle?.en || '';
+  const labSummary = document.getElementById('lab-spec-summary');
+  if (labSummary) labSummary.textContent = labSpecification(config, T);
   document.querySelector('meta[name="description"]')?.setAttribute('content', T('ui.description'));
   // Every static text and label by its id (data-i18n, data-i18n-aria in index.html)
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = T(el.dataset.i18n); });
@@ -4138,6 +4169,7 @@ function recolourLegend() {
 const skyNow = () => weather.sky(THEME.sky);
 function applySky() {
   const sky = skyNow();
+  document.documentElement.style.setProperty('--sky', sky);
   renderer.setClearColor(sky);
   uniforms.uFogColor.value.set(sky);
 }
@@ -4149,8 +4181,9 @@ function applyNightSky(night) {
     renderer.setClearColor(dark, 1);
     uniforms.uFogColor.value.set(dark);
     document.documentElement.style.setProperty('--bg', dark);
-  } else if (THEME?.ui?.['--bg']) {
-    document.documentElement.style.setProperty('--bg', THEME.ui['--bg']);
+  } else {
+    // Leaving Night restores the selected UI chrome, not the separate map look's paper ground.
+    document.documentElement.style.setProperty('--bg', chromeTokens(THEME_NAME)['--bg']);
   }
 }
 // What an atmosphere's start(ctx) gets to work with (web/look.js).

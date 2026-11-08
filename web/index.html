@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-ui="lab">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -40,8 +40,10 @@
      the preload is a different request from the module's (credentials mode), and the file is fetched twice. -->
 <link rel="modulepreload" href="vendor/three.core.js" crossorigin>
 <link rel="modulepreload" href="vendor/three.module.js" crossorigin>
+<link rel="preload" href="fonts/inter/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="styles.css">
 <link rel="stylesheet" href="scene-player.css">
+<link rel="stylesheet" href="zagreb-lab.css">
 </head>
 <body>
 <noscript><p class="noscript">Zagreb, building by building is a 3D map of Zagreb, with known and unknown years. It needs JavaScript and WebGL. The fork is based on Hus för hus and Amsterdam, building by building (MIT). Its code and data sources: <a href="https://github.com/jurecerkez-code/zagreb-map">github.com/jurecerkez-code/zagreb-map</a>.</p></noscript>
@@ -53,8 +55,15 @@
 
 <header class="masthead">
   <div>
+    <p id="lab-code" data-i18n="ui.lab.city">GRAD ZAGREB · ZG3D 2022 · LOD2.2</p>
     <h1>Zagreb</h1>
     <p class="dek">Zagreb, building by building · zgradu po zgradu</p>
+    <div id="lab-spec" class="lab-spec" aria-label="Zagreb Lab worksheet specification">
+      <span id="lab-spec-summary"></span><span>ZAGREB LAB · 048</span>
+      <span><b data-i18n="ui.lab.ground">Ground</b> <code>#0B0D33</code></span>
+      <span><b data-i18n="ui.lab.ink">Ink</b> <code>#ECEBF7</code></span>
+      <span><b data-i18n="ui.lab.font">Font</b> <code>Inter</code></span>
+    </div>
   </div>
 </header>
 
@@ -87,18 +96,24 @@
      the buttons down. -->
 <div class="corner">
   <div class="tally" aria-live="polite">
-    <span id="year" class="tally-year">&nbsp;</span>
-    <span class="tally-count"><span id="count">0</span> zgrada<span id="tally-note"></span></span>
+    <span id="year" class="tally-year" data-registration="048 · GODINA / YEAR">&nbsp;</span>
+    <span class="tally-count" data-registration="048 · BROJ / COUNT"><span id="count">0</span> zgrada<span id="tally-note"></span></span>
   </div>
   <div class="buttons">
-    <button class="search-open" aria-label="Search" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4L14 14"/></svg></button>
+    <button class="search-open" aria-label="Search" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4L14 14"/></svg><span class="lab-control-label" data-i18n="search.open">Search</span></button>
+    <button id="lab-layers" class="layers-open" aria-controls="panel-body" aria-expanded="true" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m2 5 6-3 6 3-6 3zM2 8l6 3 6-3M2 11l6 3 6-3"/></svg><span class="lab-control-label" data-i18n="ui.lab.layers">Layers</span></button>
     <!-- The north button (web/north.js): the needle points north as the map turns; a press turns the map to face it. -->
     <button class="north-open" aria-label="Heading: click turns to the next side (N → E → S → W), drag the needle to face anywhere, keys N/E/S/W" title="Heading: click turns to the next side (N → E → S → W), drag the needle to face anywhere, keys N/E/S/W" aria-keyshortcuts="N E S W"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="needle-n" d="M8 1.6 10.5 8h-5z"/><path class="needle-s" d="M5.5 8 8 14.4 10.5 8z"/></svg></button>
     <!-- Postcard mode (web/postcard.js): the map without its panels, framed and saved as a picture. -->
     <button class="postcard-open" aria-label="Postcard" title="Postcard (P)" aria-keyshortcuts="P" data-i18n-aria="postcard.open"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.2 5.6c0-.8.6-1.4 1.4-1.4h1.6l1.1-1.7h3.4l1.1 1.7h1.6c.8 0 1.4.6 1.4 1.4v6.2c0 .8-.6 1.4-1.4 1.4H3.6c-.8 0-1.4-.6-1.4-1.4z"/><circle cx="8" cy="8.5" r="2.4"/></svg></button>
     <!-- The Look switcher (web/switcher.js) fills the dialog: a popover here, a bottom sheet on a phone. -->
-    <button class="look-open" aria-haspopup="dialog" aria-expanded="false" aria-controls="look"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z"/></svg><span>Look</span></button>
+    <button class="look-open" aria-haspopup="dialog" aria-expanded="false" aria-controls="look"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M8 1.8a6.2 6.2 0 0 1 0 12.4z"/></svg><span data-i18n="ui.lab.look">Look</span></button>
+    <button id="lab-more-button" class="lab-more-open" aria-haspopup="dialog" aria-expanded="false" aria-controls="lab-more" hidden><span aria-hidden="true">⋯</span><span class="visually-hidden" data-i18n="ui.lab.more">More</span></button>
     <dialog id="look" class="look" aria-labelledby="look-title"></dialog>
+    <dialog id="lab-more" class="lab-more" aria-labelledby="lab-more-title">
+      <div class="lab-more-head"><h2 id="lab-more-title" data-i18n="ui.lab.more">More</h2><button class="lab-more-close" aria-label="Close" data-i18n-aria="ui.close">×</button></div>
+      <div id="lab-more-items" class="lab-more-items"></div>
+    </dialog>
     <!-- History scenes (web/scene-player.js): its list drops below the buttons. -->
     <button class="stories-open" aria-haspopup="true" data-i18n="ui.stories">Stories</button>
     <div class="lang" role="group" aria-label="Language" data-i18n-aria="ui.lang">
@@ -118,12 +133,12 @@
 <!-- The report form (web/report-form.js): "Something wrong?" on a card, "Suggest something" in About. -->
 <dialog id="report" class="about report" aria-labelledby="report-title"></dialog>
 
-<aside id="panel" class="panel">
+<aside id="panel" class="panel" data-registration="048 · SLOJEVI / LAYERS">
   <button class="sheet-handle" aria-expanded="true" aria-controls="panel-body">Hide legend</button>
   <div id="panel-body"></div>
 </aside>
 
-<div id="card" class="card" hidden></div>
+<div id="card" class="card" data-registration="048 · ZGRADA / BUILDING" hidden></div>
 <div id="boat-tip" class="card boat-tip" aria-hidden="true" hidden></div>
 <div id="tram-tip" class="card tram-tip" aria-hidden="true" hidden></div>
 <!-- Riding a tram (app.js startRide): Vozim se in a tram's sheet drops the camera behind it, and this is the way out
@@ -165,7 +180,7 @@
   <p class="pc-status visually-hidden" aria-live="polite"></p>
 </section>
 
-<footer class="timeline">
+<footer class="timeline" data-registration="048 · GODINE / YEARS">
   <button id="play" class="play" aria-label="Play the city's growth">
     <svg viewBox="0 0 16 16" aria-hidden="true"><path id="play-icon" d="M4 2.5v11l9-5.5z"/></svg>
   </button>

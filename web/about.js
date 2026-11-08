@@ -171,6 +171,12 @@ export function aboutHtml(config, T, howto = '') {
     <p class="lead">${T('about.lead', k)}</p>
     <nav class="about-nav" aria-label="${esc(T('about.nav'))}">${SECTIONS.map(n =>
       `<a href="#about/${n}" data-section="${n}">${esc(T(`about.nav.${n}`))}</a>`).join('')}</nav>
+    <section class="lab-quick-guide" aria-labelledby="lab-quick-guide-title">
+      <p class="lab-kicker" aria-hidden="true">ZGRB / LAB</p>
+      <h3 id="lab-quick-guide-title">${esc(T('about.lab.title'))}</h3>
+      <dl>${['map', 'timeline', 'legend', 'card'].map(topic => `<dt>${esc(T(`about.lab.${topic}.title`))}</dt><dd>${esc(T(`about.lab.${topic}`))}</dd>`).join('')}</dl>
+      <p class="lab-manual-keys"><kbd>Tab</kbd> · <kbd>Esc</kbd> ${esc(T('about.lab.keyboard'))}</p>
+    </section>
     <h3>${esc(T('about.use.title'))}</h3>
     <ul>${['play', 'range', 'period', 'floors', 'card', 'search', 'look'].map(i => `<li>${esc(T(`about.use.${i}`))}</li>`).join('')}
       ${howto ? `<li>${esc(howto)}</li>` : ''}</ul>
