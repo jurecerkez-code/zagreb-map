@@ -183,3 +183,36 @@ test('the film makes one twenty-degree orbit, or none under reduced motion', asy
     await record(page);
   }
 });
+
+test('a natural arrival really renders the completed undated-building rise', async ({ page }) => {
+  test.setTimeout(240_000);
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('/?film=1&weather=none&tram=0');
+  await expect(page.locator('#loading')).toBeHidden({ timeout: 180_000 });
+  // Do not let tile arrivals supply the frames under test. After this, clear weather and ?tram=0 add no activity.
+  await expect.poll(() => page.evaluate(() => {
+    const s = window.__dbg.stats();
+    return s.tiles === s.tilesTotal && window.__dbg.rate() === 0;
+  }), { timeout: 120_000 }).toBe(true);
+  await page.evaluate(() => {
+    const d = window.__dbg;
+    const render = d.renderer.render.bind(d.renderer);
+    window.arrivalDraws = [];
+    d.renderer.render = (...args) => {
+      const unknown = d.uniforms.uShowUnknown.value;
+      const playing = d.playState().playing;
+      const before = d.rendered();
+      const result = render(...args);
+      window.arrivalDraws.push({ unknown, playing, before, after: d.rendered() });
+      return result;
+    };
+  });
+  expect(await page.evaluate(() => window.__dbg.weather.kind)).toBe('none');
+  await page.locator('#play').click();
+  await expect.poll(() => page.evaluate(() => !window.__dbg.playState().playing), { timeout: 30_000 }).toBe(true);
+  // Observe completed WebGLRenderer.render calls, not merely the uniform evolving in skipped rAF steps.
+  await expect.poll(() => page.evaluate(() => {
+    const d = window.arrivalDraws.at(-1);
+    return d && !d.playing && d.after > d.before && d.unknown;
+  }), { timeout: 5_000 }).toBe(1);
+});

@@ -3551,6 +3551,7 @@ function datedFilmCount() {
   return countDatedAt(uniforms.uYear.value, config.histogram, config.histogramEst);
 }
 function showFilmArrival() {
+  invalidate(1000);   // the undated buildings' 0.88 s rise, plus scheduling slack (#25)
   clearTimeout(arrivalTimer);
   filmNote.hidden = false;
   filmNote.textContent = T('ui.film.arrival');
@@ -3656,6 +3657,12 @@ let unknownSolo = false, unknownWas = null;
 function stepUnknown(dt) {
   const { shown, solo } = unknownNow();
   const u = uniforms.uShowUnknown;
+  // A target switch can be the only change on an idle map. Wake it and render the whole eased transition;
+  // solo and reduced-motion switches snap, so they need just this frame.
+  if (unknownWas !== null && (shown !== unknownWas || solo !== unknownSolo)) {
+    invalidate(calm.matches || solo !== unknownSolo ? 0 : 1000);
+    frameDue = -1;
+  }
   if (solo !== unknownSolo || calm.matches) u.value = shown ? 1 : 0;
   else u.value = easeShown(u.value, shown, dt);
   if (shown !== unknownWas || solo !== unknownSolo) syncUnknownSwitch();
