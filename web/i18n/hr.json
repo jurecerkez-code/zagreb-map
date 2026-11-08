@@ -470,7 +470,7 @@
   "monument.type.cross": "Križ",
   "monument.unveiled": "Otkriven {year}.",
   "monument.removed": "uklonjen {from}, vraćen {to}",
-  "monument.noYear": "Godina nepoznata",
+  "monument.noYear": "Godina otkrivanja nije poznata",
   "monument.sculptor": "Kipar",
   "monument.sculptors": "Kipari",
   "monument.material": "Materijal",

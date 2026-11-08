@@ -133,10 +133,25 @@ test('card always has the labelled render panel; photo tabs are accessible and C
   assert.equal(nextMonumentMediaTab('ArrowRight', 'render', false), 'render');
 });
 
+test('a dated card names the year evidence; an undated one has no manufactured source', () => {
+  const dated = { id: 'node/evidence', name: 'Charlie Chaplin', kind: 'statue', h: 3.5, mat: 'bronze', year: 2008,
+    ysrc: 'osm:start_date', yurl: 'https://www.openstreetmap.org/node/42', yquote: 'start_date=2008' };
+  const html = monumentCard(dated, { T, esc, link, lang: 'en', photoHtml: '' });
+  assert.match(html, /class="monument-year-source"/);
+  assert.match(html, /title="start_date=2008"/);
+  assert.match(html, /href="https:\/\/www\.openstreetmap\.org\/node\/42">osm:start_date<\/a>/);
+  assert.match(html, /monument\.unveiled\(2008\)/);
+  const unknown = monumentCard({ ...dated, year: null }, { T, esc, link, lang: 'en', photoHtml: '' });
+  assert.doesNotMatch(unknown, /class="monument-year-source"/);
+  assert.match(unknown, /monument\.noYear/);
+});
+
 test('the UI labels are localized exactly and the pin path mounts actual renderer output', () => {
   const en = JSON.parse(readFileSync(new URL('../i18n/en.json', import.meta.url), 'utf8'));
   const hr = JSON.parse(readFileSync(new URL('../i18n/hr.json', import.meta.url), 'utf8'));
   assert.equal(hr['monument.render'], 'Prikaz na karti');
+  assert.equal(hr['monument.noYear'], 'Godina otkrivanja nije poznata');
+  assert.equal(en['monument.noYear'], 'Unveiling year unknown');
   assert.ok(en['monument.render'] && en['monument.media'] && hr['monument.media']);
   const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   assert.match(app, /monuments\.renderCard\(m\)/);

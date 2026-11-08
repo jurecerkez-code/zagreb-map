@@ -470,7 +470,7 @@
   "monument.type.cross": "Cross",
   "monument.unveiled": "Unveiled {year}",
   "monument.removed": "removed {from}, back {to}",
-  "monument.noYear": "Year unknown",
+  "monument.noYear": "Unveiling year unknown",
   "monument.sculptor": "Sculptor",
   "monument.sculptors": "Sculptors",
   "monument.material": "Material",

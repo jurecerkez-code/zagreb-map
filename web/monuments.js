@@ -305,6 +305,9 @@ export function monumentCard(m, { T, esc, link, lang, photoHtml }) {
   const kind = T(`monument.type.${m.kind}`);
   const year = m.year ? T('monument.unveiled', { year: m.year }) : T('monument.noYear');
   const removed = (m.removed || []).map(([a, b]) => T('monument.removed', { from: a, to: b + 1 })).join('; ');
+  const evidence = m.year && m.ysrc
+    ? ` · <span class="monument-year-source" title="${esc(m.yquote || m.ysrc)}">${m.yurl ? link(m.yurl, m.ysrc) : esc(m.ysrc)}</span>`
+    : '';
   const facts = [
     m.by?.length && [esc(T(m.by.length > 1 ? 'monument.sculptors' : 'monument.sculptor')), m.by.map(esc).join(', ')],
     [esc(T('monument.material')), esc(T(`monument.mat.${m.mat}`))],
@@ -343,7 +346,7 @@ export function monumentCard(m, { T, esc, link, lang, photoHtml }) {
       ${m.en && lang === 'en' ? `<p class="en">${esc(m.en)}</p>` : ''}
       <div class="when"><span class="y">${esc(m.year || '')}</span><span class="period">${esc(T('monument.kind'))} · ${esc(kind)}</span></div>
     </header>
-    <p class="dating">${esc(year)}${removed ? ` · ${esc(removed)}` : ''}</p>
+    <p class="dating">${esc(year)}${evidence}${removed ? ` · ${esc(removed)}` : ''}</p>
     <section><dl>${facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></section>
     ${excerpt}
     ${links.length ? `<section class="sources"><h4>${esc(T('card.readmore'))}</h4><p>${links.map(([h, t]) => link(h, t)).join(' · ')}</p></section>` : ''}
