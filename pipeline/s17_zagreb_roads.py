@@ -140,7 +140,7 @@ def write_compact(out, ways, points_xz, ground):
         raise ValueError("roads2: way offsets leave unowned points")
     doc = compact.write_roads2(out, rows, chunks, [name for name, _ in CLASSES], names,
                               metadata={"licence": LICENCE, "groups": GROUPS, "network": "road"})
-    compact.write_compact_config(out, "roads2", "roads2.json")
+    compact.write_compact_config(out, "roads2", doc)
     return doc
 
 

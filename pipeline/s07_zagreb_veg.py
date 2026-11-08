@@ -66,7 +66,7 @@ def write_compact(out, points_xyz, meta):
     scale = 0.88 + ((np.arange(len(points)) * 7) % 11) * 0.028
     doc = compact.write_veg2(out, points, scale=scale, width=scale * 11.8, year=np.zeros(len(points), np.uint16),
                              species=np.full(len(points), -1), kind="trees", meta=meta)
-    compact.write_compact_config(out, "veg2", "veg2.json")
+    compact.write_compact_config(out, "veg2", doc)
     return doc
 
 

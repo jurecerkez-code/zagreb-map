@@ -19,10 +19,11 @@ async function dataJson(url) {
 // Name fetched here, not in a global config pointer: config belongs to this exact version. Old folders make the same
 // requests as before. A v2 index may name only roads0.bin beside itself, never a parent or another version.
 export async function loadStreetData(base, config = null) {
+  const packed = config?.roads2 && typeof config.roads2 === 'object' ? config.roads2 : null;
   const file = chooseDataFile(config, 'roads2', 'roads.json', 'roads2.json');
-  const meta = await dataJson(`${base}${file}`);
+  const meta = packed ?? await dataJson(`${base}${file}`);
   const compact = meta.format === ROADS2_FORMAT;
-  if (compact && meta.file !== 'roads0.bin') throw new Error('roads2: bad sibling file');
+  if (compact && !['roads0.bin', 'roads2.bin.gz'].includes(meta.file)) throw new Error('roads2: bad sibling file');
   const [ptsBuf, lampBuf] = await Promise.all([compact ? meta.file : 'roads.bin.gz', 'lamps.bin.gz']
     .map(async name => {
       const response = await fetch(`${base}${name}`);

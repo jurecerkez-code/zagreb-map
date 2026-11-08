@@ -4220,7 +4220,7 @@ if (vegDebug) document.body.appendChild(vegDebug);
 performance.mark('veg-start');
 async function loadTrees() {
   try {
-    const v = await makeVeg({ THREE, base: DATA, scene, uniforms, config,
+    const v = await makeVeg({ THREE, base: DATA, scene, uniforms, config, surfaceAt,
       on: new URLSearchParams(location.search).get('veg') !== '0' });
     performance.measure('veg', 'veg-start');
     veg = v;

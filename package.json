@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:web": "node --test web/test/*.test.mjs",
+    "test:web": "node --test web/test/*.test.mjs tests/*.test.mjs",
     "test:e2e": "playwright test",
     "dist": "uv run python scripts/build_dist.py"
   },

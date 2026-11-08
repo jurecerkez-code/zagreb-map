@@ -23,11 +23,22 @@ from pathlib import Path
 import numpy as np
 import pyarrow.parquet as pq
 
-from . import compact, io, terrain
+from . import compact, io
 
 DATA = Path("data")
 WEB = Path("web") / "data"
 W = 512
+
+
+def write_ortho_payloads(out, roof, ground):
+    """Keep exact legacy RGBA8 buffers and add deterministic gzip under the issue's exact filenames."""
+    out = Path(out)
+    for name, rgba in (("roof_rgb", roof), ("ground_rgb", ground)):
+        rgba = np.asarray(rgba)
+        if rgba.dtype != np.uint8 or rgba.ndim != 3 or rgba.shape[2] != 4 or 0 in rgba.shape:
+            raise ValueError(f"{name}: expected a non-empty RGBA8 array")
+        raw = struct.pack("<II", rgba.shape[1], rgba.shape[0]) + rgba.tobytes()
+        io._write(out / f"{name}.bin.gz", gzip.compress(raw, 6, mtime=0))
 
 
 def write_ground_compact(out, rgb, grid, slopes):
@@ -72,21 +83,15 @@ def main(argv=None) -> int:
     ok = (gids >= 0) & (gids < n_b)
     roof[gids[ok], :3] = cols[ok]
     roof[gids[ok], 3] = 255
-    (out / "roof_rgb.bin").write_bytes(struct.pack("<II", W, roof.shape[0] // W) + roof.tobytes())
+    roof_rgba = roof.reshape(-1, W, 4)
 
     z = np.load(DATA / "ortho" / "ground_rgb.npz")
     arr = z["arr"]
     rgba = np.concatenate([arr, np.full(arr.shape[:2] + (1,), 255, np.uint8)], 2)
-    (out / "ground_rgb.bin").write_bytes(struct.pack("<II", rgba.shape[1], rgba.shape[0]) + rgba.tobytes())
     tj = json.loads((DATA / "terrain.json").read_text())
     assert (tj["nx"], tj["nz"]) == (rgba.shape[1], rgba.shape[0]), "ground colours do not match the terrain grid"
-
-    grid = {"x0": tj["x0"], "z0": tj["z0"], "cell": tj["cell"],
-            "h": terrain.unpack(gzip.decompress((out / "terrain.bin.gz").read_bytes()))["h"]}
-    assert grid["h"].shape == rgba.shape[:2], "ground colours and terrain heights differ in shape"
-    slopes = np.degrees(np.arctan(np.hypot(*np.gradient(grid["h"], grid["cell"]))))
-    write_ground_compact(out, arr, grid, slopes)
-    compact.write_compact_config(out, "ground2", "ground2.json")
+    write_ortho_payloads(out, roof_rgba, rgba)
+    compact.write_compact_config(out, "orthoGz", True)
 
     print(f"roof_rgb.bin {roof.shape[0] // W} rows x {W} px ({int(ok.sum()):,} of {n_b:,} buildings sampled); "
           f"ground_rgb.bin {rgba.shape[1]} x {rgba.shape[0]}; into {out}", flush=True)

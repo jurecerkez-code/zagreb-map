@@ -1,5 +1,6 @@
 // Dense legacy RGBA and v2 HDR18 ground-grid readers. Photos are real samples; a zero-alpha pixel stays unsampled.
 import { decodeHDR18 } from './compact-data.js';
+import { gunzip } from './gz.js';
 
 const size = value => Number.isSafeInteger(value) && value > 0 && value <= 65535;
 
@@ -33,10 +34,12 @@ export async function loadOrthoData(base, config = null, fetchImpl = globalThis.
   const bytes = async name => {
     const response = await fetchImpl(`${base}${name}`);
     if (!response.ok) throw new Error(`orthophoto ${response.status}: ${name}`);
-    return response.arrayBuffer();
+    const raw = await response.arrayBuffer();
+    return name.endsWith('.gz') ? gunzip(raw) : raw;
   };
-  // Roof metadata has no proven v2 writer yet: never quietly invent missing roof slope/source observations.
-  const roofPromise = bytes('roof_rgb.bin');
+  // The version config makes gzip opt-in, so an old city never probes a nonexistent new file.
+  const photoName = name => `${name}.bin${config?.orthoGz === true ? '.gz' : ''}`;
+  const roofPromise = bytes(photoName('roof_rgb'));
   let ground;
   if (config?.ground2 === 'ground2.json') {
     const response = await fetchImpl(`${base}ground2.json`);
@@ -45,7 +48,7 @@ export async function loadOrthoData(base, config = null, fetchImpl = globalThis.
     if (doc.file !== 'ground0.bin') throw new Error('ground2: bad sibling file');
     ground = decodeHDRGrid(doc, await bytes('ground0.bin'));
   } else {
-    ground = decodeRGBAHeader(await bytes('ground_rgb.bin'));
+    ground = decodeRGBAHeader(await bytes(photoName('ground_rgb')));
   }
   return { roof: decodeRGBAHeader(await roofPromise), ground };
 }

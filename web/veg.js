@@ -10,6 +10,8 @@
 // - Cable car: the mapped `aerialway=cable_car` way, drawn as its line with the terrain heights, cabins moving along
 //   it at a speed derived from the mapped trip duration, and the two mapped stations.
 import { chooseDataFile, decodeVeg2, VEG2_FORMAT } from './compact-data.js';
+import { gunzip } from './gz.js';
+export { gunzip } from './gz.js';
 
 export const VEG_COLOURS = {
   arg: {
@@ -39,40 +41,39 @@ export const VEG_COLOURS = {
   },
 };
 
-// gzip in transit, inflated here (see app.js): the mask is 6.4 MB raw and 231 KB gzipped, because most 16 m cells
-// of a city are bare. DecompressionStream, no library.
-export async function gunzip(buf) {
-  return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
-}
-
-// The selected JSON comes from this version's config. Legacy files still use their original names and gzip stream;
-// v2 point chunks are raw little-endian bytes and need no decompression worker or JSON point list.
-export async function loadVegetationData(base, config = null) {
+// gzip have a native implementation and the same fflate fallback used by the terrain. New tree records are also
+// gzip streams; the legacy veg0 chunk stays raw, and the legacy city keeps its original names.
+export async function loadVegetationData(base, config = null, ground = null) {
+  const packed = config?.veg2 && typeof config.veg2 === 'object' ? config.veg2 : null;
   const file = chooseDataFile(config, 'veg2', 'veg.json', 'veg2.json');
-  const response = await fetch(`${base}${file}`);
-  if (!response.ok) throw new Error(`vegetation ${response.status}`);
-  const meta = await response.json();
+  let meta = packed;
+  if (!meta) {
+    const response = await fetch(`${base}${file}`);
+    if (!response.ok) throw new Error(`vegetation ${response.status}`);
+    meta = await response.json();
+  }
   const compact = meta.format === VEG2_FORMAT;
-  if (compact && meta.file !== 'veg0.bin') throw new Error('veg2: bad sibling file');
+  if (compact && !['veg0.bin', 'veg2.bin.gz'].includes(meta.file)) throw new Error('veg2: bad sibling file');
+  const treeName = compact ? meta.file : 'veg_trees.bin';
   const [treeBuf, maskBuf] = await Promise.all([
-    fetch(`${base}${compact ? meta.file : 'veg_trees.bin'}`).then(r => {
+    fetch(`${base}${treeName}`).then(r => {
       if (!r.ok) throw new Error(`vegetation ${r.status}`);
       return r.arrayBuffer();
-    }),
+    }).then(buf => treeName.endsWith('.gz') ? gunzip(buf) : buf),
     fetch(`${base}veg_mask.bin.gz`).then(r => {
       if (!r.ok) throw new Error(`vegetation mask ${r.status}`);
       return r.arrayBuffer();
     }).then(b => gunzip(b)),
   ]);
   if (compact) {
-    const decoded = decodeVeg2(meta, treeBuf);
+    const decoded = decodeVeg2(meta, treeBuf, ground);
     return { meta, trees: decoded.trees, scales: decoded.scales, items: decoded.items, mask: new Uint8Array(maskBuf) };
   }
   return { meta, trees: new Float32Array(treeBuf), scales: null, items: null, mask: new Uint8Array(maskBuf) };
 }
 
-export async function makeVeg({ THREE, base, scene, uniforms, on = true, config = null }) {
-  const loaded = await loadVegetationData(base, config);
+export async function makeVeg({ THREE, base, scene, uniforms, on = true, config = null, surfaceAt = null }) {
+  const loaded = await loadVegetationData(base, config, surfaceAt);
   const { meta, trees, scales: packedScales, mask } = loaded;
   const nTrees = trees.length / 3;
   const m = meta.green.mask;
