@@ -61,6 +61,16 @@ export function periodCounts(config, from, to, { est = true } = {}) {
   return out;
 }
 
+// Separate bound headings, each reconciled with the ordinary histogram (never double-counted in the city total).
+export function boundCounts(config, from, to, on = () => true) {
+  const out = { pre1968: 0, '1968_2007': 0 };
+  for (const [key, year] of [['pre1968', 1968], ['1968_2007', 2007]]) {
+    const row = config.histogram?.[year] || [];
+    if (year > from && year <= to) out[key] = Array.isArray(row) ? row.reduce((n, c, i) => n + (on(i) ? c : 0), 0) : 0;
+  }
+  return out;
+}
+
 // Context layers: groups of {years: {year: count}}. A group's year 0 (no year) never fades, as in the shader.
 export function layerCount(groups, from, to) {
   let n = 0;
