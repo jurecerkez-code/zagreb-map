@@ -215,8 +215,8 @@ export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, render
     group.add(mesh);
   }
   const scale = m => (m.h || NOMINAL[m.kind] || 3) / (FIGURE_HEIGHT[m.kind] || NOMINAL[m.kind] || 3);
-  // Human geometries include their own normalized integral pedestal, so ground-to-top is exactly h.
-  const lift = m => (!FIGURE_HEIGHT[m.kind] && m.plinth && m.plinth <= 7 && PEDESTALLED.has(m.kind)
+  // Keep the established city-model plinth offset; the scaled figure itself is exactly h above that base.
+  const lift = m => (m.plinth && m.plinth <= 7 && PEDESTALLED.has(m.kind)
     ? Math.max(0, m.plinth - FIGURE_AT[m.kind] * scale(m)) : 0);
   const yaw = m => THREE.MathUtils.degToRad(90 - (m.dir ?? hashAngle(m.id)));
   const ys = new Float32Array(list.length).fill(NaN);

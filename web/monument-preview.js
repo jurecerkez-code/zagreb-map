@@ -13,13 +13,14 @@ export function nextMonumentMediaTab(key, current, hasPhoto = true) {
   return to === undefined || i < 0 ? null : MONUMENT_MEDIA_TABS[(to + n) % n];
 }
 
-export function monumentView(m, { surfaceAt = () => 0, streets = {} } = {}) {
+export function monumentView(m, { surfaceAt = () => 0, streets = {}, base = null } = {}) {
   const h = Number.isFinite(m?.h) && m.h > 0 ? m.h : 3;
   const x = Number(m?.x) || 0, z = Number(m?.z) || 0, ground = surfaceAt(x, z);
-  const target = [x, ground + h / 2, z], front = monumentFront(m, streets);
+  const baseY = Number.isFinite(base) ? base : ground;
+  const target = [x, baseY + h / 2, z], front = monumentFront(m, streets);
   const rise = h * 0.35, horizontal = Math.sqrt((3 * h) ** 2 - rise ** 2);
   return {
-    size: [MONUMENT_RENDER_WIDTH, MONUMENT_RENDER_HEIGHT], h, ground, front, target,
+    size: [MONUMENT_RENDER_WIDTH, MONUMENT_RENDER_HEIGHT], h, ground, base: baseY, front, target,
     camera: { position: [x + front.vector[0] * horizontal, target[1] + rise, z + front.vector[1] * horizontal],
       fov: 35, near: Math.max(0.03, h * 0.01), far: Math.max(100, h * 30) },
     background: '#f4e3c0',
@@ -55,7 +56,10 @@ export function makeMonumentPreview(T, {
     const id = String(m?.id || m?.name || '');
     if (!id) throw new Error('monument preview needs a monument id');
     if (cache.has(id)) return cache.get(id);
-    const view = monumentView(m, { surfaceAt, streets });
+    const mesh = singleMesh();                   // one instance at its real map h / direction, never the whole city
+    if (!mesh?.isInstancedMesh || mesh.count !== 1) throw new Error(`no single-map mesh for monument ${id}`);
+    const matrix = new T.Matrix4(); mesh.getMatrixAt(0, matrix);
+    const view = monumentView(m, { surfaceAt, streets, base: matrix.elements[13] });
     const [width, height] = view.size;
     const target = new T.WebGLRenderTarget(width, height, { depthBuffer: true, stencilBuffer: false });
     const scene = new T.Scene(); scene.background = new T.Color(view.background);
@@ -63,11 +67,9 @@ export function makeMonumentPreview(T, {
     scene.userData.target = new T.Vector3(...view.target);
     const camera = new T.PerspectiveCamera(view.camera.fov, width / height, view.camera.near, view.camera.far);
     camera.position.set(...view.camera.position); camera.lookAt(...view.target); camera.updateMatrixWorld();
-    let mesh = null, ground = null;
+    let ground = null;
     const oldTarget = renderer.getRenderTarget();
     try {
-      mesh = singleMesh();                       // one instance at its real map h / direction, never the whole city
-      if (!mesh?.isInstancedMesh || mesh.count !== 1) throw new Error(`no single-map mesh for monument ${id}`);
       const uniforms = mesh.material?.uniforms || {};
       uniforms.uSun?.value?.set(...view.light.direction).normalize();
       if (uniforms.uFog?.value?.set) uniforms.uFog.value.set(1e9, 1e9 + 1);

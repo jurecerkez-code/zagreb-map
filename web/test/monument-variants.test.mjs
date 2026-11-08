@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from '../vendor/three.core.js';
-import { makeMonuments, monumentVariant, makeFigureGeometry, FIGURE_VARIANTS, nearestStreetDirection, monumentFront } from '../monuments.js';
+import { makeMonuments, monumentVariant, makeFigureGeometry, FIGURE_VARIANTS, nearestStreetDirection, monumentFront, FIGURE_AT } from '../monuments.js';
 
 const fixture = (kind, i, extra = {}) => ({ id: `node/${kind}-${i}`, name: extra.name || `Fixture ${kind} ${i}`, kind,
   x: i * 10, z: -i * 3, h: 4.2, material: 'bronze', ...extra });
@@ -82,6 +82,18 @@ test('instancing is bucketed by variant and each transformed top is exactly its 
     triangles += mesh.count * (mesh.geometry.index?.count || mesh.geometry.attributes.position.count) / 3;
   }
   assert.ok(triangles < 150_000);
+});
+
+test('a city-model plinth is kept under the correctly scaled new figure', () => {
+  const record = fixture('statue', 0, { plinth: 6 });
+  const layer = makeMonuments(THREE, layerOptions([record]));
+  layer.place();
+  const mesh = layer.group.children[0], matrix = new THREE.Matrix4();
+  const lift = record.plinth - FIGURE_AT.statue * record.h / 7;
+  mesh.getMatrixAt(0, matrix);
+  close(matrix.elements[13], 12 + lift);
+  mesh.geometry.computeBoundingBox();
+  close(new THREE.Vector3(0, mesh.geometry.boundingBox.max.y, 0).applyMatrix4(matrix).y, 12 + lift + record.h);
 });
 
 test('front view uses direction first, otherwise aims toward the nearest street', () => {

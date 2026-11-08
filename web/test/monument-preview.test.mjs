@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as THREE from '../vendor/three.core.js';
-import { makeMonuments, monumentCard } from '../monuments.js';
+import { makeMonuments, monumentCard, FIGURE_AT } from '../monuments.js';
 import { monumentView, makeMonumentPreview, flipRenderPixels, pixelVariance, nextMonumentMediaTab } from '../monument-preview.js';
 
 const close = (got, want, tolerance = 1e-6) => assert.ok(Math.abs(got - want) <= tolerance, `${got} != ${want}`);
@@ -54,6 +54,9 @@ test('card camera is 3h from the centre, on the monument front and under a golde
   // east-facing monument
   assert.ok(view.camera.position[0] > 10 && view.target[0] === 10);
   close(view.target[1], 7 + m.h / 2);
+  const onPlinth = monumentView(m, { surfaceAt: () => 7, base: 17, streets: {} });
+  close(onPlinth.target[1], 17 + m.h / 2);
+  close(onPlinth.ground, 7);
   assert.equal(view.front.source, 'direction');
   assert.match(view.light.color, /^#[fF][fF]/);
   assert.ok(view.light.direction[1] > 0 && view.light.direction[1] < 0.6);
@@ -107,6 +110,17 @@ test('offscreen render target returns populated canvas pixels, restores the city
   const second = preview.render(m, source);
   assert.equal(second, first); assert.equal(second.canvas, first.canvas);
   assert.equal(sources, 1); assert.equal(renderer.calls.length, 1); assert.equal(created.length, 1);
+});
+
+test('the real preview call frames the plinth-adjusted single map instance', () => {
+  const { layer, m } = statueLayer({ id: 'node/plinth', name: 'Spomen', kind: 'statue', x: 10, z: 20, h: 5, dir: 90, plinth: 6, mat: 'bronze' });
+  const renderer = new FakeRenderer();
+  const preview = makeMonumentPreview(THREE, { renderer, surfaceAt: () => 7, streets: {}, createCanvas: fakeCanvas, ImageDataClass: FakeImageData });
+  const result = preview.render(m, () => layer.previewMesh(m));
+  const expected = 7 + 6 - FIGURE_AT.statue * m.h / 7;
+  close(result.view.base, expected);
+  close(renderer.calls[0].scene.userData.target.y, expected + m.h / 2);
+  close(renderer.calls[0].scene.children.find(o => !o.isInstancedMesh).position.y, 7 - 0.035);
 });
 
 test('card always has the labelled render panel; photo tabs are accessible and Commons is linked', () => {
