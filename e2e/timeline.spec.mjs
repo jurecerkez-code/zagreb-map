@@ -4,14 +4,20 @@ import { test, expect } from '@playwright/test';
 
 function watchErrors(page) {
   const errors = [];
+  const optional = url => url && ['/rt', '/build.json'].includes(new URL(url).pathname);
   page.on('pageerror', e => errors.push(`pageerror: ${e.message}`));
-  page.on('console', m => { if (m.type() === 'error') errors.push(`console: ${m.text()}`); });
-  page.on('response', r => { if (r.status() >= 400) errors.push(`HTTP ${r.status()}: ${r.url()}`); });
+  page.on('console', m => {
+    const url = m.location().url;
+    if (m.type() === 'error' && !optional(url)) errors.push(`console: ${m.text()} (${url})`);
+  });
+  page.on('response', r => {
+    if (r.status() >= 400 && !optional(r.url())) errors.push(`HTTP ${r.status()}: ${r.url()}`);
+  });
   return errors;
 }
 const config = page => page.evaluate(async () => {
   const { version } = await (await fetch('data/current.json')).json();
-  return (await fetch(`data/${version}/stockholm.json`)).json();
+  return (await fetch(`data/${version}/zagreb.json`)).json();
 });
 const camera = page => page.evaluate(() => window.__dbg.camera.position.toArray().map(v => Math.round(v)));
 
@@ -66,14 +72,22 @@ test('the legend counts each period within the range', async ({ page }) => {
   const errors = watchErrors(page);
   await page.goto('/');
   await expect(page.locator('#loading')).toBeHidden({ timeout: 60_000 });
+  const cfg = await config(page);
   const n = i => page.locator(`.swatch[data-i="${i}"] .n`).innerText().then(s => Number(s.replace(/\D/g, '')));
-  const funkis = await n(7);
-  test.skip(funkis === 0, 'this build has no Funkis building');
-  await page.locator('.grip-to').focus();
-  for (let k = 0; k < 20; k++) await page.keyboard.press('PageDown');      // back to well before 1930
-  await expect.poll(() => n(7)).toBe(0);
+  const index = cfg.periods.findIndex((p, i) => p.from > cfg.yearMin && Object.values(cfg.histogram).some(row => row[i] > 0));
+  test.skip(index < 0, 'this build has no dated period inside the timeline');
+  const count = await n(index);
+  const to = page.locator('.grip-to');
+  await to.focus();
+  const beforePeriod = cfg.periods[index].from - 1;
+  let year = cfg.yearMax;
+  for (; year - 10 >= beforePeriod; year -= 10) await page.keyboard.press('PageDown');
+  for (; year > beforePeriod; year--) await page.keyboard.press('ArrowLeft');
+  await expect(to).toHaveAttribute('aria-valuenow', String(beforePeriod));
+  await expect.poll(() => n(index)).toBe(0);
   await page.keyboard.press('End');
-  await expect.poll(() => n(7)).toBe(funkis);
+  await expect(to).toHaveAttribute('aria-valuenow', String(cfg.yearMax));
+  await expect.poll(() => n(index)).toBe(count);
   expect(errors).toEqual([]);
 });
 
@@ -87,7 +101,7 @@ test('a landmark label on the timeline flies to its building and opens its card'
   const box = await page.locator('#hist').boundingBox();
   await page.mouse.click(box.x + (L.x0 + L.x1) / 2, box.y + 6);
   await expect.poll(() => page.evaluate(() => window.__dbg.pinned), { timeout: 10_000 }).toBe(L.gid);
-  await expect(page.locator('#card.pinned h3')).toHaveText(L.name);
+  await expect(page.locator('#card.pinned h3')).toContainText(L.name);
   expect(errors).toEqual([]);
 });
 

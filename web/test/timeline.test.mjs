@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { placeLabels, labelAt, stepYear, filmYear, filmOrbit } from '../timeline.js';
+import { placeLabels, labelAt, stepYear, filmYear, filmOrbit, countDatedAt } from '../timeline.js';
 
 test('the film turns twenty degrees and honors reduced motion', () => {
   assert.equal(filmOrbit(0, false), 0);
@@ -18,6 +18,15 @@ test('filmYear keeps the full interval monotonic, with exact endpoints', () => {
   for (let i = 1; i < samples.length; i++) assert.ok(samples[i] >= samples[i - 1]);
 });
 
+
+test('the dated film count includes exact and bounded years up to the floor of the current year', () => {
+  const histogram = { 1200: [2, 1], 1899: [3, 0], 1900: [4, 0] };
+  const histogramEst = { 1754: [2, 1], 1900: [5, 0], 1901: [7, 0] };
+  assert.equal(countDatedAt(1899.99, histogram, histogramEst), 9);
+  assert.equal(countDatedAt(1900, histogram, histogramEst), 18);
+  assert.equal(countDatedAt(2026, histogram, histogramEst), 25);
+  assert.equal(countDatedAt(2026, {}, {}), 0);
+});
 
 const xOf = y => (y - 1100) / (2026 - 1100) * 1000;     // a 1000 px timeline from 1100 to Today
 const measure = s => s.length * 6;
@@ -61,17 +70,36 @@ test('stepYear follows the slider keys and stays within its bounds', () => {
   assert.equal(stepYear('Enter', s), null);
 });
 
-test('filmYear reserves the explicit early-history time floors', () => {
+test('filmYear reserves each early-history floor, not only their total', () => {
   const histogram = { 1200: [4, 0], 1800: [8, 0], 2026: [1000, 0] };
   const at = year => {
-    for (let i = 0; i <= 1000; i++) {
-      if (filmYear(i / 1000, histogram, 1200, 2026) >= year) return i / 1000;
+    let lo = 0, hi = 1;
+    for (let i = 0; i < 50; i++) {
+      const mid = (lo + hi) / 2;
+      if (filmYear(mid, histogram, 1200, 2026) < year) lo = mid;
+      else hi = mid;
     }
-    assert.fail(`The film never reaches ${year}`);
+    return hi;
   };
-  assert.ok(at(1500) >= 0.1, 'the first 300 years get at least 3 seconds per century');
-  assert.ok(at(1700) >= 0.5, 'all five centuries before 1700 get at least 3 seconds per century');
+  for (let year = 1300; year <= 1700; year += 100) {
+    const minimum = (year - 1200) / 1000;
+    assert.ok(at(year) >= minimum - 1e-9, `arrival at ${year} must reserve at least 3 s per century`);
+  }
   assert.ok(at(1850) >= 0.15, 'the pre-1850 story gets at least 15% of the film');
+});
+
+test('early-history floors never erase a later activity segment', () => {
+  const histogram = { 1200: [4, 0], 1800: [900, 0], 2026: [900, 0] };
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2;
+    if (filmYear(mid, histogram, 1200, 2026) < 1700) lo = mid;
+    else hi = mid;
+  }
+  assert.ok(hi >= 0.5, 'the 1700 crossing must retain at least fifteen seconds');
+  const atStop = filmYear(hi + 1e-6, histogram, 1200, 2026);
+  assert.ok(atStop <= 1701,
+    `the region after 1700 must receive its own time, not jump to ${atStop}`);
 });
 
 test('the early-history floor is not capped for a different start year', () => {

@@ -4,6 +4,18 @@ const histogramCount = row => Array.isArray(row)
   ? row.reduce((sum, n) => sum + (Number(n) || 0), 0)
   : (Number(row) || 0);
 
+// All dated categories count as known years: exact records, bounded records and estimates alike.
+export function countDatedAt(year, histogram, histogramEst = {}) {
+  const floor = Math.floor(year);
+  let count = 0;
+  for (const histogramPart of [histogram, histogramEst]) {
+    for (const [at, counts] of Object.entries(histogramPart || {})) {
+      if (Number(at) <= floor) count += histogramCount(counts);
+    }
+  }
+  return count;
+}
+
 // t is elapsed film time from 0 to 1. Dated-building activity changes the pace, but never the clock's direction.
 export function filmYear(t, histogram, from, to) {
   if (t <= 0 || to <= from) return from;
@@ -23,16 +35,31 @@ export function filmYear(t, histogram, from, to) {
   }
   const cumulative = [0];
   for (const weight of weights) cumulative.push(cumulative.at(-1) + weight / (weightTotal || 1));
-  // Activity controls the pace within a region; the issue's early-history floors apply between regions.
+  // Reserve every early century before distributing the remaining time: a max() on cumulative shares
+  // can let one stop overtake the next and erase an active region's entire time slot.
+  const bounds = [from];
+  for (let year = Math.ceil(from / 100) * 100; year < Math.min(1700, to); year += 100) bounds.push(year);
+  if (Math.min(1700, to) > from) bounds.push(Math.min(1700, to));
+  if (1850 > from && 1850 < to) bounds.push(1850);
+  bounds.push(to);
+  const segments = bounds.slice(1).map((year, i) => ({
+    year, start: bounds[i], at: cumulative[year - from],
+    minimum: year <= 1700 ? (year - bounds[i]) / 1000 : 0,
+  }));
+  const earlyFloor = segments.reduce((sum, part) => sum + part.minimum, 0);
+  if (from < 1850 && earlyFloor < 0.15) {
+    const before1850 = segments.find(part => part.year === Math.min(1850, to));
+    if (before1850) before1850.minimum += 0.15 - earlyFloor;
+  }
+  const reserved = segments.reduce((sum, part) => sum + part.minimum, 0);
+  const rest = Math.max(0, 1 - reserved);
   const stops = [{ year: from, share: 0, at: 0 }];
-  const stop = (year, minimum) => {
-    if (year <= from || year > to) return;
-    stops.push({ year, share: Math.max(minimum, cumulative[year - from]), at: cumulative[year - from] });
-  };
-  stop(Math.min(1700, to), (Math.min(1700, to) - from) * 0.001);
-  stop(1850, 0.15);
-  stop(to, 1);
-  const index = Math.max(1, stops.findIndex(point => t < point.share));
+  let share = 0;
+  for (const part of segments) {
+    share += part.minimum + (part.at - stops.at(-1).at) * rest;
+    stops.push({ year: part.year, share, at: part.at });
+  }
+  const index = Math.max(1, stops.findIndex(point => t <= point.share));
   const left = stops[index - 1], segment = stops[index];
   const raw = left.at + (segment.at - left.at) * (t - left.share) / (segment.share - left.share);
   const target = raw * (weightTotal || to - from);
@@ -46,6 +73,14 @@ export function filmYear(t, histogram, from, to) {
 
 // The camera's orbit is an angle, not a duty cycle. Shortened films still turn the same twenty degrees.
 export const filmOrbit = (t, reducedMotion) => reducedMotion ? 0 : Math.PI / 9 * t;
+
+// A pause retains its exact orbit time even when the year clock resumes at a quantized time. Scale the remaining
+// orbit across the remaining film so the first resumed frame is continuous and the last reaches the original target.
+export function filmOrbitProgress(t, yearFrom, orbitFrom) {
+  if (t >= 1) return 1;
+  if (t <= yearFrom) return orbitFrom;
+  return orbitFrom + (1 - orbitFrom) * (t - yearFrom) / (1 - yearFrom);
+}
 
 // Which landmark names fit on the timeline: highest priority first (stockholm.json landmarks' `timeline`, 1 first), then
 // the older year, each placed centred on its year and kept inside the canvas, and dropped when it would come closer
