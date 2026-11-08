@@ -7,6 +7,11 @@
 // Sizes: the tagged height (OSM or Wikidata P2048), else a typical height for the kind (pipeline side).
 // The timeline: a monument shows from its year (unveiling), and not in a `removed` span ([[1947, 1989]] for Jelačić);
 // one without a year always shows. Colours: bronze, stone and metal per look (MATERIALS), lit by the map's sun.
+import { makeFigureGeometry, monumentVariant, FIGURE_VARIANTS, FIGURE_HEIGHT } from './monument-forms.js';
+// The DOM-independent card-render seam is added with the card controller after the forms are verified.
+
+export { FIGURE_VARIANTS, monumentVariant, makeFigureGeometry, nearestStreetDirection, monumentFront } from './monument-forms.js';
+
 export const MONUMENTS_KEY = 'hfh-monuments';
 export const monumentsOnFrom = stored => stored !== 'off';   // on by default
 
@@ -68,12 +73,7 @@ function shapes(THREE) {
   const kinds = {};
   const take = () => { const p = parts.splice(0); return p; };
 
-  // Statue on a pedestal (7 m): pedestal 3.3 m, figure 3.7 m.
-  figure(pedestal(1.9, 1.9, 3.6), 3.7, 1, true); kinds.statue = take();
-  // Bust (3 m): a pillar and a bust.
-  box(0.95, 0.18, 0.95, 0, -0.3, 0, 0); box(0.62, 1.75, 0.62, 0, -0.12, 0, 0); box(0.74, 0.14, 0.74, 0, 1.63, 0, 0);
-  lathe([[0, 0], [0.42, 0.02], [0.4, 0.3], [0.3, 0.52], [0.12, 0.6], [0, 0.6]], 1, 10, M(0, 1.77, 0, 0, 0, 0, 0.75, 1, 1));
-  cyl(0.12, 0.1, 0.16, 0, 2.3, 0, 1, 6); ball(0.21, 0.02, 2.62, 0, 1, 1, 1.2, 0.95); kinds.bust = take();
+  // Statues and busts are built by monument-forms.js, not as a single generic human mesh.
   // Column (12 m): base, shaft, capital, a gilded figure on top.
   box(2.2, 0.5, 2.2, 0, -0.3, 0, 0); box(1.6, 1.4, 1.6, 0, 0.2, 0, 0);
   cyl(0.42, 0.34, 7.4, 0, 1.6, 0, 0, 12); box(1.0, 0.45, 1.0, 0, 9.0, 0, 0);
@@ -143,6 +143,10 @@ function shapes(THREE) {
     g.computeBoundingSphere();
     out[k] = g;
   }
+  // Figure forms below are the only statue/bust geometries in the layer.
+  for (const [kind, variants] of Object.entries(FIGURE_VARIANTS)) {
+    for (const variant of variants) out[`${kind}:${variant}`] = makeFigureGeometry(THREE, kind, variant);
+  }
   return out;
 }
 
@@ -186,9 +190,14 @@ export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, render
         gl_FragColor = vec4(c, 1.0);
       }`,
   });
-  // One InstancedMesh per kind.
+  // One InstancedMesh per kind, with human figures split into their four meaningful variants.
   const byKind = {};
-  list.forEach((m, i) => { const k = NOMINAL[m.kind] ? m.kind : 'memorial'; (byKind[k] ||= []).push(i); });
+  list.forEach((m, i) => {
+    const kind = NOMINAL[m.kind] ? m.kind : 'memorial';
+    const k = FIGURE_VARIANTS[kind] ? `${kind}:${monumentVariant(m)}` : kind;
+    m.which = [k];
+    (byKind[k] ||= []).push(i);
+  });
   const meshes = [], slot = new Array(list.length);
   for (const [k, idx] of Object.entries(byKind)) {
     const g = geos[k].clone();
@@ -205,8 +214,10 @@ export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, render
     meshes.push(mesh);
     group.add(mesh);
   }
-  const scale = m => Math.min(3, Math.max(0.4, (m.h || NOMINAL[m.kind] || 3) / (NOMINAL[m.kind] || 3)));
-  const lift = m => (m.plinth && m.plinth <= 7 && PEDESTALLED.has(m.kind) ? Math.max(0, m.plinth - FIGURE_AT[m.kind] * scale(m)) : 0);
+  const scale = m => (m.h || NOMINAL[m.kind] || 3) / (FIGURE_HEIGHT[m.kind] || NOMINAL[m.kind] || 3);
+  // Human geometries include their own normalized integral pedestal, so ground-to-top is exactly h.
+  const lift = m => (!FIGURE_HEIGHT[m.kind] && m.plinth && m.plinth <= 7 && PEDESTALLED.has(m.kind)
+    ? Math.max(0, m.plinth - FIGURE_AT[m.kind] * scale(m)) : 0);
   const yaw = m => THREE.MathUtils.degToRad(90 - (m.dir ?? hashAngle(m.id)));
   const ys = new Float32Array(list.length).fill(NaN);
   const q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), v = new THREE.Vector3(), s3 = new THREE.Vector3(), mx = new THREE.Matrix4();
