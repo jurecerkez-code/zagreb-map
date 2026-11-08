@@ -63,6 +63,9 @@ Both `web/i18n/en.json` and `web/i18n/hr.json` contain the new control/spec labe
 
 ## Evidence boundaries
 
+Static checks also cover bounded focus behavior, translated About output and the ordered card record hierarchy. A pure-white composite behind the prescribed .72 glass is used to challenge small-label contrast; those labels and links use opaque `--ui-surface` inserts, and photo-arrow glyphs receive a contrasting dark ink. These do not replace browser verification of image rendering, overflow or hit areas.
+
+
 `e2e/zagreb-lab.spec.mjs` is an independent Playwright file. It covers tokens and font resources, all five dock controls, Layers and Search behavior, More keyboard containment/focus restoration, Paper restoration, real Croatian labels, phone sizing/overflow, reduced motion, serious/critical axe findings and captured browser/page/asset errors. It is tagged `@zagreb-lab` with accessibility runs also tagged `@design-a11y`.
 
 Browser execution and screenshots remain the parent's verification responsibility. **This worker has run no browser process, Playwright, screenshots or axe checks.** Static Node tests and source inspection do not prove actual layout, zoom reflow, safe-area hit regions or visual equivalence, so no visual approval is declared here. Progress and remaining browser checks are recorded separately in `scratch/issue34-progress.md`.

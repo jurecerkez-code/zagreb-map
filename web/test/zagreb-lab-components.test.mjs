@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { LAB_UI } from '../zagreb-lab.js';
+import { rgb, lin } from '../tone.js';
 
 const css = readFileSync(new URL('../zagreb-lab.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
@@ -61,6 +63,29 @@ test('Card record types, facts and sources read without legacy light panels or C
   assert.match(app, /class="lab-kicker" /);
   assertProps('[data-ui="lab"] .timeline canvas', 'height: 76px');
   assert.match(app, /chromeKind\(THEME_NAME\).*JetBrains Mono/s);
+});
+
+
+test('Lab keeps small labels and links legible even when the backdrop is pure white', () => {
+  const luminance = h => rgb(h).map(lin).reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
+  const contrast = (fg, bg) => (Math.max(luminance(fg), luminance(bg)) + .05) / (Math.min(luminance(fg), luminance(bg)) + .05);
+  const [red, green, blue, alpha] = LAB_UI['--ui-glass'].match(/[\d.]+/g).map(Number);
+  const bright = [red, green, blue].map(v => Math.round(v * alpha + 255 * (1 - alpha))).map(v => v.toString(16).padStart(2, '0')).join('');
+  assert.ok(contrast(LAB_UI['--ui-gold'], '#'+bright) < 4.5, 'the fixture detects the bright-background failure');
+  for (const selector of [
+    '[data-ui="lab"] #lab-code',
+    '[data-ui="lab"] .tally [data-registration]::before',
+    '[data-ui="lab"] .lab-spec',
+    '[data-ui="lab"] .panel .back',
+    '[data-ui="lab"] .about a',
+  ]) {
+    assert.match(rule(selector), /background(-color)?:\s*var\(--ui-surface\)/, `${selector}: opaque text insert`);
+  }
+  for (const selector of ['[data-ui="lab"] .look p', '[data-ui="lab"] .card .dating', '[data-ui="lab"] .about :is(.credit, .caveat, .note)'])
+    assert.match(rule(selector), /color:\s*var\(--ui-fg\)/, selector);
+  assert.match(rule('[data-ui="lab"] .modes::before'), /color:\s*var\(--ui-fg\)/);
+  for (const selector of ['[data-ui="lab"] .card .photo .prev', '[data-ui="lab"] .card .photo .next'])
+    assert.match(rule(selector), /color:\s*#171717/, selector);
 });
 
 test('Paper is a quiet, non-translucent alternative and the live truth comes from feed state', () => {

@@ -825,6 +825,33 @@
   [data-ui="lab"] .lab-quick-guide dl { grid-template-columns: 1fr; }
 }
 
+/* Small labels cannot rely on varying photograph brightness behind glass. */
+[data-ui="lab"] #lab-code {
+  display: inline-block;
+  padding: 2px 4px;
+  border-radius: 2px;
+  background: var(--ui-surface);
+}
+[data-ui="lab"] .tally [data-registration]::before {
+  display: inline-block;
+  padding: 2px 4px;
+  border-radius: 2px;
+  background: var(--ui-surface);
+}
+[data-ui="lab"] .lab-quick-guide .lab-kicker {
+  padding: 2px 4px;
+  border-radius: 2px;
+  background: var(--ui-surface);
+}
+[data-ui="lab"] .panel .back { background: var(--ui-surface); color: var(--ui-link); }
+[data-ui="lab"] .about a { background-color: var(--ui-surface); border-radius: 2px; }
+[data-ui="lab"] .look p,
+[data-ui="lab"] .card .dating,
+[data-ui="lab"] .about :is(.credit, .caveat, .note) { color: var(--ui-fg); }
+[data-ui="lab"] .card .dating a { color: inherit; }
+[data-ui="lab"] .modes::before { color: var(--ui-fg); }
+[data-ui="lab"] .card .photo .prev, [data-ui="lab"] .card .photo .next { color: #171717; }
+
 /* Paper is a solid, non-glass alternative using the same functional controls. */
 [data-ui="paper"] :is(.timeline, .panel, .lab-more, .about, .look) {
   border: 1px solid var(--ui-line);
