@@ -90,6 +90,10 @@
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; }
 button { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.map-update { position: fixed; z-index: 70; top: calc(env(safe-area-inset-top, 0px) + var(--gutter)); left: 50%;
+  transform: translateX(-50%); max-width: calc(100vw - 2 * var(--gutter)); padding: 8px 14px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink);
+  box-shadow: 0 2px 12px #0002; cursor: pointer; font-weight: 600; }
 
 #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 /* Sky veils keep the masthead and the timeline legible over the model. */

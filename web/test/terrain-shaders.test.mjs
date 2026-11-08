@@ -167,7 +167,7 @@ test('?fade= and the terrain worker go through web/terrain.js\'s checked helpers
     'TERRAIN.file);',
     'const [buf, waterBuf] = await Promise.all([file, base]);',
   ));
-  assert.match(src, /const m = await askWorker\(new Worker\('terrain-worker\.js', \{ type: 'module' \}\),/);
+  assert.match(src, /const m = await askWorker\(new Worker\(new URL\('terrain-worker\.js', import\.meta\.url\), \{ type: 'module' \}\),/);
   // the flat land: fetched with the water only for a build without terrain, else only once the terrain has failed;
   // and the flat water is drawn only with it, so the land never shows the sky's colour while the terrain loads (the
   // final review's VIEWER-4): with the terrain in, its own water at the levels replaces it
@@ -175,7 +175,8 @@ test('?fade= and the terrain worker go through web/terrain.js\'s checked helpers
   assert.match(src, lines('async function showFlat() {', 'await loadLand();', 'flat.add(water);', '}'));
   assert.equal([...src.matchAll(/flat\.add\(water\)/g)].length, 1);
   assert.match(src, lines(
-    'loadTerrain(base).catch(e => {',
+    'try { await loadTerrain(base); }',
+    'catch (e) {',
     "terrainState = 'failed';",
     "console.warn('The terrain did not load; the map stays flat.', e);",
     "showFlat().catch(optional('The land'));",

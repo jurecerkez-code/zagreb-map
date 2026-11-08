@@ -63,6 +63,12 @@ jobs:
       - name: Fetched files committed
         run: uv run python scripts/checks/site_fetches.py
 
+      - name: Bundle the deployed build exercised by every browser gate
+        run: |
+          npx --yes esbuild@0.27.0 web/app.js --bundle --format=esm --minify --outdir=web/dist --external:./vendor/*
+          npx --yes esbuild@0.27.0 web/worker.js web/terrain-worker.js web/roads-worker.js --bundle --format=esm --minify --outdir=web/dist --external:./vendor/*
+          node scripts/pages-dist.mjs
+
       - name: Chromium for the boot smoke
         run: npx playwright install --with-deps chromium
 

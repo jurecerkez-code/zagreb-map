@@ -197,7 +197,7 @@ export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt
   // The points transfer; the (t, cut) texture stays put for the ground's own shader, so it goes by clone. The
   // worker's round trip gets its own measure, reachable from perf.json as builders['roads-worker'].
   performance.mark('roads-worker-start');
-  const worker = new Worker('roads-worker.js', { type: 'module' });
+  const worker = new Worker(new URL('roads-worker.js', import.meta.url), { type: 'module' });
   const answer = await new Promise((resolve, reject) => {
     worker.onmessage = ({ data }) => resolve(data);
     worker.onerror = e => reject(e);

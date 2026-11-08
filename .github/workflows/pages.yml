@@ -33,6 +33,12 @@ jobs:
           du -sh web
       # Which commit the site is: the page shows it in the console and via __dbg.__build, so a stale tab stops
       # impersonating the latest deploy and "is it live?" stops needing a human answer.
+      - name: Bundle deployed app and module workers (source stays build-free)
+        run: |
+          npx --yes esbuild@0.27.0 web/app.js --bundle --format=esm --minify --outdir=web/dist --external:./vendor/*
+          npx --yes esbuild@0.27.0 web/worker.js web/terrain-worker.js web/roads-worker.js --bundle --format=esm --minify --outdir=web/dist --external:./vendor/*
+          node scripts/pages-dist.mjs
+
       - name: Stamp the build
         run: printf '{"sha":"%s","date":"%s"}\n' "${GITHUB_SHA}" "$(date -u +%FT%TZ)" > web/build.json
       - uses: actions/upload-pages-artifact@v3
