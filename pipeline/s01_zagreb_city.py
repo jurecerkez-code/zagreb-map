@@ -103,6 +103,11 @@ def main_city(src: dict, helpers) -> None:
     # On Zagreb's own footprints, apply accepted GitHub-issue years from pipeline/contributions.csv
     # after every other tier (they neither train nor test the estimate) and before the privacy mark.
     # The existing contributor loader checks the marker against this actual build's gids.
+    # `b` is still the raw merged frame here and has no uuid column; give it the same per-building uuid
+    # the shipped buildings.parquet gets below, or reader_years cannot detect a stale contribution.
+    b["uuid"] = uuids(b.oid.to_numpy(),
+                      [osm_b.osm_id.iat[o] if o >= 0 else "" for o in b.osm],
+                      np.arange(n, dtype=np.int32))
     reader = contributions.reader_years(contributions.read(contributions.PATH), b)
     readers = contributions.apply_years(reader, pd.Series(np.arange(n), index=b.gid), y["year"], y["y_from"],
                                         y["y_to"], y["ysrc"], y["yflag"])

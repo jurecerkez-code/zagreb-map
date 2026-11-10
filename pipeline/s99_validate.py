@@ -119,7 +119,7 @@ from .geo import lonlat_to_3011
 from .privacy import mentions, normalise, owner, phrases
 from .s02_attributes import REGISTER_CODE, load_private_firms, load_private_names
 from .s03_tiles import (ATTR_DTYPE, CARD_FIELDS, SAT_YEARS, CURRENT, DTM_SOURCE, LASER_SOURCE, N_CARD_SHARDS, PHOTO_FIELDS, SOURCES,
-                       WIKI_LICENCE)
+                       WIKI_LICENCE, histogram_years)
 from .s04_base import unpack
 from .s08_landmarks import REBUILD_KINDS
 from .sources import PROCESSED, check_sources, licence_names, load_sources
@@ -579,7 +579,16 @@ def check_bounds(cfg: dict, attrs=None) -> list[str]:
                 continue
             count = sum(bucket) if isinstance(bucket, list) else bucket
             in_bucket = np.isin(attrs["yflag"], (codes.EXACT, codes.RANGE, codes.LONG, codes.BOUND))
-            expected = int(np.sum(in_bucket & (attrs["year"] == year)))
+            # histogram_years spreads a private house over its decade by a stable hash of the gid. A BOUND private
+            # house is therefore counted at 1960..1969, not necessarily at its bound, so compare like with like.
+            hist_year = attrs["year"]
+            if "private" in attrs.dtype.names:
+                hist_year = histogram_years(pd.DataFrame({
+                    "gid": np.arange(len(attrs), dtype=np.int64),
+                    "year": attrs["year"].astype(np.int64),
+                    "private": attrs["private"].astype(bool),
+                }))
+            expected = int(np.sum(in_bucket & (hist_year == year)))
             if count != expected:
                 errors.append(f"bounds: histogram {year} has {count} but attrs.bin has {expected} ordinary dated/bounded buildings")
     return errors

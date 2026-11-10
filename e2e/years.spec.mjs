@@ -7,6 +7,8 @@ test('a bounded building says before 1968/2007 and is counted apart from dated b
   await page.addInitScript(() => localStorage.setItem('hfh-legend', 'open'));
   await page.goto('/?lang=en');
   await expect(page.locator('#loading')).toBeHidden({ timeout: 60_000 });
+  // attrs.bin is deliberately off the boot path; __dbg.building reads it, so wait for its tally.
+  await page.waitForFunction(() => window.__dbg.attrTally !== null, null, { timeout: 60_000 });
 
   const found = await page.evaluate(async () => {
     const { version } = await (await fetch('data/current.json')).json();
