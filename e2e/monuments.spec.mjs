@@ -21,11 +21,13 @@ const MIN_CANVAS_VARIANCE = 100;
 async function loadSelection(page, selection) {
   await page.goto('?lang=hr');
   await expect(page.locator('#loading')).toBeHidden({ timeout: 90000 });
-  await settled(page);
-  await expect.poll(() => page.evaluate(() => window.__dbg.monuments?.length || 0)).toBeGreaterThan(0);
+  // The cards draw their own 512×384 render; the ground rising (minutes under software GL) changes nothing they
+  // assert, so this spec does not wait for the heights.
+  await settled(page, { terrain: false });
+  await expect.poll(() => page.evaluate(() => window.__dbg.monuments?.list.length || 0), { timeout: 60_000 }).toBeGreaterThan(0);
 
   const records = await page.evaluate(requested => requested.map(item => {
-    const m = window.__dbg.monuments.find(monument => monument.id === item.id);
+    const m = window.__dbg.monuments.list.find(monument => monument.id === item.id);
     return m ? {
       id: m.id,
       name: m.name,
@@ -40,9 +42,9 @@ async function loadSelection(page, selection) {
 
 async function pinMonument(page, id) {
   await page.evaluate(monumentId => {
-    const m = window.__dbg.monuments.find(monument => monument.id === monumentId);
+    const m = window.__dbg.monuments.list.find(monument => monument.id === monumentId);
     if (!m) throw new Error(`Monument not loaded: ${monumentId}`);
-    const p = window.__dbg.screenAt(m.x, m.z);
+    const p = window.__dbg.monuments.screenAt(m);
     const clipped = p.x < 24 || p.y < 100 || p.x > innerWidth - 100 || p.y > innerHeight - 100;
     window.__dbg.pinMonument(m,
       clipped ? innerWidth * 0.55 : p.x,
@@ -88,7 +90,7 @@ async function expectNonblankCanvas(canvas) {
 
 async function verifyMonument(page, record, { cachedReopen = false } = {}) {
   let card = await pinMonument(page, record.id);
-  await expect(card.locator('h2')).toHaveText(record.name);
+  await expect(card.locator('#card-title')).toHaveText(record.name);
 
   const dating = card.locator('.dating');
   if (record.year === null) {
@@ -142,7 +144,9 @@ test.describe('phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
   test('a photo-less card opens and reuses its visible map render', async ({ page }) => {
-    const [record] = await loadSelection(page, [FIXED_MONUMENTS[3]]);
+    // Juraj Habdelić has neither a photo nor a year, so the card shows the render alone, with no tabs at all.
+    const [record] = await loadSelection(page, [FIXED_MONUMENTS[9]]);
+    expect(record.photoKey).toBeNull();
     await verifyMonument(page, record, { cachedReopen: true });
   });
 });

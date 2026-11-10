@@ -2288,7 +2288,8 @@ function monTipShow(m, x, y) {
   }
   monTip.hidden = false;
   const w = monTip.offsetWidth || 240, h = monTip.offsetHeight || 62;
-  monTip.style.left = `${Math.min(innerWidth - w - 12, x + 16)}px`;
+  // Beside the pointer, never off either edge: on a phone the window is narrower than a long name's tip.
+  monTip.style.left = `${Math.max(8, Math.min(innerWidth - w - 12, x + 16))}px`;
   monTip.style.top = `${Math.max(12, y - h - 12)}px`;
 }
 

@@ -21,6 +21,9 @@ export const MATERIALS = {
   kalk: { bronze: '#6a4f35', stone: '#e0d4bd', metal: '#8f969c', gold: '#bf9a45', water: '#7fa2b0' },
   blatimme: { bronze: '#a98656', stone: '#8d93a0', metal: '#a3afbf', gold: '#e6c066', water: '#3c6f9e' },
   paper: { bronze: '#57514b', stone: '#dddad2', metal: '#8f969a', gold: '#b39445', water: '#9fb9b8' },
+  // Foto, the default look: the stones as the photographs show them, bronze gone dark with patina under a grey sky,
+  // and basins as dark as the Sava. The look itself is arg's palette (web/themes.js); its monuments are not.
+  foto: { bronze: '#6b5741', stone: '#ded9cd', metal: '#8a9297', gold: '#b9963f', water: '#16293a' },
 };
 const MAT_INDEX = { bronze: 0, stone: 1, metal: 2 };
 // Nominal height (m) each kind's shape is built at; an instance is scaled to its own height.

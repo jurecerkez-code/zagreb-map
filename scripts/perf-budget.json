@@ -3,6 +3,7 @@
  "near.triangles": 1800000,
  "far.triangles": 12000000,
  "home.groups.veg": 400000,
+ "home.groups.monuments": 150000,
  "far.groups.veg": 400000,
  "home.calls": 100,
  "bytesBeforeReveal": 45000000,
