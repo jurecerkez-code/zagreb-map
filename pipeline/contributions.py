@@ -118,10 +118,17 @@ def read(path: Path = PATH) -> pd.DataFrame:
     return t
 
 
+def direct_gid(value: str) -> int | None:
+    """A GitHub issue's explicit gid:<n>, deliberately not a parcel UUID. Only an actual build gid resolves it."""
+    match = re.fullmatch(r"gid:(0|[1-9]\d*)", value)
+    return int(match.group(1)) if match else None
+
+
 def missing(t: pd.DataFrame, b: pd.DataFrame) -> list[str]:
-    """The refs whose uuid is on no footprint of b: a fixture build, or a footprint the City has since redrawn."""
+    """Refs whose uuid (or issue-linked gid) is on no footprint of b. Unknowns are skipped, never guessed."""
     have = set(b.uuid)
-    return [ref for ref, u in zip(t.ref, t.uuid) if u not in have]
+    have_gids = set(b.gid.astype(int))
+    return [ref for ref, u in zip(t.ref, t.uuid) if (direct_gid(u) not in have_gids if direct_gid(u) is not None else u not in have)]
 
 
 def present(t: pd.DataFrame, b: pd.DataFrame) -> pd.DataFrame:
@@ -140,7 +147,10 @@ def gids(t: pd.DataFrame, b: pd.DataFrame) -> pd.Series:
     by = b.groupby("uuid").gid.agg(list)
     out = {}
     for ref, u in zip(t.ref, t.uuid):
-        found = by.get(u, []) if u else []
+        direct = direct_gid(u)
+        # A public form names a gid rather than exposing a parcel UUID. No gid means no match; a repeated
+        # gid is ambiguous. Never substitute an index, another building's uuid, or a nearest footprint.
+        found = b.loc[b.gid.astype(int) == direct, "gid"].tolist() if direct is not None else by.get(u, []) if u else []
         if len(found) != 1:
             raise Refused(f"{ref}: uuid {u} is on {len(found)} footprints, not exactly one")
         out[ref] = int(found[0])

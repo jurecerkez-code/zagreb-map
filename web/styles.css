@@ -219,6 +219,17 @@ h1 { margin: 0; font-size: clamp(34px, 4.4vw, 56px); font-weight: 800; letter-sp
   text-align: left; padding: 4px 0; cursor: pointer; }
 .swatch i { width: 12px; height: 12px; border-radius: 2px; }
 .swatch .n { color: var(--muted); font-size: 12px; }
+/* Public, prefilled GitHub issue: no report form or nonexistent year-submission endpoint. */
+.year-cta { margin: .8rem 16px; }
+.year-cta h3 { margin: 0 0 .35rem; font: inherit; font-size: 14px; }
+.year-cta p { margin: 0; font-size: 13px; }
+/* BOUND has its own concise, headed counts. Its swatch is the period colour at 50%, with dots, never the unknown hatch. */
+.bound-legend { margin-top: 1rem; padding-top: .7rem; border-top: 1px solid var(--muted); }
+.bound-legend h3 { margin: 0 0 .5rem; font: inherit; font-size: 12px; }
+.bound-row { display: grid; grid-template-columns: 12px 1fr auto; gap: 10px; align-items: center; margin: .4rem 0; font-size: 12px; }
+.bound-swatch { width: 12px; height: 12px; opacity: .5; border-radius: 2px; background-color: var(--bound-color);
+  background-image: radial-gradient(currentColor .6px, transparent .75px); background-size: 3px 3px; }
+.bound-count { color: var(--muted); }
 .swatch.unknown { cursor: default; row-gap: 2px; }
 /* The "Year unknown" row's switch, "Show" (D30, revised): under the label, a small track in the muted ink that fills
    with the accent when on. On reads "they are on the map now". A button with aria-pressed, like the legend's other

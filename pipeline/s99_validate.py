@@ -158,14 +158,15 @@ FERRY_KINDS = {"ferry", "ship"}         # s17_ferries (pipeline/ferries.py kind)
 FERRY_ENDS = {"pier", "edge"}
 FERRY_ID = re.compile(r"[rw]\d+")
 MIN_PRIVATE_OVERLAP = 2  # years a private row's decade must share with its period, or the pair pins the year
-YFLAGS = (codes.EXACT, codes.RANGE, codes.LONG, codes.AREA, codes.ESTIMATE, codes.PERIOD, codes.UNKNOWN)
+YFLAGS = (codes.EXACT, codes.RANGE, codes.LONG, codes.AREA, codes.ESTIMATE, codes.PERIOD, codes.UNKNOWN, codes.BOUND)
 YSRCS = (codes.SRC_NONE, codes.SRC_CURATED, codes.SRC_RAA, codes.SRC_RAA_AREA, codes.SRC_WIKIDATA, codes.SRC_ESTIMATE,
          codes.SRC_RAA_OLD, codes.SRC_OSM, codes.SRC_READER, codes.SRC_ZBSM, codes.SRC_KD, codes.SRC_ZG_HER,
          codes.SRC_ZG_FACADE, codes.SRC_ZG_AREA, codes.SRC_ZG_TIPO)
 # The codes.py pairing: the yflags a source may carry.
 PAIRS = {codes.SRC_NONE: (codes.UNKNOWN,), codes.SRC_RAA_AREA: (codes.AREA,),
          codes.SRC_ZG_AREA: (codes.AREA,), codes.SRC_ZG_TIPO: (codes.AREA,),
-         codes.SRC_ESTIMATE: (codes.ESTIMATE, codes.PERIOD)}
+         codes.SRC_ESTIMATE: (codes.ESTIMATE, codes.PERIOD),
+         codes.SRC_ZBSM: (codes.EXACT, codes.RANGE, codes.LONG, codes.BOUND)}
 DATED_FLAGS = (codes.EXACT, codes.RANGE, codes.LONG)
 # The accuracy table's keys, a cell's keys and the statuses.
 TABLE_KEYS = {"method", "held_out", "folds", "near_m", "min_cell", "min_right", "max_band", "tested", "cells", "fallback",
@@ -447,9 +448,12 @@ def check_attrs(a: np.ndarray, periods: list[tuple[int, int]] | None = None) -> 
     rule(a["floors"] > MAX_FLOORS, f"with more than {MAX_FLOORS} floors")
     y_from, y_to = a["year_from"].astype(int), a["year_to"].astype(int)
     # a year already reported above (0 on a dated row, or out of bounds) is not reported twice
-    rule(~unknown & in_bounds & ((y_from > year) | (year > y_to)),
+    bounded = flag == codes.BOUND
+    rule(~unknown & ~bounded & in_bounds & ((y_from > year) | (year > y_to)),
          "dated with a year outside their own year_from..year_to")
-    rule(~unknown & (y_from < YEAR_MIN), f"dated with a year_from before {YEAR_MIN}")
+    rule(~unknown & ~bounded & (y_from < YEAR_MIN), f"dated with a year_from before {YEAR_MIN}")
+    rule(bounded & ((y_from != 0) | (year != y_to) | ~np.isin(year, (1968, 2007))),
+         "with BOUND not exactly one of year_from=0 and year=year_to=1968/2007")
     finite = np.isfinite(a["x"]) & np.isfinite(a["z"])
     far = (np.abs(a["x"]) > MAX_LOCAL_M) | (np.abs(a["z"]) > MAX_LOCAL_M)
     rule(~finite | far, "with NaN or out-of-bounds coordinates")
@@ -538,6 +542,47 @@ def check_histograms(cfg: dict) -> list[str]:
     if total != n:
         return [f"histograms: histogram + histogramEst + unknown is {total:,} but stats.buildings is {n:,}"]
     return []
+
+
+def check_bounds(cfg: dict, attrs=None) -> list[str]:
+    """Cross-check the separate bound headings with flags, source pairing, files and the normal histogram."""
+    errors, actual = [], {"pre1968": 0, "1968_2007": 0}
+    if attrs is not None:
+        bounded = attrs["yflag"] == codes.BOUND
+        actual = {key: int(np.sum(bounded & (attrs["year"] == year)))
+                  for key, year in (("pre1968", 1968), ("1968_2007", 2007))}
+        bad = bounded & ((attrs["year_from"] != 0) | (attrs["year"] != attrs["year_to"])
+                         | ~np.isin(attrs["year"], (1968, 2007)) | (attrs["ysrc"] != codes.SRC_ZBSM))
+        if bad.any():
+            errors.append("bounds: every BOUND must pair with ZBSM and have year_from=0 and year=year_to=1968/2007")
+    header = cfg.get("bounds")
+    flag_count = int(cfg.get("stats", {}).get("byFlag", {}).get("bound", 0))
+    if isinstance(header, dict) and set(header) == {"pre1968", "1968_2007"}:
+        if not all(whole(v) and v >= 0 for v in header.values()):
+            errors.append("bounds: each headed count must be a whole, non-negative number")
+        else:
+            if sum(header.values()) != flag_count:
+                errors.append(f"bounds: headed counts total {sum(header.values())} but stats.byFlag.bound is {flag_count}")
+            if attrs is not None and header != actual:
+                errors.append(f"bounds: headed counts {header} but attrs.bin has {actual}")
+    elif header is not None or flag_count:
+        errors.append("bounds: cfg must carry separate pre1968 and 1968_2007 counts")
+    by_bound = cfg.get("stats", {}).get("byBound")
+    if by_bound is not None and attrs is not None and by_bound != actual:
+        errors.append(f"bounds: stats.byBound {by_bound} disagrees with attrs.bin {actual}")
+    if attrs is not None:
+        for year, key in ((1968, "pre1968"), (2007, "1968_2007")):
+            bucket = cfg.get("histogram", {}).get(str(year))
+            if bucket is None:
+                if actual[key]:
+                    errors.append(f"bounds: histogram has no {year} bucket for its {actual[key]} bounded buildings")
+                continue
+            count = sum(bucket) if isinstance(bucket, list) else bucket
+            in_bucket = np.isin(attrs["yflag"], (codes.EXACT, codes.RANGE, codes.LONG, codes.BOUND))
+            expected = int(np.sum(in_bucket & (attrs["year"] == year)))
+            if count != expected:
+                errors.append(f"bounds: histogram {year} has {count} but attrs.bin has {expected} ordinary dated/bounded buildings")
+    return errors
 
 
 def check_row(where: str, row, required: set[str], allowed: set[str], min_cell: int) -> list[str]:
@@ -1958,6 +2003,7 @@ def validate(out: Path, data: Path = DATA, *, release: bool = False, sources: li
     periods = [(p["from"], p["to"]) for p in cfg["periods"]] if cfg.get("periods") else None
     errors += check_attrs(a, periods)
     errors += check_histograms(cfg)
+    errors += check_bounds(cfg, a)
     errors += check_accuracy(cfg)
     errors += check_tiles(out, cfg, len(a))
     mismatch = check_data(out, data, len(a))

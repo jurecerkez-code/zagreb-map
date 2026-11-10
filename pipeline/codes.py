@@ -2,21 +2,25 @@
 web/test/codes.test.mjs checks the mirror both ways."""
 
 # yflag: how the year is known. Value 5 is retired: it was DECADE; private houses now carry the separate `private` flag.
-EXACT, RANGE, LONG, AREA, ESTIMATE, PERIOD, UNKNOWN = 0, 1, 2, 3, 4, 6, 7
+EXACT, RANGE, LONG, AREA, ESTIMATE, PERIOD, UNKNOWN, BOUND = 0, 1, 2, 3, 4, 6, 7, 8  # 5 retired (DECADE)
 # With ysrc SRC_CURATED, RANGE means "construction period": year is the curated completion year, whatever the span.
 # ESTIMATE: year is the kNN estimate, year_from/year_to = year -/+ the cell's band, clamped to 1000..2026.
 # PERIOD: the cell's band is wider than +-15 years, so only the period is shown. year is still the estimate (the
 # timeline needs one); year_from/year_to are the period's first and last year (the last capped at 2026).
+# BOUND: a ZBSM cadastre-before statement, not a measured year or estimate. year = year_to = 1968 or 2007;
+# year_from = 0. The film and ordinary histogram add it at that bound; the card and legend name the source class.
 # Private houses keep their yflag (EXACT, RANGE, LONG, AREA, ESTIMATE or PERIOD) and set years.parquet
 # `private` = True; their published year is the decade start, year_from = year, year_to = year + 9.
 
 # ysrc: where it came from. Pairs with yflag (s99 checks it): SRC_NONE <-> UNKNOWN; SRC_RAA_AREA <-> AREA;
-# SRC_ESTIMATE <-> ESTIMATE or PERIOD; every other source <-> EXACT, RANGE or LONG.
+# SRC_ESTIMATE <-> ESTIMATE or PERIOD; SRC_ZBSM <-> BOUND or EXACT/RANGE/LONG (its measured spans);
+# every other source except an area source <-> EXACT, RANGE or LONG.
 SRC_NONE, SRC_CURATED, SRC_RAA, SRC_RAA_AREA, SRC_WIKIDATA, SRC_ESTIMATE = 0, 1, 2, 3, 4, 5
 SRC_RAA_OLD, SRC_OSM = 6, 7
 # SRC_READER: a reader's report the owner checked and accepted (pipeline/contributions.py); EXACT, RANGE or LONG.
 SRC_READER = 8
-# SRC_ZBSM: the Zagreb Building Stock Model (Zenodo 10.5281/zenodo.13602015, CC BY-SA 4.0); EXACT.
+# SRC_ZBSM: Zagreb Building Stock Model (Zenodo 10.5281/zenodo.13602015, CC BY-SA 4.0);
+# EXACT/RANGE/LONG for measured spans, BOUND for the two cadastre-before statements.
 SRC_ZBSM = 9
 # Zagreb, City of Zagreb layers (Grad Zagreb, used with permission, email 21.10.2026; pipeline/zagreb_heritage.py):
 # SRC_KD: KD_pojedinacna + Registar kulturnih dobara RH, a record (EXACT, RANGE or LONG).
