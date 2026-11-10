@@ -14,23 +14,26 @@ test('load probe explicitly emulates 4 Mbit/s rather than calling local throughp
   assert.ok(NETWORK_4MBIT.uploadThroughput > 0);
 });
 
-test('first-load bytes, cached second-load time and browser failures are hard gates', () => {
-  assert.deepEqual(loadProbeFailures({ ...clean, phases: phases(6_000_000, 0, 1499) }), []);
-  assert.deepEqual(loadProbeFailures({ ...clean, phases: phases(6_000_001, 0, 1499) }),
-    ['first-load bytesBeforeReveal 6000001 exceeds 6000000']);
-  assert.deepEqual(loadProbeFailures({ ...clean, phases: phases(1, 0, 1500) }),
-    ['second-load reveal 1500 ms must be under 1500 ms at 4 Mbit/s']);
+test('first-load bytes, the cached second load and browser failures are hard gates', () => {
+  assert.deepEqual(loadProbeFailures({ ...clean, phases: phases(5_500_000, 0, 11_999) }), []);
+  assert.deepEqual(loadProbeFailures({ ...clean, phases: phases(5_500_001, 0, 1) }),
+    ['first-load bytesBeforeReveal 5500001 exceeds 5500000']);
+  // A repeat visit that pulls the city again is the regression the byte gate exists for.
+  assert.deepEqual(loadProbeFailures({ ...clean, phases: phases(1, 200_001, 1) }),
+    ['second-load bytesBeforeReveal 200001 re-downloads the city (over 200000)']);
+  assert.deepEqual(loadProbeFailures({ ...clean, phases: phases(1, 0, 12_000) }),
+    ['second-load reveal 12000 ms must be under 12000 ms at 4 Mbit/s']);
   assert.match(loadProbeFailures({ ...clean, errors: ['boom'], phases: phases(1, 0, 1) })[0], /page errors/);
   assert.match(loadProbeFailures({ ...clean, missing: [{ status: 404 }], phases: phases(1, 0, 1) })[0], /404/);
   assert.match(loadProbeFailures({ ...clean, rejected: [{ reason: 'offline' }], phases: phases(1, 0, 1) })[0], /failed requests/);
   assert.match(loadProbeFailures({ ...clean, phases: { ...phases(1, 0, 1), cachedCriticalBytes: null } })[0], /second-load/);
 });
 
-test('the checked-in perf enforcement is 6 MB and truthful about the unmeasured total', async () => {
+test('the checked-in perf enforcement matches the measured city', async () => {
   const budget = JSON.parse(await readFile(new URL('../scripts/perf-budget.json', import.meta.url), 'utf8'));
-  assert.equal(budget.bytesBeforeReveal, 6_000_000);
-  assert.equal(budget.bytesTotal, null);
-  assert.match(budget.bytesTotalStatus, /pending/);
+  assert.equal(budget.bytesBeforeReveal, 5_500_000);
+  assert.equal(budget.bytesTotal, 33_000_000);
+  assert.match(budget.bytesTotalStatus, /measured/);
   const perf = await readFile(new URL('../scripts/perf.mjs', import.meta.url), 'utf8');
   const probe = await readFile(new URL('../scripts/load-probe.mjs', import.meta.url), 'utf8');
   assert.match(perf, /numericBudgetFailures/);
