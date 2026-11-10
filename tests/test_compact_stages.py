@@ -84,7 +84,7 @@ def test_s99_independently_compares_legacy_roads_and_tree_positions(tmp_path):
     raw = np.frombuffer(gzip.decompress(original), dtype='<f4').copy()
     raw[0] += 2
     (out / 'roads.bin.gz').write_bytes(gzip.compress(raw.tobytes()))
-    assert any('roads' in e and 'equal' in e for e in s99_validate.check_compact(out, cfg))
+    assert any('roads' in e and 'drift' in e for e in s99_validate.check_compact(out, cfg))
     (out / 'roads.bin.gz').write_bytes(original)
     old_trees = np.frombuffer((out / 'veg_trees.bin').read_bytes(), dtype='<f4').reshape(-1, 3).copy()
     old_trees[0, 0] += 1

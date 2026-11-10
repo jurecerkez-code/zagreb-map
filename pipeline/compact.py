@@ -87,9 +87,15 @@ def _absolute_point(out, x, z):
 def pack_roads2(ways, points_xyz, classes, names=()):
     """The published ZGR2 stream: columnar way indexes and exact xz point records.
 
-    A first point uses signed 1.6 m cells and following points signed decimetre deltas only when those values
-    decode to exactly the old float32 coordinates. Otherwise the -32768 pair escapes to absolute float32 x/z;
-    this is what lets s99 require equality instead of silently accepting coordinate drift. The display terrain
+    A point is signed 1.6 m cells only when it is the way's first and lands exactly on that grid; after it, signed
+    decimetre deltas against the *decoded* previous point. The -32768 pair escapes to absolute float32 x/z only for
+    that first point, or for a step longer than int16 decimetres can carry (3.27 km).
+
+    The old writer also escaped whenever adding the delta back in float32 did not reproduce the legacy float32 bit
+    pattern, which is almost never: it wrote 12 bytes for nearly every point, and the "compact" file came out no
+    smaller than the two files it replaces. A decimetre grid cannot reproduce arbitrary float32 metres, so what is
+    promised (and what s99 checks) is the grid's own bound: every decoded point within 0.05 m of the legacy one,
+    measured from the decoded previous point so the error never accumulates along a way. The display terrain
     supplies y in the viewer, as it did for roads.json/roads.bin.gz.
     """
     if len(ways) != len(points_xyz) or not 0 < len(classes) <= 256:
@@ -126,20 +132,21 @@ def pack_roads2(ways, points_xyz, classes, names=()):
         qx, qz = round(float(x) / 1.6), round(float(z) / 1.6)
         if all(-32767 <= q <= 32767 for q in (qx, qz)) and _f32(qx * 1.6) == x and _f32(qz * 1.6) == z:
             out += struct.pack("<hh", qx, qz)
+            px, pz = _f32(qx * 1.6), _f32(qz * 1.6)     # the decoder's value (origin is 0, 0)
         else:
             _absolute_point(out, x, z)
-        previous = np.array([x, z], dtype=np.float32)
+            px, pz = x, z
         for point in xz[1:]:
             x, z = map(_f32, point)
-            dx, dz = round((x - float(previous[0])) * 10), round((z - float(previous[1])) * 10)
-            decoded = np.array([_f32(previous[0] + np.float32(dx / 10)),
-                                _f32(previous[1] + np.float32(dz / 10))], dtype=np.float32)
-            if all(-32767 <= q <= 32767 for q in (dx, dz)) and decoded[0] == x and decoded[1] == z:
+            # Against the decoder's own previous point, accumulated in float32 exactly as web/compact-data.js and
+            # s99's independent decoder do, so the grid error stays per point and never drifts along a way.
+            dx, dz = dm(x - float(px)), dm(z - float(pz))
+            if all(-32767 <= q <= 32767 for q in (dx, dz)):
                 out += struct.pack("<hh", dx, dz)
-                previous = decoded
+                px, pz = _f32(px + _f32(dx / 10)), _f32(pz + _f32(dz / 10))
             else:
                 _absolute_point(out, x, z)
-                previous = np.array([x, z], dtype=np.float32)
+                px, pz = x, z
     doc = {"version": 2, "format": ROADS_FORMAT, "file": "roads2.bin.gz",
            "encoding": "ZGR2/u8-cls/u8-quarter-m/u16-count/i16-delta+absolute-f32-escape",
            "classes": classes, "classWidths": class_widths, "count": count, "nWays": len(ways), "origin": list(origin)}

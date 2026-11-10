@@ -71,7 +71,7 @@ THREE.ColorManagement.enabled = false;
 const looks = createLooks();
 // Noncritical city work waits for the reveal, with each idle job registered once.
 const afterReveal = makeStartupQueue({
-  order: ['terrain', 'attributes', 'roads', 'trees', 'foto', 'cityHeight', 'monuments', 'facts', 'funicular', 'tour', 'trams'],
+  order: ['restPacks', 'terrain', 'attributes', 'roads', 'trees', 'foto', 'cityHeight', 'monuments', 'facts', 'funicular', 'tour', 'trams'],
   idle: () => new Promise(resolve => {
     if ('requestIdleCallback' in window) requestIdleCallback(resolve, { timeout: 1500 });
     else setTimeout(resolve, 0);
@@ -1431,7 +1431,6 @@ function setMonuments(v) {
 const meshes = [];
 const tileMsgs = [];   // the tiles' messages, for the roof years: built when the attributes land, they need them all
 let loaded = 0;
-const queue = [...config.tiles];
 const progressEl = document.getElementById('progress');
 const pool = Array.from({ length: WORKERS }, () => new Worker(new URL('worker.js', import.meta.url), { type: 'module' }));
 
@@ -1467,11 +1466,10 @@ function addTile(m) {
   meshes.push(mesh);
   roofYears?.addTile(m);
   tileMsgs.push(m);
-  fetchRestPacks();
 }
 
 // Tiles come in gzip packs (see pipeline/s03_tiles.py); offsets refer to the unpacked pack. pack0 is requested
-// at once, the others when the first tile is on the map (addTile), or sooner if a worker needs one.
+// at once; the other reveal packs when a worker needs one, the rest of the city only after the map has opened.
 // config.packs holds file names ("pack0.bin.gz"); a tile's `pack` names its pack (an index also works).
 const packs = {};
 const packName = p => (typeof p === 'string' ? p : p.file);
@@ -1527,6 +1525,11 @@ const revealAt = (() => {
   return config.tiles.filter(t => first.has(packOf(t))).length;
 })();
 let mapRevealed = false;
+// What the wait costs, and what it does not: until the map opens, a lane takes only the reveal packs' tiles, so the
+// periphery's packs are not on the wire before the first frame. The rest of the city starts at the reveal (below).
+const queue = config.tiles.filter(t => revealNames.has(packOf(t)));
+const restQueue = config.tiles.filter(t => !revealNames.has(packOf(t)));
+const pumpers = [];
 let restRequested = false;
 function fetchRestPacks() {
   if (restRequested) return;
@@ -1545,7 +1548,7 @@ function fetchRestPacks() {
 fetchPack(packName(config.packs[0]));
 for (const w of pool) {
   const next = async () => {
-    const t = queue.shift();
+    const t = queue.shift() ?? (mapRevealed ? restQueue.shift() : undefined);
     if (!t) return;
     try {
       const buf = (await fetchPack(packOf(t))).slice(t.offset, t.offset + t.length);
@@ -1562,11 +1565,13 @@ for (const w of pool) {
       document.getElementById('loading').hidden = true;
       afterReveal.release();
       startMapUpdates();
+      for (const pump of pumpers) pump();   // the lanes stopped at the reveal's edge: the rest of the city starts now
       document.getElementById('ready').textContent = T('ui.ready');   // the live region's "done" (finding 7)
       foldCreditSoon();
     }
     next();
   };
+  pumpers.push(next);
   next();
 }
 
@@ -4268,6 +4273,8 @@ async function startRoads(baseGrid) {
 
 const FLAT_GRID = { tex: new Float32Array(2), x0: 0, z0: 0, cell: 1, nx: 1, nz: 1 };
 function scheduleDeferredLayers() {
+  // The periphery's packs, once the eye has the centre: the two lanes would otherwise race the reveal for the line.
+  afterReveal.add('restPacks', fetchRestPacks);
   afterReveal.add('terrain', async () => {
     const base = loadBase();
     base.catch(optional('The water (or the flat land)'));

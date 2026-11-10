@@ -9,13 +9,18 @@ const bytes = key => {
   return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
 };
 
-test('ZGR2 shared bytes preserve way order and exact absolute escapes', () => {
+test('ZGR2 shared bytes preserve way order and quantise inside the decimetre grid', () => {
   const doc = { version: 2, format: ROADS2_FORMAT, file: 'roads2.bin.gz', count: 4,
     classes: ['residential', 'service'] };
   const got = decodeRoads2(doc, bytes('zgr2_hex'));
   assert.deepEqual(got.ways.map(w => [w.o, w.c, w.w, w.cls]), [[0, 2, 1.5, 0], [2, 2, 2.25, 1]]);
-  assert.deepEqual(Array.from(got.pts), [0, 0, Math.fround(0.1), Math.fround(-0.1),
-    Math.fround(0.03), Math.fround(-0.07), 1000, 1000]);
+  // A first point off the 1.6 m cells and a 1 km step are quantised, not escaped: the 5 cm grid bound is the
+  // contract (see pack_roads2), so compare inside it rather than to the legacy float32 bits.
+  const want = [[0, 0], [0.1, -0.1], [0.03, -0.07], [1000, 1000]];
+  for (let i = 0; i < want.length; i++) {
+    assert.ok(Math.abs(got.pts[i * 2] - want[i][0]) <= 0.05, `point ${i} x`);
+    assert.ok(Math.abs(got.pts[i * 2 + 1] - want[i][1]) <= 0.05, `point ${i} z`);
+  }
   assert.equal(got.xyz, null);
   assert.throws(() => decodeRoads2(doc, bytes('zgr2_hex').slice(0, -1)), /absolute|length/);
 });

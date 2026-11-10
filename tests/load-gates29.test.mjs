@@ -57,3 +57,18 @@ test('performance budget skips an explicitly unmeasured total but never relaxes 
   assert.deepEqual(numericBudgetFailures({ bytesBeforeReveal: 6_000_001, bytesTotal: 1 }, budget),
     ['bytesBeforeReveal=6000001 > 6000000']);
 });
+
+test('nothing outside the reveal packs is on the wire before the map opens', async () => {
+  const app = await readFile(new URL('../web/app.js', import.meta.url), 'utf8');
+  // Two queues: a lane takes the reveal packs' tiles, and the periphery's only once the reveal has happened.
+  assert.match(app, /const queue = config\.tiles\.filter\(t => revealNames\.has\(packOf\(t\)\)\)/);
+  assert.match(app, /const restQueue = config\.tiles\.filter\(t => !revealNames\.has\(packOf\(t\)\)\)/);
+  assert.match(app, /queue\.shift\(\) \?\? \(mapRevealed \? restQueue\.shift\(\) : undefined\)/);
+  assert.match(app, /for \(const pump of pumpers\) pump\(\)/);
+  // The prewarm is an idle job after the reveal, and the first one: it raced the reveal for the line before.
+  assert.match(app, /afterReveal\.add\('restPacks', fetchRestPacks\)/);
+  assert.match(app, /order: \['restPacks', 'terrain'/);
+  // addTile runs on the first tile, before the map opens: a prewarm there put every pack on the wire first.
+  const addTile = app.slice(app.indexOf('function addTile('), app.indexOf('// Tiles come in gzip packs'));
+  assert.doesNotMatch(addTile, /fetchRestPacks\(\);/);
+});

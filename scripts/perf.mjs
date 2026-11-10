@@ -18,7 +18,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 // Optional by design on a plain file server (and on Pages): the trams' live proxy and the deploy-stamped build
 // card. The page falls back for both. The 404 budget counts everything else, so a mistyped fetch path fails at 1.
 const OPTIONAL_404 = new Set(['rt', 'build.json']);
-let bytes = 0, bytesBeforeReveal = null, http404 = 0, optional404 = 0;
+let bytesBeforeReveal = null, http404 = 0, optional404 = 0;
 const files = [], notFound = [];
 // A page warning is as good as a log line here — a stalled pack lane was last seen silent (run 42011722454).
 page.on('console', m => { if (m.type() === 'warning' || m.type() === 'error') console.log(`[page] ${m.text()}`); });
@@ -28,14 +28,30 @@ page.on('response', async r => {
     if (OPTIONAL_404.has(path)) optional404++; else { http404++; notFound.push(path); }
   }
   const len = Number((await r.allHeaders().catch(() => ({})))['content-length'] || 0);
-  bytes += len;
   files.push([len, r.url().replace(url, '')]);
 });
 const t0 = Date.now();
+// The reveal's own byte count comes from the browser's resource timing, not from the response handler above: those
+// race the reveal (a pack that is half in when the overlay hides lands on whichever side the loop is on) and count
+// a response twice when the service worker precaches what the page has already fetched. The load probe reads the
+// same entries, so the two gates agree on one number.
+await page.addInitScript(() => {
+  window.__revealAudit = { at: null, bytes: 0 };
+  document.addEventListener('DOMContentLoaded', () => {
+    const sample = () => {
+      if (!document.getElementById('loading')?.hidden || window.__revealAudit.at !== null) return;
+      window.__revealAudit.at = performance.now();
+      window.__revealAudit.bytes = performance.getEntriesByType('resource')
+        .filter(e => e.startTime <= window.__revealAudit.at).reduce((n, e) => n + e.transferSize, 0);
+    };
+    new MutationObserver(sample).observe(document.documentElement, { attributes: true, subtree: true, attributeFilter: ['hidden'] });
+    sample();
+  }, { once: true });
+});
 // Measure the city, not its weather: ?weather=none keeps snowfall off the byte budget.
 await page.goto(`${url}?debug=1&weather=none`);
 await page.waitForFunction(() => document.getElementById('loading')?.hidden, null, { timeout: 180000 });
-bytesBeforeReveal = bytes;
+bytesBeforeReveal = await page.evaluate(() => window.__revealAudit.bytes);
 const msReveal = Date.now() - t0;
 // Throughput is capped by software-GL rendering: at the trams-in-view tier the map holds 20 fps while tiles stream,
 // so a full city on SwiftShader can need a quarter hour. Say so while waiting (the silence reads as a hang).
@@ -82,8 +98,11 @@ const at = async d => {
 };
 const home = await at('home'), near = await at(400), far = await at(20000);
 const marks = await page.evaluate(() => Object.fromEntries(performance.getEntriesByType('measure').map(m => [m.name, Math.round(m.duration)])));
+// The whole city from the same source, for the same reason: one entry per resource, no response event counted twice.
+const bytesTotal = await page.evaluate(() =>
+  performance.getEntriesByType('resource').reduce((n, e) => n + e.transferSize, 0));
 const result = {
-  url, msReveal, bytesBeforeReveal, bytesTotal: bytes, requests: files.length, http404, optional404, notFound,
+  url, msReveal, bytesBeforeReveal, bytesTotal, requests: files.length, http404, optional404, notFound,
   heaviest: files.sort((a, b) => b[0] - a[0]).slice(0, 15).map(([n, f]) => `${(n / 1e6).toFixed(2)} MB ${f}`),
   home, near, far, builders: marks,
 };

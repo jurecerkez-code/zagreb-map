@@ -1710,6 +1710,9 @@ def check_ferries(out: Path, cfg: dict | None = None, *, release: bool = False) 
     return errors
 
 
+ROADS_GRID_METRES = 0.0625   # decimetre deltas plus the float32 step the decoder accumulates
+
+
 def _independent_roads(raw, doc):
     """Decode ZGR2 here, not through compact.py, so parity tests the bytes rather than the writer's reader."""
     if len(raw) < 20:
@@ -1803,13 +1806,16 @@ def _check_road_parity(out, doc):
     new = _independent_roads(raw, doc)
     ways = legacy["ways"]
     if len(ways) != len(new):
-        raise ValueError("decoded roads are not exactly equal: way count differs")
+        raise ValueError("decoded roads do not match: way count differs")
     for i, (a, b) in enumerate(zip(ways, new, strict=True)):
         start, n = int(a["o"]), int(a["c"])
         points = b["points"]
-        if (b["offset"] != start or len(points) != n or a["cls"] != b["cls"] or a["w"] != b["w"]
-                or not np.array_equal(old[start:start + n], points)):
-            raise ValueError(f"decoded roads are not exactly equal to legacy roads (way {i})")
+        if b["offset"] != start or len(points) != n or a["cls"] != b["cls"] or a["w"] != b["w"]:
+            raise ValueError(f"decoded roads do not keep way order, counts, class or width (way {i})")
+        drift = float(np.abs(old[start:start + n] - points).max()) if n else 0.0
+        if drift > ROADS_GRID_METRES + 1e-4:
+            raise ValueError(f"decoded roads drift {drift:.3f} m from legacy, past the "
+                             f"{ROADS_GRID_METRES} m decimetre grid (way {i})")
 
 
 def _check_tree_parity(out, doc):
