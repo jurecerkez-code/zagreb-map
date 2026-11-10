@@ -23,7 +23,7 @@ export const EST_FLAGS = [YFLAG.AREA, YFLAG.ESTIMATE, YFLAG.PERIOD];
 // unknown, yearMin, yearMax, periods}, with histogram = EXACT/RANGE/LONG and histogramEst = AREA/ESTIMATE/PERIOD by
 // year; yearMin and yearMax are config's, which unknownShown reads.
 export function tallyFromAttrs(view, n, stride, { periods, yearMin, yearMax }) {
-  const histogram = {}, histogramEst = {};
+  const histogram = {}, histogramEst = {}, boundPeriods = { pre1968: periods.map(() => 0), '1968_2007': periods.map(() => 0) };
   let unknown = 0;
   for (let gid = 0; gid < n; gid++) {
     const o = gid * stride;
@@ -31,8 +31,10 @@ export function tallyFromAttrs(view, n, stride, { periods, yearMin, yearMax }) {
     if (yflag === YFLAG.UNKNOWN) { unknown++; continue; }
     const h = EST_FLAGS.includes(yflag) ? histogramEst : histogram;
     (h[year] ??= periods.map(() => 0))[period]++;
+    // A bound has its own headed count; an exact building that happens to stand in 1968 must not be added to it.
+    if (yflag === YFLAG.BOUND && (year === 1968 || year === 2007)) boundPeriods[year === 1968 ? 'pre1968' : '1968_2007'][period]++;
   }
-  return { histogram, histogramEst, unknown, yearMin, yearMax, periods };
+  return { histogram, histogramEst, boundPeriods, unknown, yearMin, yearMax, periods };
 }
 
 // config: stockholm.json or a tally from tallyFromAttrs (histogram, histogramEst, unknown, yearMin, yearMax,
@@ -61,12 +63,16 @@ export function periodCounts(config, from, to, { est = true } = {}) {
   return out;
 }
 
-// Separate bound headings, each reconciled with the ordinary histogram (never double-counted in the city total).
+// Separate bound headings. A tally counts only the BOUND flag (tallyFromAttrs boundPeriods); the build's config
+// carries the same totals at config.bounds, never read from the ordinary histogram, where an exactly dated 1968
+// building also stands. The ordinary histogram keeps the bound so the film and the total count show it.
 export function boundCounts(config, from, to, on = () => true) {
   const out = { pre1968: 0, '1968_2007': 0 };
   for (const [key, year] of [['pre1968', 1968], ['1968_2007', 2007]]) {
-    const row = config.histogram?.[year] || [];
-    if (year > from && year <= to) out[key] = Array.isArray(row) ? row.reduce((n, c, i) => n + (on(i) ? c : 0), 0) : 0;
+    if (!(year > from && year <= to)) continue;
+    const row = config.boundPeriods?.[key];
+    if (Array.isArray(row)) out[key] = row.reduce((n, c, i) => n + (on(i) ? c : 0), 0);
+    else if (Number.isFinite(config.bounds?.[key])) out[key] = config.bounds[key];
   }
   return out;
 }

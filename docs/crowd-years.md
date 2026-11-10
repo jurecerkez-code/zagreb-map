@@ -1,6 +1,7 @@
 # Crowd dating: public issue → review → contribution PR
 
-For a truly undated (`UNKNOWN`) card, **“Do you know when it was built?”** opens GitHub’s
+For an undated card — `UNKNOWN`, or a one-sided cadastre `BOUND` that names no construction year — **“Do you know
+when it was built?”** opens GitHub's
 [`year.yml` issue form](/.github/ISSUE_TEMPLATE/year.yml) with **gid**, any already-public card address,
 and the labels `contributions,needs-human`. No Worker endpoint or guessed year API is called.
 

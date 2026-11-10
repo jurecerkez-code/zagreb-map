@@ -5,7 +5,7 @@ import { readAttrs, ATTR_FLOATS } from './tile.js';
 import { liftBounds } from './bounds.js';
 import { YFLAG, YSRC } from './codes.js';
 import { yearLine, sourceLine, rebuildLine, floorsLine, heightLine, towerLine, ratingLine, protLine, photoCredit, extractFor, cardLinks, fillUrl,
-  isEstimate, placeLine, whyAnchor } from './card.js';
+  isEstimate, placeLine, whyAnchor, boundClass } from './card.js';
 import { shareText, shareLink, parseAt, findLayer } from './share.js';
 import { googleMapsUrl } from './geo.js';
 import { withTry } from './features.js';
@@ -2117,7 +2117,9 @@ function cardHtml(gid, pinned) {
   //. s03 already leaves them out of the card of every non-curated building in PRIVATE_HOUSE_KATEGORI;
   // cardLinks is a second guard for the RAÄ link.
   const links = cardLinks(more, b, T, config.links);
-  const yearCta = unknown && pinned ? `<section class="year-cta"><h3>${esc(T('card.year.cta'))}</h3><p>${yearIssueUrl(gid, more.addr || '')
+  // Undated includes a one-sided cadastre bound: it names a latest year, not a construction year, so a reader can
+  // still supply evidence.
+  const yearCta = (unknown || boundClass(b)) && pinned ? `<section class="year-cta"><h3>${esc(T('card.year.cta'))}</h3><p>${yearIssueUrl(gid, more.addr || '')
     ? `<a href="${esc(yearIssueUrl(gid, more.addr || ''))}" target="_blank" rel="noopener">${esc(T('card.year.link'))}</a>` : ''}</p></section>` : '';
   const picked = gid === forcedGid && hiddenByMap(b) ? `<p class="picked">${esc(T('card.picked'))}</p>` : '';
   return `

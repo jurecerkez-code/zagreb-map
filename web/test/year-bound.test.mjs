@@ -44,21 +44,25 @@ function attrs(rows) {
 }
 
 test('bound classes enter the film at their own bound, outside unknown and the estimate set', () => {
-  const tally = tallyFromAttrs(attrs([[1968, YFLAG.BOUND, 9], [1968, YFLAG.BOUND, 9],
-    [2007, YFLAG.BOUND, 10], [1930, YFLAG.ESTIMATE, 6], [0, YFLAG.UNKNOWN, 0]]), 5, 24, CONFIG);
+  const tally = tallyFromAttrs(attrs([[1968, YFLAG.BOUND, 9], [1968, YFLAG.BOUND, 9], [2007, YFLAG.BOUND, 10],
+    [1968, YFLAG.EXACT, 9], [2007, YFLAG.EXACT, 10], [1930, YFLAG.ESTIMATE, 6], [0, YFLAG.UNKNOWN, 0]]), 7, 24, CONFIG);
   assert.equal(tally.unknown, 1);
-  assert.deepEqual(tally.histogram, CONFIG.histogram);
+  assert.deepEqual(tally.histogram, { 1968: periods.map((_, i) => i === 9 ? 3 : 0),
+    2007: periods.map((_, i) => i === 10 ? 2 : 0) });
   assert.deepEqual(tally.histogramEst, { 1930: periods.map((_, i) => i === 6 ? 1 : 0) });
   const counted = (from, to) => cityCount(tally, from, to, () => true, 'hide', { est: false });
   assert.equal(counted(1900, 1967), 0);
-  assert.equal(counted(1900, 1968), 2);
-  assert.equal(counted(1969, 2007), 1);
-  assert.equal(counted(1900, 2026), 3);
+  assert.equal(counted(1900, 1968), 3);
+  assert.equal(counted(1969, 2007), 2);
+  assert.equal(counted(1900, 2026), 5);
+  // the headed counts are BOUND only: the exact 1968/2007 buildings in the same histogram buckets stay out
   assert.deepEqual(boundCounts(tally, 0, 2026), { pre1968: 2, '1968_2007': 1 });
   assert.deepEqual(boundCounts(tally, 0, 1950), { pre1968: 0, '1968_2007': 0 });
   assert.deepEqual(boundCounts(tally, 1970, 2026), { pre1968: 0, '1968_2007': 1 });
   const on = i => i === 9;
   assert.deepEqual(boundCounts(tally, 0, 2026, on), { pre1968: 2, '1968_2007': 0 });
+  // config's flat totals are the build's own headed counts, not its histogram buckets
+  assert.deepEqual(boundCounts(CONFIG, 0, 2026), { pre1968: 2, '1968_2007': 1 });
 });
 
 test('the bound legend has a heading and a count for each class', () => {

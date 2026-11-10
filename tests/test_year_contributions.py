@@ -167,7 +167,8 @@ def test_the_workflow_cli_writes_a_real_contribution_row(tmp_path):
 
     path = blank(tmp_path)
     issue_file = tmp_path / "issue.json"
-    issue_file.write_text(json.dumps([ISSUE]))
+    # `gh api --paginate --slurp` writes one array per page, even when there is one page.
+    issue_file.write_text(json.dumps([[ISSUE]]))
     run = subprocess.run(
         [sys.executable, "scripts/year_contributions.py", "--issues-json", str(issue_file), "--csv", str(path)],
         capture_output=True,
@@ -176,6 +177,27 @@ def test_the_workflow_cli_writes_a_real_contribution_row(tmp_path):
     assert run.returncode == 0, run.stderr
     assert json.loads(run.stdout.split("not proposed:")[0].split("1 new candidate rows")[0])["added"] == ["HFH-427"]
     assert contributions.read(path).iloc[0].uuid == "gid:42"
+
+
+def test_paginated_issue_pages_are_flattened_without_inventing_rows(tmp_path):
+    import subprocess
+    import sys
+
+    path = blank(tmp_path)
+    other = dict(ISSUE, number=428, html_url="https://github.com/jurecerkez-code/zagreb-map/issues/428",
+                 body=BODY.replace("42\n", "43\n", 1).replace("1938", "1931"))
+    rejected = dict(ISSUE, number=429, html_url="https://github.com/jurecerkez-code/zagreb-map/issues/429",
+                    body=BODY.replace("1938", "not a year"))
+    issue_file = tmp_path / "issues.json"
+    issue_file.write_text(json.dumps([[ISSUE], [other, rejected]]))
+    run = subprocess.run(
+        [sys.executable, "scripts/year_contributions.py", "--issues-json", str(issue_file), "--csv", str(path)],
+        capture_output=True,
+        text=True,
+    )
+    assert run.returncode == 0, run.stderr
+    assert [row.uuid for row in contributions.read(path).itertuples()] == ["gid:42", "gid:43"]
+    assert "issue #429" in run.stdout
 
 
 def test_form_and_workflow_are_real_machine_consumable_inputs():

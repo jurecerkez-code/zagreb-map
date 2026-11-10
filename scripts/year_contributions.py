@@ -163,7 +163,10 @@ def main(argv=None):
     args = parser.parse_args(argv)
     raw = json.loads(args.issues_json.read_text(encoding="utf-8"))
     assert isinstance(raw, list), "the issue input must be the array returned by GitHub's Issues API"
-    result = integrate([issue for issue in raw if isinstance(issue, dict)], args.csv)
+    # `gh api --paginate --slurp` writes one array per page, so a build with two pages arrives as [[...], [...]];
+    # a single page is [[...]] too. Flatten only lists, never an object that is not an issue.
+    issues = [issue for page in raw for issue in (page if isinstance(page, list) else [page])]
+    result = integrate([issue for issue in issues if isinstance(issue, dict)], args.csv)
     print(
         json.dumps(
             {"added": result.added, "skipped_existing": result.skipped_existing, "rejected": result.rejected},
