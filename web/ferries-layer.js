@@ -14,9 +14,9 @@
 // Tested through the pure parts (web/test/ferries.test.mjs) and in the browser (e2e/ferries.spec.mjs).
 import { KINDS, routePlan, boatAt, calmTime, boatScale, boatModels, wakeModel, PAINT, PARTS, HIT_PX,
   boatUnder } from './ferries.js';
-import { SHADING } from './themes.js';
-
-const glf = x => (Number.isInteger(x) ? x.toFixed(1) : String(x));
+import { DISPLAY_FOG_GLSL } from './display-fog.js';
+import { SUN_LIGHT } from './themes.js';
+// The boats share the city's light numbers with app.js uSunCol/uSkyCol; SHADING no longer colours their faces.
 const WAKE_ALPHA = 0.55;   // a wake's opacity at the stern, at full speed
 const HIT_SEEN = 0.2;      // a boat is hit while it shows at least this much: fading out at an edge end of its route,
                            // into the haze at the map's edge or into the fog far off. Not more: Tallink's lane down
@@ -45,9 +45,11 @@ const HULL_VERT = /* glsl */`
 `;
 const hullFrag = fade => /* glsl */`
   precision highp float;
-  uniform vec3 uFogColor, uSun;
+  uniform vec3 uFogColor, uSun, uSunCol, uSkyCol;
+  uniform float uNight;
   uniform vec2 uFog;
   ${fade}
+  ${DISPLAY_FOG_GLSL}
   in vec3 vWorld;
   in vec3 vColour;
   in float vAlpha;
@@ -55,11 +57,16 @@ const hullFrag = fade => /* glsl */`
   void main() {
     // flat faces lit like the buildings' walls (app.js FRAG): n faces the camera, so it is the outward normal
     vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
-    float light = n.y > 0.9 ? 1.04 : ${glf(SHADING.wallMin)} + ${glf(SHADING.wallLit)} * max(dot(n, uSun), 0.0);
-    vec3 c = vColour * light;
-    c = mix(uFogColor, c, fadeAt(vWorld.xz));
-    c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, length(vWorld - cameraPosition)));
+    // #24: the same one light as the buildings' (app.js LIGHT_GLSL), no wall fudge any more
+    vec3 direct = uSunCol * (max(dot(n, uSun), 0.0) * ${SUN_LIGHT.direct.toFixed(1)});
+    vec3 ambient = uSkyCol * (mix(0.6, 1.0, n.y * 0.5 + 0.5) * ${SUN_LIGHT.skyFill.toFixed(1)});
+    vec3 c = vColour * (direct + ambient);
     outColor = vec4(c, vAlpha);
+    #define gl_FragColor outColor
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+    outColor.rgb = mix(outColor.rgb, outColor.rgb * vec3(0.30, 0.36, 0.56), uNight);
+    outColor.rgb = displayFog(outColor.rgb, length(vWorld - cameraPosition), fadeAt(vWorld.xz));
   }
 `;
 const WAKE_VERT = /* glsl */`
@@ -80,15 +87,21 @@ const WAKE_VERT = /* glsl */`
 const wakeFrag = fade => /* glsl */`
   precision highp float;
   uniform vec3 uFogColor, uWake;
+  uniform float uNight;
   uniform vec2 uFog;
   ${fade}
+  ${DISPLAY_FOG_GLSL}
   in vec3 vWorld;
   in float vAlpha;
   out vec4 outColor;
   void main() {
-    vec3 c = mix(uFogColor, uWake, fadeAt(vWorld.xz));
-    c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, length(vWorld - cameraPosition)));
+    vec3 c = uWake;
     outColor = vec4(c, vAlpha);
+    #define gl_FragColor outColor
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+    outColor.rgb = mix(outColor.rgb, outColor.rgb * vec3(0.30, 0.36, 0.56), uNight);
+    outColor.rgb = displayFog(outColor.rgb, length(vWorld - cameraPosition), fadeAt(vWorld.xz));
   }
 `;
 
@@ -101,7 +114,9 @@ export function makeFerries(THREE, { routes, uniforms, fadeGlsl, look, calm, cam
   // calm: the moment this boat stands still at under reduced motion
   const boats = plans.flatMap(plan => Array.from({ length: plan.boats }, (_, i) => ({ plan, i, calm: calmTime(plan, i) })));
   const n = boats.length;
-  const shared = { uFog: uniforms.uFog, uFogColor: uniforms.uFogColor, uSun: uniforms.uSun, uFade: uniforms.uFade,
+  const shared = { uFog: uniforms.uFog, uFogColor: uniforms.uFogColor, uFogDisplay: uniforms.uFogDisplay,
+    uSun: uniforms.uSun, uFade: uniforms.uFade, uNight: uniforms.uNight,
+    uSunCol: uniforms.uSunCol, uSkyCol: uniforms.uSkyCol,          // #24: the boats light their faces with the city's sun
     uGridO: uniforms.uGridO, uGridN: uniforms.uGridN, uCell: uniforms.uCell };
 
   const m = boatModels();

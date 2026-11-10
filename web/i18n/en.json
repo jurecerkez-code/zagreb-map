@@ -515,6 +515,7 @@
   "ui.facts": "History facts",
   "ui.facts.hint": "24 dated events, each with two sources",
   "ui.sun.live": "Live sun",
+  "ui.sun.golden": "Golden hour",
   "ui.sun.day": "Day",
   "ui.sun.night": "Night",
   "ui.tour.open": "Sightseeing",

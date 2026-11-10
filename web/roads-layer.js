@@ -8,6 +8,8 @@
 // points, lamps.bin.gz the 5,821 mapped street lamps lit at night.
 import { gunzip } from './veg.js';
 import { TILE, KERB, EDGE_W, LIFT, CLASSES, PAVEMENT } from './roads-worker.js';
+import { DISPLAY_FOG_GLSL } from './display-fog.js';
+import { SUN_LIGHT } from './themes.js';
 
 // The class palette: asphalt greys for the carriageway, warmer greys for the pavements: measured off Zagreb
 // (#4f5450 asphalt, #8d908e kerb side pavement), the motorway the darkest, a service lane the lightest. The row
@@ -56,9 +58,18 @@ export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt
   const myUniforms = {
     uFog: uniforms.uFog,
     uFogColor: uniforms.uFogColor,
+    uFogDisplay: uniforms.uFogDisplay,
     uNight: uniforms.uNight,
     uRelief: uniforms.uRelief,
     uCutK: uniforms.uCutK,
+    uSun: uniforms.uSun,
+    uSunCol: uniforms.uSunCol,
+    uSkyCol: uniforms.uSkyCol,
+    uHgt: uniforms.uHgt,
+    uHgtN: uniforms.uHgtN,
+    uHgtO: uniforms.uHgtO,
+    uHgtCell: uniforms.uHgtCell,
+    uHgtOn: uniforms.uHgtOn,
     uLift: { value: LIFT },
     uCls: { value: CLASSES.map(c => new THREE.Color(COLOUR[c] || '#94989c')) },
     uSide: { value: new THREE.Color(SIDEWALK) },
@@ -70,9 +81,11 @@ export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt
       attribute float aU, aHalf, aCls, aT, aCut;
       uniform float uRelief, uCutK, uLift;
       varying float vU, vHalf, vCls, vDepth;
+      varying vec3 vWorld;
       void main() {
         vec4 w = vec4(position.x, aT * uRelief - aCut * uCutK + uLift, position.z, 1.0);
         vec4 mv = modelViewMatrix * w;
+        vWorld = (modelMatrix * w).xyz;
         vU = aU; vHalf = aHalf; vCls = aCls; vDepth = -mv.z;
         gl_Position = projectionMatrix * mv;
       }`,
@@ -82,7 +95,37 @@ export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt
       uniform vec2 uFog;
       uniform float uNight;
       uniform vec3 uCls[${CLASSES.length}], uSide, uEdge;
+      uniform vec3 uSun, uSunCol, uSkyCol;
+      uniform sampler2D uHgt;
+      uniform vec2 uHgtN, uHgtO;
+      uniform float uHgtCell, uHgtOn;
+      ${DISPLAY_FOG_GLSL}
       varying float vU, vHalf, vCls, vDepth;
+      varying vec3 vWorld;
+      float cityHeight(vec2 xz) {
+        vec2 uv = (xz - uHgtO) / (uHgtCell * uHgtN);
+        if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return -500.0;
+        vec4 s = texture(uHgt, uv);
+        return (s.r * 65280.0 + s.g * 255.0) * 0.1;
+      }
+      float sunShadow(vec3 p) {
+        if (uHgtOn < 0.5 || uNight > 0.5) return 1.0;
+        float horizontal = length(uSun.xz);
+        if (horizontal < 0.06) return 1.0;
+        vec2 dir = uSun.xz / horizontal;
+        float rise = uSun.y / horizontal;
+        float t = 10.0;
+        for (int i = 0; i < 20; i++) {
+          if (cityHeight(p.xz + dir * t) > p.y + t * rise + 1.5) return 0.0;
+          t += 14.0 + float(i) * 6.0;
+        }
+        return 1.0;
+      }
+      vec3 lighting(vec3 n, float visibility) {
+        vec3 direct = uSunCol * (max(dot(n, uSun), 0.0) * ${SUN_LIGHT.direct.toFixed(1)} * visibility);
+        vec3 ambient = uSkyCol * (mix(0.6, 1.0, n.y * 0.5 + 0.5) * ${SUN_LIGHT.skyFill.toFixed(1)});
+        return direct + ambient;
+      }
       void main() {
         vec3 c = uCls[int(vCls + 0.5)];
         // A carriageway's bands by distance from the centreline: asphalt out to aHalf, the kerb just past it, the
@@ -94,9 +137,15 @@ export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt
         float side = smoothstep(vHalf + ${EDGE_W.toFixed(2)} - fw, vHalf + ${EDGE_W.toFixed(2)} + fw, a);
         c = mix(c, uEdge, kerb * (1.0 - pave));
         c = mix(c, uSide, side * (1.0 - pave));
-        c = mix(c, c * ${NIGHT_TINT}, uNight);
-        c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, vDepth));
+        vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
+        float visibility = mix(0.58, 1.0, sunShadow(vWorld));
+        c *= lighting(n, visibility);
         gl_FragColor = vec4(c, 1.0);
+        // #24: the display transform, then one Night dim and the display-space fog.
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, gl_FragColor.rgb * ${NIGHT_TINT}, uNight);
+        gl_FragColor.rgb = displayFog(gl_FragColor.rgb, vDepth, 1.0);
       }`,
     polygonOffset: true,             // the terrain writes its own depth at the same height: pull the street forward
     polygonOffsetFactor: -2,

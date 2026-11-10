@@ -17,7 +17,9 @@ function ringTexture(THREE, colour, fill, dashed) {
   ctx.beginPath(); ctx.arc(32, 32, 24, 0, Math.PI * 2);
   if (!dashed) ctx.fill();
   ctx.stroke();
-  return new THREE.CanvasTexture(c);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
 function nameTexture(THREE, text, ink, halo) {
@@ -29,6 +31,7 @@ function nameTexture(THREE, text, ink, halo) {
   ctx.lineWidth = 6; ctx.strokeStyle = halo; ctx.strokeText(text, 8, 20);
   ctx.fillStyle = ink; ctx.fillText(text, 8, 20);
   const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
   t.userData = { aspect: c.width / c.height };
   return t;
 }

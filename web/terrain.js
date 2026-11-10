@@ -112,6 +112,17 @@ export const cutFactor = (mode, relief) => (mode === 'none' ? 0 : mode === 'true
 // Bilinear on the grid, each of the four nodes clamped on its own (as texelFetch is in the shaders and
 // pipeline/terrain.py bilinear): tAt and cutAt in true metres, surfaceAt = R * t - K * cut, what the map draws. It reads
 // the interleaved (t, cut) texture data (T.tex, heightTexture's layout), so the page keeps one copy of the grid.
+// Exact derivatives of a bilinear cell, in world metres. values = lower-left,
+// lower-right, upper-left, upper-right; fractions = x/z inside the cell.
+export function gradientBilinear(values, fractions, cellSize = 1) {
+  const [a, b, c, d] = values;
+  const [tx, tz] = fractions;
+  return [
+    ((b - a) * (1 - tz) + (d - c) * tz) / cellSize,
+    ((c - a) * (1 - tx) + (d - b) * tx) / cellSize,
+  ];
+}
+
 export function makeGround(T) {
   if (!T) return { tAt: () => 0, cutAt: () => 0, surfaceAt: () => 0 };
   const { x0, z0, cell, nx, nz } = T, tex = T.tex ?? heightTexture(T);

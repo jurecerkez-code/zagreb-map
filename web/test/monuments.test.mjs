@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { shownAt, monumentsOnFrom, monumentCard, NOMINAL, FIGURE_AT, MATERIALS } from '../monuments.js';
-import { THEMES } from '../themes.js';
+import { shownAt, monumentsOnFrom, monumentCard, makeMonuments, NOMINAL, FIGURE_AT, MATERIALS } from '../monuments.js';
+import { THEMES, SUN_LIGHT } from '../themes.js';
+import * as THREE from '../vendor/three.module.js';
 
 const jelacic = { name: 'Ban Josip Jelačić', kind: 'equestrian', year: 1866, removed: [[1947, 1989]], mat: 'bronze', h: 9,
   by: ['Anton Dominik Fernkorn'], qid: 'Q121636557', wp: { hr: 'Kip bana Josipa Jelačića u Zagrebu' },
@@ -25,6 +26,31 @@ test('the switch is on unless turned off', () => {
 test('every kind has a figure height and every look its materials', () => {
   for (const k of Object.keys(NOMINAL)) assert.ok(FIGURE_AT[k] >= 0 && FIGURE_AT[k] < NOMINAL[k], k);
   for (const look of Object.keys(THEMES)) assert.ok(MATERIALS[look], look);
+});
+
+test('monuments share the scene light and the buildings night attenuation', () => {
+  const uniforms = {
+    uYear: { value: 2026 }, uSun: { value: new THREE.Vector3(0, 1, 0) },
+    uFog: { value: new THREE.Vector2(9000, 26000) }, uFogColor: { value: new THREE.Color('#b3c7dd') },
+    uSunCol: { value: new THREE.Color('#ffdcae') }, uSkyCol: { value: new THREE.Color('#b3c7dd') },
+    uNight: { value: 0 },
+  };
+  const monuments = makeMonuments(THREE, {
+    list: [{ id: 'test', kind: 'statue', mat: 'stone', x: 0, z: 0, h: 7, year: 1900 }],
+    uniforms, surfaceAt: () => 0, camera: new THREE.PerspectiveCamera(),
+    renderer: { domElement: { clientWidth: 800, clientHeight: 600 } }, look: () => 'paper', yearMax: 2026,
+  });
+  const material = monuments.group.children[0].material;
+  for (const key of ['uSun', 'uSunCol', 'uSkyCol', 'uNight']) assert.equal(material.uniforms[key], uniforms[key], key);
+  assert.ok(material.fragmentShader.includes(
+    `uSunCol * (max(dot(n, normalize(uSun)), 0.0) * ${SUN_LIGHT.direct.toFixed(1)})`,
+    'direct sunlight uses the same constant as the city',
+  ));
+  assert.ok(material.fragmentShader.includes(
+    `uSkyCol * (mix(0.6, 1.0, n.y * 0.5 + 0.5) * ${SUN_LIGHT.skyFill.toFixed(1)})`,
+    'sky fill uses the same constant as the city',
+  ));
+  assert.match(material.fragmentShader, /mix\(c, c \* vec3\(0\.30, 0\.36, 0\.56\), uNight\)/);
 });
 
 test('the card escapes, names the sculptor, the removal and the Croatian excerpt', () => {
