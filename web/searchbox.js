@@ -16,6 +16,10 @@ export function mountSearch({ root, openButton, getJson, base, T, onPick, swatch
   let current = Promise.resolve();     // the latest run(): Enter waits for it, so it never picks an older query's row
   const shards = {};
   const loadShard = k => (shards[k] ??= getJson(`${base}addr/${k}.json`).catch(e => { delete shards[k]; throw e; }));
+  // A street whose buildings have no house number is a street reference, its own lazy shard, loaded only if the
+  // numbers shard had nothing for that street: a pick then still flies to the buildings that stand on it.
+  const refShards = {};
+  const loadRef = k => (refShards[k] ??= getJson(`${base}ref/${k}.json`).catch(e => { delete refShards[k]; throw e; }));
 
   function load() {
     loading ??= getJson(`${base}index.json`).then(index => { P = prepare(index); failed = false; return P; })
@@ -53,7 +57,7 @@ export function mountSearch({ root, openButton, getJson, base, T, onPick, swatch
     if (!P) { showMessage(esc(t(failed ? 'search.failed' : 'search.loading'))); shown = 'hint'; return; }
     const chips = P.examples.map(e => `<button type="button" class="search-try" data-q="${esc(e)}">${esc(e)}</button>`).join(' · ');
     showMessage(`${chips ? `<b>${esc(t('search.try'))}</b> ${chips}<br>` : ''}${esc(t('search.coverage',
-      { share: t.num(100 * P.addressed / Math.max(1, buildings), 0) }))}`);
+      { share: t.num(100 * (P.addressed + P.streetRef) / Math.max(1, buildings), 0) }))}`);
     shown = 'hint';
   }
   function render() {
@@ -115,7 +119,7 @@ export function mountSearch({ root, openButton, getJson, base, T, onPick, swatch
     // Blurring the hidden sheet falls back to body. Focus the real trigger before the
     // card records its return target, so Escape never strands the keyboard on body.
     if (isPhone()) leave();
-    onPick(row, loadShard);
+    onPick(row, loadShard, loadRef);
   }
 
   input.addEventListener('input', () => { current = run(); });

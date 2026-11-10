@@ -17,7 +17,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   outputDir: 'data/test-results',
   reporter: 'list',
-  use: { baseURL: `http://127.0.0.1:${PORT}/`, trace: 'retain-on-failure' },
+  use: { baseURL: `http://127.0.0.1:${PORT}/`, locale: 'en-US', trace: 'retain-on-failure' },
   // On a Mac the browser draws with the GPU (Metal) instead of SwiftShader, Chromium's CPU renderer: a full map load
   // took 6.4 s on the CPU and 0.4 s on the GPU (2026-10-18), and the CPU run kept the fans going. CI (Linux, no GPU)
   // keeps the default.

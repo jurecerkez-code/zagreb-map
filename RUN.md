@@ -14,6 +14,59 @@ Paths are relative to `CODE university/PROJEKTI/zagreb-by-building/`. Run comman
 
 Overpass is not reachable from this laptop; the Geofabrik PBF replaces it.
 
+### Address coverage, source evidence and search
+
+- `pipeline/address_sources.py` measures the table and/or the actual address shards without rebuilding the city. It also
+  optionally joins a **licensed local** RPJ GeoJSON. It never downloads addresses or guesses their reuse rights:
+
+  ```bash
+  uv run python -m pipeline.address_sources --buildings data/buildings.parquet \
+    --addresses data/addresses.parquet --search web/data/v20261103-fix/search/addr
+  uv run python -m pipeline.address_sources --buildings data/buildings.parquet \
+    --addresses data/addresses.parquet --rpj ../data/raw/addresses/rpj.geojson \
+    --out data/addresses.parquet --audit data/address_evidence.parquet --report data/address_report.json
+  ```
+
+- For the full city pipeline, `SOURCE["rpj_addresses"]` points at `../data/raw/zagreb/rpj_kucni_broj.geojson` and
+  `pipeline/sources.yml` records the publisher's permission (Grad Zagreb, confirmed 2026-11-10, credited "Grad Zagreb").
+  The accessible public ArcGIS schema is not itself a publication licence; the permission is the recorded basis.
+- Measured on 2026-11-10 (all footprints / footprints over 30 m²): 117,345 / 115,803 have a house number (39.3% / 59.3%);
+  282,995 / 187,325 have a number or a street reference (94.75% / 95.94%). The RPJ register has 136,448 points, so the
+  issue's 80%-house-number gate is arithmetically unreachable by one point per footprint; no number is invented.
+- New point attribution accepts only a point covered by exactly one footprint (`unique_covered_by`), with explicit CRS
+  conversion. No nearest/smallest-overlap assignment: outside and ambiguous points do not get an address. Candidates
+  and zero-metre coverage evidence are logged locally in `data/address_evidence.parquet`, not copied to the web.
+  Source ranges/slashes are not expanded. Existing direct ZBSM and tagged-building rows retain their old joins and are
+  not mislabeled as newly measured geometry matches.
+- `withheld` is a privacy/takedown flag, while `source` identifies OSM, `grad_zagreb_rpj`, or another record source;
+  neither replaces the other. Merging cannot undo an existing takedown. Coverage is computed from distinct real gids
+  in valid non-withheld rows, not address-string tallies. A full build writes `data/address_report.json`, a machine
+  report including coverage, unmatched source-point reasons, and the remaining gap.
+- Search folds Croatian diacritics (including đ), `ul.`/descriptive street aliases, plain alphanumeric suffixes and
+  number-first queries in Python and browser code identically. These aliases do not canonical-merge `Ulica` and
+  `Cesta` or infer that a range/slash value is another house number. Split aliases are still working shards; the
+  canonical-name acceptance gate is not claimed as solved.
+
+## 1b. Addresses (issue #30)
+
+`pipeline/zagreb_addresses.py` canonicalises street names, puts a house number on every footprint an OSM address
+point covers, expands `addr:interpolation` ranges from numbered ends, lets a ≤ 30 m² structure inherit the address it
+shares an edge with, and gives every other footprint the street it stands by. It never invents a number.
+
+```bash
+cd address-worktree
+../engine/.venv/Scripts/python.exe -m pipeline.zagreb_addresses \
+  --buildings ../engine/data/buildings.parquet --existing ../engine/data/addresses.parquet \
+  --addresses data/raw/osm/addresses --streets data/raw/osm/streets \
+  --street-lines ../data/raw/osm/zg_osm_streets.parquet \
+  --out-addresses data/addresses.parquet --refs data/street_refs.parquet \
+  --evidence data/address_evidence.parquet --report data/address_report.json
+```
+
+`data/addresses.parquet` feeds s03/s14 (cards get `addr`/`addrn`, and `addrref` for a reference), `data/street_refs.parquet`
+feeds `search/ref/`, and `data/address_report.json` holds the before/after coverage on the issue's denominators.
+`s03_tiles`' `load_places` picks `street_refs.parquet` up from the same folder as `addresses.parquet`.
+
 ## 2. Build (about 3.5 min)
 
 ```bash

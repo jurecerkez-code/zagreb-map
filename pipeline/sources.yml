@@ -79,6 +79,25 @@
   modified: true
   status: pending-O1   # check the GLO-30 licence's redistribution terms for derived terrain before a release
 
+# Grad Zagreb's RPJKucniBroj address points (136,448 house numbers with street names). The owner confirmed
+# 2026-11-10 that the layer may be used in the map if Grad Zagreb is named as the source. Downloaded once to
+# data/raw/zagreb/rpj_kucni_broj.geojson and merged into the address index by pipeline/address_sources.py.
+- id: gz_rpj
+  url: https://services8.arcgis.com/Usi0jGQwMmBUpFjr/arcgis/rest/services/RPJKucniBroj/FeatureServer/0
+  local_copy: data/raw/zagreb/rpj_kucni_broj.geojson
+  downloaded: 2026-11-10
+  publisher: Grad Zagreb
+  product: RPJKucniBroj (house numbers and streets)
+  dataset: City of Zagreb address register
+  licence: LicenseRef-Permission
+  licence_url: https://services8.arcgis.com/Usi0jGQwMmBUpFjr/arcgis/rest/services/RPJKucniBroj/FeatureServer/0
+  licence_note: {en: "permission confirmed 2026-11-10", sv: "dozvola potvrđena 10.11.2026."}
+  terms: "Grad Zagreb, used with permission (confirmed 2026-11-10): RPJKucniBroj address points may be used, credited 'Grad Zagreb'"
+  attribution: RPJKucniBroj, Grad Zagreb, used with permission (2026-11-10); house numbers and streets matched to footprints (modified)
+  modified: true
+  corner: {en: "© Grad Zagreb", sv: "© Grad Zagreb"}
+  status: confirmed
+
 # City of Zagreb layers (Gradski ured za digitalizaciju, email from Ivana Špendić, 21.10.2026): KULTURA_ZASTITA,
 # KD_pojedinacna, OBNOVA_PROCELJA and koristenje1986 may be used with the credit "Grad Zagreb" (koristenje1986 is not
 # used by the build yet). The City warns its working layers can be removed at any time: the copies downloaded on

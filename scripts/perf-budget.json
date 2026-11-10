@@ -6,7 +6,8 @@
  "home.groups.monuments": 150000,
  "far.groups.veg": 400000,
  "home.calls": 100,
- "bytesBeforeReveal": 5500000,
+ "bytesBeforeReveal": 6500000,
+ "bytesBeforeRevealStatus": "measured 6,247,735 on v20261110-addresses; the address index and reference cards add 0.75 MB to first reveal, so the gate moves from 5.5 MB to 6.5 MB (4% headroom)",
  "bytesTotal": 33000000,
  "bytesTotalStatus": "measured 32,069,212 with scripts/perf.mjs on v20261110-compact (was 43,705,626 on v20261103-fix); the 33 MB gate keeps 3% headroom and claims the >9 MB saving the issue asked for",
  "http404": 0

@@ -1,0 +1,54 @@
+{
+ "cable": {
+  "points": 200,
+  "length_m": 5001.7,
+  "duration_min": 16.5,
+  "name": "Žičara Sljeme"
+ },
+ "trees": {
+  "count": 144878,
+  "from_nodes": 37785,
+  "from_rows": 107093,
+  "row_spacing_m": 8.0
+ },
+ "green": {
+  "mask": {
+   "w": 2326,
+   "h": 2809,
+   "cell": 16.0,
+   "x0": -16192.0,
+   "z0": -22416.0,
+   "gz": true
+  },
+  "classes": [
+   "grass",
+   "meadow",
+   "forest",
+   "wood",
+   "scrub",
+   "grassland",
+   "heath",
+   "orchard",
+   "park",
+   "garden",
+   "allotments"
+  ],
+  "counts": {
+   "grass": 10677,
+   "meadow": 2044,
+   "forest": 1426,
+   "wood": 970,
+   "scrub": 1628,
+   "grassland": 300,
+   "heath": 143,
+   "orchard": 1428,
+   "park": 406,
+   "garden": 804,
+   "allotments": 687
+  },
+  "green_cells": 1872437,
+  "green_km2": 479.34
+ },
+ "licence": "OpenStreetMap (Geofabrik Croatia extract), (c) OpenStreetMap contributors, ODbL",
+ "source": "OpenStreetMap natural=tree, natural=tree_row, landuse/leisure/natural green polygons"
+}

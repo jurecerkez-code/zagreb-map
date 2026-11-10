@@ -78,7 +78,7 @@ SRC_NAMES = ["none", "curated", "raa", "raa_area", "wikidata", "estimate", "raa_
 KNOWN_FLAGS = (codes.EXACT, codes.RANGE, codes.LONG, codes.BOUND)  # bounded classes join the film at their bound
 ESTIMATED_FLAGS = (codes.AREA, codes.ESTIMATE, codes.PERIOD)
 CARD_FIELDS = ("name", "en", "architects", "raa", "prot", "since", "qid", "wp", "photo", "nofloors", "rebuilt",
-               "cellars", "addr", "addrn", "tower", "yrd", "br", "arch", "sat")
+               "cellars", "addr", "addrn", "addrref", "tower", "yrd", "br", "arch", "sat")
 # sat (Zagreb): the satellite lower bound, 1990 or 2000 (pipeline/zagreb_sat.py, data/sat.parquet): "the land was still
 # empty in <sat>". Card text only, and only on a building with no other year (yflag UNKNOWN); never a year or colour.
 SAT_YEARS = (1990, 2000)
@@ -234,15 +234,18 @@ def load_archive_photos(data: Path = DATA) -> dict[int, list[dict]]:
 
 def load_places(data: Path = DATA) -> dict:
     """s02_addresses' outputs: {"addresses": addresses.parquet without its withheld rows, "districts":
-    districts.parquet}."""
+    districts.parquet, "street_refs": street_refs.parquet or empty (pipeline/zagreb_addresses.py: gid, street for a
+    building with no house number)}."""
     for name in ("addresses.parquet", "districts.parquet"):
         if not (data / name).exists():
             raise SystemExit(f"{data / name} is missing: run s02_addresses")
     a = pd.read_parquet(data / "addresses.parquet")
     if "withheld" in a:
         a = a[~a.withheld.to_numpy(bool)].drop(columns="withheld").reset_index(drop=True)
+    refs = data / "street_refs.parquet"
     return {"addresses": a,
-            "districts": pd.read_parquet(data / "districts.parquet")}
+            "districts": pd.read_parquet(data / "districts.parquet"),
+            "street_refs": pd.read_parquet(refs) if refs.exists() else no_places()["street_refs"]}
 
 
 def shown_addresses(a: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
@@ -258,7 +261,9 @@ def shown_addresses(a: pd.DataFrame, df: pd.DataFrame) -> pd.DataFrame:
 def no_places() -> dict:
     return {"addresses": pd.DataFrame({"gid": pd.Series([], dtype="int32"), "street": pd.Series([], dtype=str),
                                        "number": pd.Series([], dtype=str)}),
-            "districts": pd.DataFrame({"gid": pd.Series([], dtype="int32"), "district": pd.Series([], dtype=str)})}
+            "districts": pd.DataFrame({"gid": pd.Series([], dtype="int32"), "district": pd.Series([], dtype=str)}),
+            "street_refs": pd.DataFrame({"gid": pd.Series([], dtype="int32"), "street": pd.Series([], dtype=str),
+                                         "distance_m": pd.Series([], dtype=float)})}
 
 
 def with_places(df: pd.DataFrame, places: dict) -> pd.DataFrame:
@@ -272,6 +277,11 @@ def with_places(df: pd.DataFrame, places: dict) -> pd.DataFrame:
     gid = out.gid.astype("int64")
     out["addr"] = gid.map((first.street + " " + first.number).rename(index=int)).fillna("").astype(str)
     out["addrn"] = gid.map(first.n.rename(index=int)).fillna(0).astype(int)
+    # a building with no house number: the street it stands by ("uz Ilicu"), never a number it does not have
+    refs = places.get("street_refs")
+    street = (refs.assign(gid=refs.gid.astype("int64")).drop_duplicates("gid").set_index("gid").street
+              if refs is not None and len(refs) else pd.Series(dtype=str))
+    out["addrref"] = gid.map(street).fillna("").astype(str)
     names = places["districts"].assign(gid=lambda d: d.gid.astype("int64")).set_index("gid").district
     out["dist"] = [city.DISTRICT_NAMES.get(n, n.title()) if isinstance(n, str) and n else ""
                    for n in gid.map(names)]
@@ -455,7 +465,8 @@ def card_shards(df: pd.DataFrame, photos: dict | None = None, landmarks: list[di
     curated = (df.ysrc.to_numpy() == codes.SRC_CURATED) if "ysrc" in df else np.zeros(len(df), bool)
     marks = df.landmark.to_numpy() if "landmark" in df else np.full(len(df), "", dtype=object)
     col = {c: (df[c].to_numpy() if c in df else np.full(len(df), None, dtype=object))
-           for c in ("qid", "wname", "wname_en", "langs", "photo", "prot", "since", "nofloors", "addr", "addrn", "sat")}
+           for c in ("qid", "wname", "wname_en", "langs", "photo", "prot", "since", "nofloors", "addr", "addrn",
+                     "addrref", "sat")}
     unknown = (df.yflag.to_numpy() == codes.UNKNOWN) if "yflag" in df else np.zeros(len(df), bool)
     for i, (gid, name, arch, raa) in enumerate(zip(df.gid, df["name"], df.architects, df.raa_id, strict=True)):
         card = {}
@@ -505,6 +516,11 @@ def card_shards(df: pd.DataFrame, photos: dict | None = None, landmarks: list[di
             card["addr"] = addr
             if col["addrn"][i] and int(col["addrn"][i]) > 1:
                 card["addrn"] = int(col["addrn"][i])
+        # No house number: the street it stands by, so the card says what the building is without inventing a number.
+        # A private house keeps the same silence as about its address.
+        ref = _text(col["addrref"][i])
+        if ref and not addr and (city.PRIVATE_ADDRESSES or not hide[i]):
+            card["addrref"] = ref
         if card:
             shards[int(gid) % N_CARD_SHARDS][str(int(gid))] = card
     return shards

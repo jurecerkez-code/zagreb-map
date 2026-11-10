@@ -72,7 +72,9 @@ export function sourceLine(b, T, card = {}) {
 // without one shows only its stadsdel.
 export function placeLine(card, T) {
   const addr = card?.addr ? (card.addrn > 1 ? T('card.address.more', { address: card.addr, n: card.addrn - 1 }) : card.addr) : '';
-  return [addr, card?.dist || ''].filter(Boolean).join(' · ');
+  // no house number: the street the footprint stands by, never a number it does not have (issue #30, step 4)
+  const ref = addr || !card?.addrref ? '' : T('card.address.near', { street: card.addrref });
+  return [addr || ref, card?.dist || ''].filter(Boolean).join(' · ');
 }
 
 // A curated card's second line (§14 of the Gamla stan research): "Rebuilt 1757 · raised 1857", never with

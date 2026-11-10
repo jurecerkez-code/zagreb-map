@@ -12,7 +12,8 @@ Writes into the version folder:
   (the empty field says what share of the city search covers);
 - search/addr/<k>.json, loaded when a street is resolved: {street: [[number, gid, stadsdel], ...]}, the stadsdel an
   index into `districts`, k the first character of the street's folded name (pipeline/textfold.py; "_" for anything but
-  a-z and 0-9).
+  a-z and 0-9). search/ref/<k>.json holds the same shape for a building with no house number: [gid, stadsdel], from
+  pipeline/zagreb_addresses.py's street references, and is loaded only when that street is picked.
 
 Names come only from the version's own cards (cards/NN.json), so search shows no name a card does not, and a
 private house's name only as its card does (the reviewed list); an alias only finds a building that a card
@@ -35,14 +36,15 @@ import numpy as np
 import pandas as pd
 
 from . import city, io
-from .addresses import number_key
+from .addresses import number_identity, number_key
 from .s03_tiles import DATA, N_CARD_SHARDS, load, load_places, out_dir, shown_addresses
-from .textfold import fold
+from .textfold import fold, street_variants
 
 SHARD_KEY = re.compile(r"[a-z0-9]")
 TRASH = Path("temp_trash")
 OCCUPANTS = Path("data/occupants.json")
-EXAMPLE = re.compile(r"^(.*\S)\s+(\d+\s*[a-zA-Z]?)$")
+EXAMPLE = re.compile(r"^(.*\D)\s+(\d{1,4})(?:\s*([a-z]{1,3}))?$")
+REVERSE_EXAMPLE = re.compile(r"^(\d{1,4})(?:\s*([a-z]{1,3}))?\s+(.+\D)$")
 
 
 def shard_key(street: str) -> str:
@@ -92,9 +94,11 @@ def occupant_entries(cards: dict[int, dict], occupants: dict[str, list[dict]]) -
 
 
 def build(df: pd.DataFrame, cards: dict[int, dict], places: dict,
-          occupants: dict[str, list[dict]] | None = None) -> tuple[dict, dict[str, dict]]:
-    """(index, {shard key: {street: [[number, gid, stadsdel], ...]}}) for buildings `df` (s03_tiles.load: gid, x, z,
-    kategori, private, ysrc), the version's cards, s02_addresses' outputs and s06_wiki's occupants."""
+          occupants: dict[str, list[dict]] | None = None) -> tuple[dict, dict, dict[str, dict]]:
+    """(index, {shard key: {street: [[number, gid, stadsdel], ...]}}, {street: [[gid, stadsdel], ...]}) for buildings
+    `df` (s03_tiles.load: gid, x, z, kategori, private, ysrc), the version's cards, s02_addresses' and
+    pipeline/zagreb_addresses.py's outputs (`street_refs`: a building with no number, by its street) and s06_wiki's
+    occupants. A street whose buildings have no house number at all still resolves, to its buildings."""
     dist_of = places["districts"].set_index("gid").district.reindex(df.gid).fillna("").to_numpy(dtype=object)
     keys = sorted({d for d in dist_of if d}, key=lambda d: city.DISTRICT_NAMES.get(d, d))
     di = {d: i for i, d in enumerate(keys)}
@@ -117,6 +121,29 @@ def build(df: pd.DataFrame, cards: dict[int, dict], places: dict,
         counts = pd.Series(dist_of[gids]).value_counts()
         ds = [di[d] for d, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])) if d in di]
         streets.append([street, int(len(gids)), ds, k])
+    # A building with no house number is still found by its street: the reference pairs are their own lazy shards,
+    # loaded only when someone picks that street, so a search never pays for the city's 260,000 gids.
+    references: dict[str, dict] = {}
+    refs = places.get("street_refs")
+    if refs is not None and len(refs):
+        refs = refs[~refs.gid.astype(int).isin(set(a.gid.astype(int)))]
+        seen = {s[0] for s in streets}
+        for street, rows in refs.groupby("street", sort=True):
+            gids = sorted({int(g) for g in rows.gid})
+            if not gids:
+                continue
+            references[street] = [[g, di.get(dist_of[g], -1)] for g in gids]
+            if street not in seen:
+                counts = pd.Series(dist_of[gids]).value_counts()
+                ds = [di[d] for d, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])) if d in di]
+                streets.append([street, len(gids), ds, shard_key(street)])
+    # the reference pairs, sharded by the street's folded first letter as the address pairs are
+    if references:
+        streets.sort(key=lambda s: s[0])
+    ref_shards: dict[str, dict] = {}
+    for street, pairs in references.items():
+        if street not in shards.get(shard_key(street), {}):
+            ref_shards.setdefault(shard_key(street), {})[street] = pairs
 
     buildings = []
     for g in sorted(cards):
@@ -131,47 +158,59 @@ def build(df: pd.DataFrame, cards: dict[int, dict], places: dict,
     index = {"v": 1, "settings": {k: v for k, v in city.SEARCH.items() if k not in ("examples", "addr_max_m")},
              "districts": districts, "aliases": aliases, "outside": list(city.OUTSIDE), "streets": streets,
              "buildings": buildings, "baliases": baliases, "occupants": occupant_entries(cards, occupants or {}),
-             "addressed": int(a.gid.nunique())}
+             "addressed": int(a.gid.nunique()), "street_ref": int(sum(len(v) for v in references.values()))}
     index["examples"] = [e for e in city.SEARCH["examples"] if resolves(e, index, shards)]
-    return index, shards
+    return index, shards, ref_shards
 
 
 def resolves(example: str, index: dict, shards: dict[str, dict]) -> bool:
     """An example the empty field suggests must find something exactly: a street and its number, a building, a
     stadsdel or an everyday district name."""
     f = fold(example)
-    m = EXAMPLE.match(example)
-    if m:
-        street = next((s for s in index["streets"] if fold(s[0]) == fold(m.group(1))), None)
-        number = re.sub(r"\s+", "", m.group(2)).upper()
-        if street and any(p[0] == number for p in shards.get(street[3], {}).get(street[0], [])):
+    m = EXAMPLE.fullmatch(f)
+    reverse = None if m else REVERSE_EXAMPLE.fullmatch(f)
+    if m or reverse:
+        asked = re.sub(r" (?:nr|no)$", "", m.group(1) if m else reverse.group(3))
+        number = number_identity((m.group(2) if m else reverse.group(1))
+                                 + ((m.group(3) if m else reverse.group(2)) or ""))
+        if any(set(street_variants(asked)).intersection(street_variants(s[0]))
+               and any(number_identity(p[0]) == number
+               for p in shards.get(s[3], {}).get(s[0], [])) for s in index["streets"]):
             return True
     names = ([b[0] for b in index["buildings"]] + [d[0] for d in index["districts"]] + [a[0] for a in index["aliases"]]
              + [a[0] for a in index.get("baliases", [])])
     return any(fold(n) == f for n in names)
 
 
-def write(out: Path, index: dict, shards: dict[str, dict], trash: Path = TRASH) -> dict:
+def write(out: Path, index: dict, shards: dict[str, dict], trash: Path = TRASH,
+          refs: dict[str, dict] | None = None) -> dict:
     """Write search/ into `out` (replacing an older one: a shard the new index does not use goes to trash/<version>/,
     never deleted, and never over a copy trashed before: that one keeps its name, the new one gets -1, -2, ...);
-    return sizes."""
+    `refs` are the street-reference shards of a street with no house number; return sizes."""
     folder = out / "search"
-    for old in sorted(folder.glob("addr/*.json")):
-        if old.stem not in shards:
-            dest = base = trash / out.name / "search" / "addr" / old.name
-            k = 0
-            while dest.exists():
-                k += 1
-                dest = base.with_name(f"{old.stem}-{k}{old.suffix}")
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            old.replace(dest)
+    refs = refs or {}
+    for sub, used in (("addr", shards), ("ref", refs)):
+        for old in sorted((folder / sub).glob("*.json")):
+            if old.stem not in used:
+                dest = base = trash / out.name / "search" / sub / old.name
+                k = 0
+                while dest.exists():
+                    k += 1
+                    dest = base.with_name(f"{old.stem}-{k}{old.suffix}")
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                old.replace(dest)
     raw = io.write_json(folder / "index.json", index)
     gz = len(io.gzip_bytes((folder / "index.json").read_bytes()))
-    addr = sum(len(io.gzip_bytes(json.dumps(s, ensure_ascii=False, separators=(",", ":")).encode()))
-               for s in shards.values())
+
+    def size(groups):
+        return sum(len(io.gzip_bytes(json.dumps(s, ensure_ascii=False, separators=(",", ":")).encode()))
+                   for s in groups.values())
+
     for k, shard in sorted(shards.items()):
         io.write_json(folder / "addr" / f"{k}.json", shard)
-    return {"index_raw": raw, "index_gz": gz, "addr_gz": addr}
+    for k, shard in sorted(refs.items()):
+        io.write_json(folder / "ref" / f"{k}.json", shard)
+    return {"index_raw": raw, "index_gz": gz, "addr_gz": size(shards), "ref_gz": size(refs)}
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -185,12 +224,14 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(f"{out / 'cards'} holds no cards: run s03_tiles first")
     df = load(args.data)
     occ = json.loads(OCCUPANTS.read_text(encoding="utf-8")) if OCCUPANTS.exists() else {}
-    index, shards = build(df, cards, load_places(args.data), occ)
-    s = write(out, index, shards)
+    index, shards, refs = build(df, cards, load_places(args.data), occ)
+    s = write(out, index, shards, refs=refs)
     n_addr = sum(len(v) for shard in shards.values() for v in shard.values())
+    n_ref = sum(len(v) for shard in refs.values() for v in shard.values())
     dropped = [e for e in city.SEARCH["examples"] if e not in index["examples"]]
     missing = sorted(set(city.BUILDING_ALIASES) - {a[0] for a in index["baliases"]})
     print(f"search: {len(index['streets']):,} streets, {n_addr:,} addresses in {len(shards)} shards, "
+          f"{n_ref:,} street references in {len(refs)} shards ({index['street_ref']:,} buildings with no number), "
           f"{len(index['buildings']):,} named buildings ({len(index['baliases'])} other names), "
           f"{len(index['occupants'])} institutions inside them, "
           f"{len(index['districts'])} stadsdelar; index {s['index_gz'] / 1e3:.0f} KB gz, addresses "

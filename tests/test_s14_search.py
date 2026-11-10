@@ -19,7 +19,7 @@ def built(tmp_path):
 
 def test_index_holds_districts_streets_and_the_cards_names(built):
     out, df, cards = built
-    index, shards = s14_search.build(df, cards, PLACES)
+    index, shards, _ = s14_search.build(df, cards, PLACES)
     names = [d[0] for d in index["districts"]]
     assert names == ["Gamla stan", "Grimsta", "Ladugårdsgärdet", "Riddarholmen", "Södermalm"]   # display names, sorted
     gamla = index["districts"][0]
@@ -42,7 +42,7 @@ def test_other_names_point_at_the_one_card_that_carries_their_target(built, monk
     out, df, cards = built
     monkeypatch.setattr(city, "BUILDING_ALIASES", {"Slottet": "Kungliga slottet", "Royal Palace": "Kungliga slottet",
                                                    "TV-tornet": "Kaknästornet", "Nowhere": "Stockholms slott"})
-    index, _ = s14_search.build(df, cards, PLACES)
+    index, _, _ = s14_search.build(df, cards, PLACES)
     assert index["baliases"] == [["Royal Palace", 1], ["Slottet", 1], ["TV-tornet", 7]]
     assert s14_search.resolves("Royal Palace", index, {}) and not s14_search.resolves("Nowhere", index, {})
 
@@ -51,16 +51,16 @@ def test_examples_are_only_the_ones_that_resolve(built, monkeypatch):
     out, df, cards = built
     monkeypatch.setitem(city.SEARCH, "examples", ("Hornsgatan 30", "Hornsgatan 31", "Kungliga slottet", "Old Town",
                                                  "Vällingby", "hornsgatan 32"))
-    index, _ = s14_search.build(df, cards, PLACES)
+    index, _, _ = s14_search.build(df, cards, PLACES)
     assert index["examples"] == ["Hornsgatan 30", "Kungliga slottet", "Old Town", "hornsgatan 32"]
 
 
 def test_a_private_house_address_follows_decision_3(built, monkeypatch):
     out, df, cards = built
-    _, shards = s14_search.build(df, cards, PLACES)
+    _, shards, _ = s14_search.build(df, cards, PLACES)
     assert shards["g"] == {"Grimstagatan": [["5", 4, 1]]}                     # gid 4: a private house, shown for now
     monkeypatch.setattr(city, "PRIVATE_ADDRESSES", False)                   # if the answer is no
-    index, shards = s14_search.build(df, cards, PLACES)
+    index, shards, _ = s14_search.build(df, cards, PLACES)
     assert "g" not in shards and "Grimstagatan" not in [s[0] for s in index["streets"]] and index["addressed"] == 3
 
 
@@ -70,7 +70,7 @@ def test_a_private_house_address_goes_from_its_neighbour_too(built, monkeypatch)
     places = dict(PLACES, addresses=pd.concat([PLACES["addresses"], pd.DataFrame(
         {"gid": pd.array([3], dtype="int32"), "street": ["Grimstagatan"], "number": ["5"]})], ignore_index=True))
     monkeypatch.setattr(city, "PRIVATE_ADDRESSES", False)
-    index, shards = s14_search.build(df, cards, places)
+    index, shards, _ = s14_search.build(df, cards, places)
     assert "g" not in shards and index["addressed"] == 3
     card = s03_tiles.with_places(df, places).set_index("gid")
     assert (card.addr[3], card.addrn[3]) == ("Hornsgatan 30", 2)         # gid 3 keeps only its own two
@@ -79,9 +79,24 @@ def test_a_private_house_address_goes_from_its_neighbour_too(built, monkeypatch)
 def test_a_withheld_address_is_in_no_shard(built):
     out, df, cards = built
     places = dict(PLACES, addresses=PLACES["addresses"].assign(withheld=lambda a: a.street == "Hornsgatan"))
-    index, shards = s14_search.build(df, cards, places)
+    index, shards, _ = s14_search.build(df, cards, places)
     assert "h" not in shards and index["addressed"] == 3
     assert s03_tiles.with_places(df, places).set_index("gid").addr[3] == ""
+
+
+def test_a_building_with_no_number_is_found_by_its_street(built):
+    # issue #30 step 4: a footprint with no house number and no address gets its street, so it is searchable by that
+    # street and its card says "uz <street>"; the number is never invented, so the address shard stays empty for it
+    out, df, cards = built
+    refs = pd.DataFrame({"gid": pd.array([2], dtype="int32"), "street": ["Riddarholmskajen"], "distance_m": [4.0]})
+    places = dict(PLACES, street_refs=refs)
+    index, shards, ref_shards = s14_search.build(df, cards, places)
+    assert ["Riddarholmskajen", 1, [3], "r"] in index["streets"]
+    assert ref_shards == {"r": {"Riddarholmskajen": [[2, 3]]}}
+    assert "r" not in shards and index["street_ref"] == 1
+    shown = s03_tiles.with_places(df, places).set_index("gid")
+    assert (shown.addr[2], shown.addrref[2]) == ("", "Riddarholmskajen")
+    assert shown.addrref[0] == ""                       # an unaddressed building with no reference says neither
 
 
 def test_shard_key_folds_the_first_letter():
@@ -102,7 +117,9 @@ def test_main_writes_search_into_the_version(tmp_path, monkeypatch, capsys):
     assert (tmp_path / "temp_trash" / "v20261016" / "search" / "addr" / "q.json").exists()   # ... to temp_trash
     index = json.loads((out / "search" / "index.json").read_text())
     assert len(index["streets"]) == 4 and index["v"] == 1
-    assert "search: 4 streets, 5 addresses in 4 shards, 4 named buildings" in capsys.readouterr().out
+    out_text = capsys.readouterr().out
+    assert "search: 4 streets, 5 addresses in 4 shards, 0 street references in 0 shards" in out_text
+    assert "4 named buildings" in out_text
 
 
 def test_main_needs_the_cards(tmp_path, monkeypatch):
@@ -141,6 +158,24 @@ def test_resolves_without_the_shard_and_with_a_name_that_ends_in_a_number():
     assert s14_search.resolves("Hornsgatan 30", index, {"h": {"Hornsgatan": [["30", 0, 0]]}})
 
 
+def test_examples_resolve_croatian_aliases_and_alphanumeric_suffixes():
+    index = {"streets": [["Ulica Đakovačka", 1, [0], "u"], ["Cesta Grgura Ninskog", 1, [0], "c"]],
+             "buildings": [], "districts": [], "aliases": []}
+    shards = {"u": {"Ulica Đakovačka": [["18aa", 4, 0], ["23/1", 5, 0]]},
+              "c": {"Cesta Grgura Ninskog": [["7", 6, 0]]}}
+    assert s14_search.resolves("Dakovacka 18AA", index, shards)
+    assert s14_search.resolves("ul. Đakovačka 18ab", index, shards) is False
+    assert s14_search.resolves("Đakovačka 23/1", index, shards) is False  # no slash syntax is invented as an exact match
+    assert s14_search.resolves("Grgura Ninskog 7", index, shards)
+    split = {"streets": [["Adamičeva ulica", 1, [0], "a"], ["Adamičeva", 1, [0], "a"]],
+             "buildings": [], "districts": [], "aliases": []}
+    addresses = {"a": {"Adamičeva ulica": [["13", 10, 0]], "Adamičeva": [["5", 20, 0]]}}
+    assert s14_search.resolves("Adamiceva 5", split, addresses)
+    assert s14_search.resolves("Adamiceva 13", split, addresses)
+    assert s14_search.resolves("ul. Adamičeva 13", split, addresses)
+    assert s14_search.resolves("13 Adamiceva", split, addresses)
+
+
 def test_a_shard_trashed_twice_keeps_both_copies(tmp_path):
     # never delete: a second stale q.json under the same version must not overwrite the first one in temp_trash
     out, trash = tmp_path / "web" / "data" / "v1", tmp_path / "temp_trash"
@@ -159,16 +194,16 @@ def test_a_street_spelt_in_two_cases_is_one_street(built):
     extra = pd.DataFrame({"gid": pd.array([3, 5, 5], dtype="int32"), "street": ["hornsgatan"] * 3,
                           "number": ["34", "36", "38"]})
     places = dict(PLACES, addresses=pd.concat([PLACES["addresses"], extra], ignore_index=True))
-    index, shards = s14_search.build(df, cards, places)
+    index, shards, _ = s14_search.build(df, cards, places)
     assert [s[0] for s in index["streets"] if s[0].casefold() == "hornsgatan"] == ["hornsgatan"]
     assert [p[0] for p in shards["h"]["hornsgatan"]] == ["30", "32", "34", "36", "38"]
     tie = pd.DataFrame({"gid": pd.array([4], dtype="int32"), "street": ["grimstagatan"], "number": ["7"]})
     places = dict(PLACES, addresses=pd.concat([PLACES["addresses"], tie], ignore_index=True))
-    _, shards = s14_search.build(df, cards, places)
+    _, shards, _ = s14_search.build(df, cards, places)
     assert shards["g"] == {"Grimstagatan": [["5", 4, 1], ["7", 4, 1]]}
     # diacritics are another street: Vasterlanggatan stays apart from Västerlånggatan
     other = pd.DataFrame({"gid": pd.array([10], dtype="int32"), "street": ["Vasterlanggatan"], "number": ["1"]})
-    index, _ = s14_search.build(df, cards, dict(PLACES, addresses=pd.concat([PLACES["addresses"], other])))
+    index, _, _ = s14_search.build(df, cards, dict(PLACES, addresses=pd.concat([PLACES["addresses"], other])))
     assert {"Vasterlanggatan", "Västerlånggatan"} <= {s[0] for s in index["streets"]}
 
 
@@ -180,6 +215,6 @@ def test_occupants_are_listed_only_for_buildings_a_card_names_and_carries(built)
     occ = {"Q404416": [{"qid": "Q1144549", "sv": "Nobelprismuseet", "en": "Nobel Prize Museum", "alt": ["Nobelmuseet"]},
                        {"qid": "Q9", "sv": "Börshuset", "en": "Börshuset", "alt": []}],
            "Q999": [{"qid": "Q8", "sv": "Ingenstans", "en": "Nowhere", "alt": []}]}
-    index, _ = s14_search.build(df, cards, PLACES, occ)
+    index, _, _ = s14_search.build(df, cards, PLACES, occ)
     assert index["occupants"] == [["Nobelprismuseet", "Nobel Prize Museum", 0, ["Nobelmuseet"]]]
     assert s14_search.build(df, cards, PLACES)[0]["occupants"] == []

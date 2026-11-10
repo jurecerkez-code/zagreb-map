@@ -24,6 +24,8 @@ from .privacy import mentions, normalise
 
 ADDRESSES = Path("data/raw/osm/addresses")
 NUMBER = re.compile(r"(\d{1,4})\s*([a-zA-Z])?")
+NUMBER_IDENTITY = re.compile(r"0*(\d{1,4})\s*([a-zA-Z]{1,3})?")
+SORT_NUMBER = re.compile(r"0*(\d{1,4})(.*)")
 LIST = re.compile(r"\s*[;,]\s*|\s*[-–]\s*")
 
 
@@ -39,10 +41,19 @@ def numbers(raw) -> list[str]:
     return out
 
 
+def number_identity(n: str) -> str:
+    """Case/space-insensitive identity of a plain alphanumeric house number; "" for ranges and slash forms.
+
+    This is a lookup normalisation only. It never splits 7-9, treats 23/1 as 23, or invents a missing number.
+    """
+    m = NUMBER_IDENTITY.fullmatch(str(n).strip())
+    return str(int(m.group(1))) + (m.group(2) or "").upper() if m else ""
+
+
 def number_key(n: str) -> tuple[int, str]:
-    """Sort key: 2 < 10 < 10A < 10B < 12."""
-    m = NUMBER.fullmatch(n)
-    return (int(m.group(1)), m.group(2) or "") if m else (0, n)
+    """Numeric sort tolerant of real address suffixes: 2 < 10 < 10a = 10A < 10AA < 12 and 23/1 < 24."""
+    m = SORT_NUMBER.fullmatch(str(n).strip())
+    return (int(m.group(1)), m.group(2).replace(" ", "").casefold()) if m else (0, str(n).casefold())
 
 
 def load(folder: Path = ADDRESSES, names: list[str] | None = None) -> pd.DataFrame:

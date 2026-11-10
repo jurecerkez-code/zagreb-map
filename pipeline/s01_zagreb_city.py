@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import shapely
 
+from . import address_sources as ads
 from . import city, codes, contributions, terrain
 from . import zagreb_city as zc
 from . import zagreb_heritage as zh
@@ -182,7 +183,9 @@ def main_city(src: dict, helpers) -> None:
     })
     attrs.to_parquet(DATA / "attributes.parquet", index=False)
 
-    # addresses: ZBSM, the OSM building's own tags, OSM address nodes inside a footprint
+    # addresses: ZBSM, the OSM building's own tags, and only uniquely located OSM/RPJ source points. A point covered by
+    # several footprints is ambiguous and stays out (never nearest or smallest-polygon assignment); the local evidence
+    # records every candidate. Configured RPJ input is local and licensed: this step does not download address data.
     rows = []
     for g, z in zb_of.items():
         rows += [(g, s, num) for s, num in helpers.parse_addresses(zbsm.adresa.iat[z])]
@@ -190,14 +193,29 @@ def main_city(src: dict, helpers) -> None:
         if o >= 0 and isinstance(osm_b.addr_street.iat[o], str) and isinstance(osm_b.addr_number.iat[o], str):
             rows += [(int(g), osm_b.addr_street.iat[o], num.strip()) for num in osm_b.addr_number.iat[o].split(";")]
     ap = gpd.read_parquet(osm / "zg_osm_addr_points.parquet")
-    hit = zc.within(ap.geometry.values, b.geometry.values)
-    rows += [(int(g), s, str(num)) for g, s, num in zip(hit, ap.street, ap.number) if g >= 0]
+    matched, evidence = ads.match_unique(ap, b, source="osm_zagreb")
+    rows += list(matched[["gid", "street", "number"]].itertuples(index=False, name=None))
+    if src.get("rpj_addresses"):
+        rpj, rpj_evidence = ads.match_unique(ads.read_rpj(rel("rpj_addresses")), b)
+        rows += list(rpj[["gid", "street", "number"]].itertuples(index=False, name=None))
+        evidence = pd.concat([evidence, rpj_evidence], ignore_index=True)
+    evidence.to_parquet(DATA / "address_evidence.parquet", index=False)
     addr = pd.DataFrame(rows, columns=["gid", "street", "number"]).drop_duplicates()
     addr = addr[addr.number.str.match(r"^\d")].astype({"gid": "int32"})
     addr["withheld"] = False
     addr.to_parquet(DATA / "addresses.parquet", index=False)
+    address_coverage = ads.coverage(addr, bb)
+    zc.write_json(DATA / "address_report.json", {
+        "coverage": address_coverage, "matched_source_points": ads.summary(evidence),
+        "unaddressed_buildings": {"all": len(bb) - address_coverage["all"]["addressed"],
+                                  "over_30_m2": address_coverage["over_30_m2"]["buildings"]
+                                                - address_coverage["over_30_m2"]["addressed"]},
+        "why": "No valid non-withheld address row. New source points stay unmatched when outside all footprints or "
+               "covered by multiple footprints; no nearest-building, street-facing, range or interpolation inference. "
+               "Direct ZBSM/OSM-building-tag rows predate per-row source/match fields and are not relabelled."})
     pd.DataFrame({"gid": gid, "district": district}).to_parquet(DATA / "districts.parquet", index=False)
-    log(t0, f"{len(addr):,} addresses on {addr.gid.nunique():,} buildings")
+    log(t0, f"{len(addr):,} addresses on {addr.gid.nunique():,} buildings; "
+            f"source points: {ads.summary(evidence)}; coverage {address_coverage['all']['coverage']:.2%}")
 
     # domain = the city boundary; water from OSM, cut into 1 km pieces with a level each
     dom_poly = max(getattr(dom, "geoms", [dom]), key=lambda g: g.area)
@@ -305,7 +323,8 @@ def main_city(src: dict, helpers) -> None:
         "satellite": {"after_1990": int((sat.sat == 1990).sum()), "after_2000": int((sat.sat == 2000).sum())},
         "private_houses": int((kategori == "house").sum()), "private_dated": int(private.sum()), "reader_years": readers,
         "periods": np.bincount(period[yf != codes.UNKNOWN], minlength=len(city.PERIODS)).tolist(),
-        "addresses": int(len(addr)), "street_label_candidates": len(cands), "water_pieces": len(water),
+        "addresses": int(len(addr)), "address_coverage": address_coverage, "address_matches": ads.summary(evidence),
+        "street_label_candidates": len(cands), "water_pieces": int(len(water)),
     }
     zc.write_json(DATA / "zagreb_report.json", report)
     log(t0, "report: " + json.dumps(report, ensure_ascii=False))

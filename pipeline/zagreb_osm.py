@@ -10,7 +10,7 @@ Reads the PBF with GDAL's OSM driver (pyogrio) inside BBOX and writes to ../data
   zg_osm_admin.parquet       administrative boundaries (admin_level 4..10) with name and admin_level
   zg_osm_water.parquet       water areas (natural=water, water=*, waterway=riverbank/dock, landuse=reservoir/basin)
   zg_osm_streets.parquet     named highway centrelines (name, highway, geometry)
-  zg_osm_addr_points.parquet address nodes (street, number, geometry)
+  zg_osm_addr_points.parquet address nodes (osm_id, street, number, geometry; the id is local match evidence)
   zg_osm_waterways.parquet   named river/canal/stream lines (name, waterway, geometry)
 """
 import re
@@ -106,7 +106,8 @@ def main() -> None:
     pt = read("points")
     pot = [tags(s) for s in pt.other_tags]
     has = np.array([bool(d.get("addr:housenumber") and d.get("addr:street")) for d in pot])
-    gpd.GeoDataFrame({"street": [d.get("addr:street") for d, h in zip(pot, has) if h],
+    gpd.GeoDataFrame({"osm_id": ["n" + str(v) for v, h in zip(pt.osm_id, has) if h],
+                      "street": [d.get("addr:street") for d, h in zip(pot, has) if h],
                       "number": [d.get("addr:housenumber") for d, h in zip(pot, has) if h]},
                      geometry=pt.geometry.values[has], crs=4326).to_crs(CRS).to_parquet(
         OUT / "zg_osm_addr_points.parquet", index=False)
