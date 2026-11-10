@@ -26,7 +26,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import city
+from . import city, compact
 
 ROOT = Path(__file__).resolve().parents[2]
 PBF = ROOT / "data" / "raw" / "osm" / "croatia-latest.osm.pbf"
@@ -108,6 +108,42 @@ def parts(geom):
     return []
 
 
+def write_compact(out, ways, points_xz, ground):
+    """Keep the full OSM id, intern names, and sample each chunk's ground in one call (same grid at its seams)."""
+    points_xz = np.asarray(points_xz, dtype=np.float64)
+    if points_xz.ndim != 2 or points_xz.shape[1] != 2:
+        raise ValueError("roads2: coordinates must be Nx2")
+    # One global sampler call: no differing tile/chunk rounding at a shared vertex.
+    heights = np.asarray(ground(points_xz[:, 0], points_xz[:, 1]), dtype=np.float64)
+    if heights.shape != (len(points_xz),):
+        raise ValueError("roads2: terrain sampler did not return one height per point")
+    names, indices, chunks, rows = [], {}, [], []
+    expected = 0
+    for way in ways:
+        o, n = compact.whole(way["o"], maximum=len(points_xz)), compact.whole(way["c"], maximum=len(points_xz))
+        if o != expected or o + n > len(points_xz) or not n:
+            raise ValueError("roads2: way offsets are disjoint, empty or not contiguous")
+        p = points_xz[o:o + n]
+        chunks.append(np.c_[p[:, 0], heights[o:o + n], p[:, 1]])
+        row = {"id": way["id"], "cls": way["cls"], "w": way["w"]}
+        label = way.get("name")
+        if isinstance(label, str) and label:
+            if label not in indices:
+                indices[label] = len(names)
+                names.append(label)
+            row["name"] = indices[label]
+        else:
+            row["name"] = -1
+        rows.append(row)
+        expected += n
+    if expected != len(points_xz):
+        raise ValueError("roads2: way offsets leave unowned points")
+    doc = compact.write_roads2(out, rows, chunks, [name for name, _ in CLASSES], names,
+                              metadata={"licence": LICENCE, "groups": GROUPS, "network": "road"})
+    compact.write_compact_config(out, "roads2", doc)
+    return doc
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--version", required=True)
@@ -124,14 +160,15 @@ def main(argv=None):
     print(f"left out {int(dropped.sum()):,} ways: {in_skip:,} on the skip list, {stray:,} of tags outside "
           f"the table ({top})", flush=True)
 
-    xs, zs, ways = [], [], []
+    xs, zs, ways, compact_ways = [], [], [], []
     per_class = {name: [0, 0.0] for name, _ in CLASSES}     # ways, metres
     gap_max_way, gaps = [], []
-    for cls, geom in zip(df["cls"].to_numpy(), df.geometry.to_numpy()):
+    for osm_id, name, cls, geom in zip(df["osm_id"], df["name"], df["cls"], df.geometry, strict=True):
         for c in parts(geom):
             x, z = c[:, 0] - city.ORIGIN[0], -(c[:, 1] - city.ORIGIN[1])
             o = len(xs)
             ways.append({"o": o, "c": int(len(x)), "cls": cls, "w": WIDTH[cls]})
+            compact_ways.append({**ways[-1], "id": int(osm_id), "name": name if isinstance(name, str) else None})
             xs.extend(np.asarray(x, dtype="<f4").tolist())
             zs.extend(np.asarray(z, dtype="<f4").tolist())
             seg = np.hypot(np.diff(x), np.diff(z))
@@ -189,6 +226,8 @@ def main(argv=None):
     }
     (out / "roads.json").write_text(json.dumps(meta, separators=(",", ":"), ensure_ascii=False) + "\n",
                                     encoding="utf-8")
+    from .s07_zagreb_veg import Terrain
+    write_compact(out, compact_ways, np.c_[np.asarray(xs), np.asarray(zs)], Terrain().at)
     for name in ("roads.bin.gz", "roads.json", "lamps.bin.gz"):
         print(f"  {name:<13} {(out / name).stat().st_size / 1e6:.2f} MB", flush=True)
     print(f"written into web/data/{args.version}", flush=True)

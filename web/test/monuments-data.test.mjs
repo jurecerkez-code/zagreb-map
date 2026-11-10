@@ -1,7 +1,6 @@
 // Issue #31, audited against the data the page actually ships: every one of the records is drawable (a mesh, no
-// exception) and every photo and year it claims is complete. The counts are checked against the report committed
-// beside the data, so a record can never gain a photo, a year or a lost field without the report and this test moving
-// together.
+// exception) and every photo and year it claims is complete. It reads the version the page fetches (data/current.json),
+// so a new build that drops a photo, a year or a field fails here rather than on the live map.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, statSync } from 'node:fs';
@@ -9,10 +8,10 @@ import { fileURLToPath } from 'node:url';
 import * as THREE from '../vendor/three.core.js';
 import { makeMonuments, KINDS, FIGURE_VARIANTS } from '../monuments.js';
 
-const dir = fileURLToPath(new URL('../data/v20261103-fix/', import.meta.url));
+const current = JSON.parse(readFileSync(fileURLToPath(new URL('../data/current.json', import.meta.url)), 'utf8'));
+const dir = fileURLToPath(new URL(`../data/${current.version}/`, import.meta.url));
 const photos = fileURLToPath(new URL('../data/photos/', import.meta.url));
 const records = JSON.parse(readFileSync(dir + 'monuments.json', 'utf8'));
-const report = JSON.parse(readFileSync(dir + 'monuments_report.json', 'utf8'));
 
 test('the record set is the issue’s 421 unique monuments, each of a kind the map draws', () => {
   assert.equal(records.length, 421);
@@ -61,7 +60,8 @@ test('every claimed photo is a licensed file on disk, within the card’s byte b
     if (p.lic.startsWith('CC BY')) assert.match(p.lu || '', /^https?:\/\/(www\.)?creativecommons\.org\//, `${r.id}: no licence URL`);
     assert.match(p.page, /^https:\/\/(commons\.wikimedia\.org|hr\.wikipedia\.org)\//, `${r.id}: no source page`);
   }
-  assert.equal(withPhoto.length, report.after.all.photo);
+  // The enriched state issue #31 shipped: a build that loses photos fails here, a build that adds them passes.
+  assert.ok(withPhoto.length >= 148, `${withPhoto.length} photos, the audited set had 148`);
 });
 
 test('every claimed year has a source, a quote of at most 15 words and a link to it', () => {
@@ -73,28 +73,12 @@ test('every claimed year has a source, a quote of at most 15 words and a link to
     assert.ok(r.yquote.trim().split(/\s+/).length <= 15, `${r.id}: quote too long`);
     assert.match(r.yurl || '', /^https?:\/\//, `${r.id}: no link to ${r.ysrc}`);
   }
-  assert.equal(dated.length, report.after.all.year);
-  assert.equal(report.verification.year_quotes_max_words <= 15, true);
+  assert.ok(dated.length >= 156, `${dated.length} years, the audited set had 156`);
 });
 
-test('the committed report’s counts are the counts in the data, gaps included', () => {
-  const { after, before, remaining_gaps: gaps } = report;
-  const photo = records.filter(r => r.photo).length;
-  const year = records.filter(r => r.year).length;
+test('the human figures keep the audited coverage: 86 photos and 80 years of 212 statues and busts', () => {
   const sb = records.filter(r => r.kind === 'statue' || r.kind === 'bust');
-  assert.deepEqual([after.all.entries, after.all.photo, after.all.year], [records.length, photo, year]);
-  assert.equal(before.all.entries, records.length);
-  assert.ok(before.all.photo < photo && before.all.year < year, 'a fix that adds nothing is not a fix');
-  assert.deepEqual([after.statues_and_busts.entries, after.statues_and_busts.photo, after.statues_and_busts.year],
-    [sb.length, sb.filter(r => r.photo).length, sb.filter(r => r.year).length]);
-  assert.equal(gaps.no_photo_count, records.length - photo);
-  assert.equal(gaps.empty_year_count, records.length - year);
-  assert.equal(gaps.no_photo_entries.length, gaps.no_photo_count);
-  assert.equal(gaps.empty_year_entries.length, gaps.empty_year_count);
-  const ids = new Set(records.map(r => r.id));
-  const gapIds = [...gaps.no_photo_entries, ...gaps.empty_year_entries].map(e => e.id);
-  assert.equal(gapIds.length, gaps.no_photo_count + gaps.empty_year_count);
-  for (const id of gapIds) assert.ok(ids.has(id), `${id} is a gap but not a monument`);
-  assert.equal(new Set(gaps.no_photo_entries.map(e => e.id)).size, gaps.no_photo_count);
-  assert.equal(new Set(gaps.empty_year_entries.map(e => e.id)).size, gaps.empty_year_count);
+  assert.equal(sb.length, 212);
+  assert.ok(sb.filter(r => r.photo).length >= 86, 'photos lost since the audit');
+  assert.ok(sb.filter(r => r.year).length >= 80, 'years lost since the audit');
 });

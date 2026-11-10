@@ -16,6 +16,7 @@
 import { parseTrams, makeNet, tramClock, tramInfo, tramHtml } from './trams.js';
 import { gunzip } from './veg.js';   // the same gzip in transit, inflated here: no library either way
 import { BODY_PARTS, BELLOWS_WIDTH, BELLOWS_CENTRES, SECTION_LENGTH, SECTION_CENTRES, vehicleDimensions, makeDoorFrame, makeVehicleParts, sideOffset, setVehicleNight } from './tram-model.js';
+import { localRtAllowed } from './startup-load.js';
 
 const LIVE_MS = 15000;      // ZET refreshes its feed about once a minute; a quarter of that keeps the map current
 const NIGHT = 0.36;         // the same hand darkening the trees get: an unlit material does not dim at night
@@ -185,12 +186,13 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
   // ZET's feed sends no CORS header, so a browser cannot read it directly and the dev server parses it at /rt. A
   // static host has no such endpoint, so a scheduled workflow publishes the same JSON to the `live` branch, and
   // raw.githubusercontent serves that with CORS. Local first, snapshot second.
-  const RT_SNAPSHOT = 'https://raw.githubusercontent.com/jurecerkez-code/zagreb-map/live/rt.json';
+  const RT_SNAPSHOT = 'https://raw.githubusercontent.com/jurecerkez-code/zagreb-map/refs/heads/live/rt.json';
   let liveVehicles = [];
   let liveAt = 0;
   async function fetchRt() {
     const bust = Math.floor(Date.now() / 60000);
-    for (const url of [new URL('rt', location.href).href, `${RT_SNAPSHOT}?t=${bust}`]) {
+    const sources = localRtAllowed(location.hostname) ? [new URL('rt', location.href).href, `${RT_SNAPSHOT}?t=${bust}`] : [`${RT_SNAPSHOT}?t=${bust}`];
+    for (const url of sources) {
       try {
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) continue;

@@ -112,7 +112,7 @@ import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
 
-from . import city, codes, contributions, ferries, plaques, stadsmuseet, suppress
+from . import city, codes, compact, contributions, ferries, plaques, stadsmuseet, suppress
 from . import stadsmuseet_photos as sm_photos
 from .estimate import GROUPS
 from .geo import lonlat_to_3011
@@ -1710,6 +1710,225 @@ def check_ferries(out: Path, cfg: dict | None = None, *, release: bool = False) 
     return errors
 
 
+ROADS_GRID_METRES = 0.0625   # decimetre deltas plus the float32 step the decoder accumulates
+
+
+def _independent_roads(raw, doc):
+    """Decode ZGR2 here, not through compact.py, so parity tests the bytes rather than the writer's reader."""
+    if len(raw) < 20:
+        raise ValueError("ZGR2 header is truncated")
+    magic, nw, np_, ox, oz = struct.unpack_from("<4sIIff", raw)
+    if magic != b"ZGR2" or nw != doc.get("nWays") or np_ != doc.get("count") or 20 + 4 * nw > len(raw):
+        raise ValueError("ZGR2 header, counts or way index length")
+    counts = np.frombuffer(raw, "<u2", nw, 20 + 2 * nw)
+    if int(counts.sum(dtype=np.uint64)) != np_:
+        raise ValueError("ZGR2 way point count")
+    at, out, offset = 20 + 4 * nw, [], 0
+
+    def fpair(pos):
+        nonlocal at
+        if at + 8 > len(raw):
+            raise ValueError("ZGR2 absolute pair is truncated")
+        x, z = struct.unpack_from("<ff", raw, at)
+        at += 8
+        return np.float32(x), np.float32(z)
+
+    for wi, count in enumerate(counts):
+        if at + 4 > len(raw):
+            raise ValueError("ZGR2 first point is truncated")
+        x, z = struct.unpack_from("<hh", raw, at)
+        at += 4
+        if -32768 in (x, z):
+            x, z = fpair(at)
+        else:
+            x, z = np.float32(ox + x * 1.6), np.float32(oz + z * 1.6)
+        points = [(x, z)]
+        for _ in range(1, int(count)):
+            if at + 4 > len(raw):
+                raise ValueError("ZGR2 delta is truncated")
+            dx, dz = struct.unpack_from("<hh", raw, at)
+            at += 4
+            if -32768 in (dx, dz):
+                x, z = fpair(at)
+            else:
+                x, z = np.float32(x + np.float32(dx / 10)), np.float32(z + np.float32(dz / 10))
+            points.append((x, z))
+        cls = raw[20 + wi]
+        if cls >= len(doc.get("classes", [])):
+            raise ValueError("ZGR2 class index")
+        width = doc.get("classWidths", {}).get(doc["classes"][cls], raw[20 + nw + wi] / 4)
+        out.append({"offset": offset, "cls": doc["classes"][cls], "w": float(width),
+                    "points": np.asarray(points, dtype="<f4")})
+        offset += int(count)
+    if at != len(raw) or offset != np_ or not all(np.isfinite(w["points"]).all() for w in out):
+        raise ValueError("ZGR2 trailing data, count or non-finite coordinate")
+    return out
+
+
+def _independent_trees(raw, doc):
+    """Return sorted integer half-metre cells and u8 attributes, independently of compact.py."""
+    if len(raw) < 8:
+        raise ValueError("ZGV2 header is truncated")
+    magic, n = struct.unpack_from("<4sI", raw)
+    if magic != b"ZGV2" or n != doc.get("count"):
+        raise ValueError("ZGV2 header or count")
+    at, cells, attrs, previous = 8, [], [], None
+    for i in range(n):
+        if at + (11 if i == 0 else 7) > len(raw):
+            raise ValueError("ZGV2 record is truncated")
+        x, z = struct.unpack_from("<ii" if i == 0 else "<hh", raw, at)
+        if i == 0:
+            attr_at = at + 8
+        elif -32768 in (x, z):
+            if at + 15 > len(raw):
+                raise ValueError("ZGV2 absolute cell escape is truncated")
+            x, z = struct.unpack_from("<ii", raw, at + 4)
+            attr_at = at + 12
+        else:
+            x, z = previous[0] + x, previous[1] + z
+            attr_at = at + 4
+        if previous is not None and (x, z) < previous:
+            raise ValueError("ZGV2 cells are not sorted")
+        cells.append((x, z))
+        attrs.append(struct.unpack_from("<BBB", raw, attr_at))
+        at = attr_at + 3
+        previous = (x, z)
+    if at != len(raw):
+        raise ValueError("ZGV2 trailing data")
+    return np.asarray(cells, dtype=np.int64), np.asarray(attrs, dtype=np.uint8)
+
+
+def _check_road_parity(out, doc):
+    with (out / "roads.json").open(encoding="utf-8") as f:
+        legacy = json.load(f)
+    old = np.frombuffer(gzip.decompress((out / "roads.bin.gz").read_bytes()), dtype="<f4").reshape(-1, 2)
+    raw = gzip.decompress((out / "roads2.bin.gz").read_bytes())
+    new = _independent_roads(raw, doc)
+    ways = legacy["ways"]
+    if len(ways) != len(new):
+        raise ValueError("decoded roads do not match: way count differs")
+    for i, (a, b) in enumerate(zip(ways, new, strict=True)):
+        start, n = int(a["o"]), int(a["c"])
+        points = b["points"]
+        if b["offset"] != start or len(points) != n or a["cls"] != b["cls"] or a["w"] != b["w"]:
+            raise ValueError(f"decoded roads do not keep way order, counts, class or width (way {i})")
+        drift = float(np.abs(old[start:start + n] - points).max()) if n else 0.0
+        if drift > ROADS_GRID_METRES + 1e-4:
+            raise ValueError(f"decoded roads drift {drift:.3f} m from legacy, past the "
+                             f"{ROADS_GRID_METRES} m decimetre grid (way {i})")
+
+
+def _check_tree_parity(out, doc):
+    old_bytes = (out / "veg_trees.bin").read_bytes()
+    if len(old_bytes) % 12:
+        raise ValueError("legacy trees are not whole xyz float32 records")
+    old = np.frombuffer(old_bytes, dtype="<f4").reshape(-1, 3)
+    if (out / "veg.json").exists():
+        # Decode the legacy metadata too; never satisfy the old-file gate by reading only the new configuration.
+        with (out / "veg.json").open(encoding="utf-8") as f:
+            json.load(f)
+    cells, attrs = _independent_trees(gzip.decompress((out / "veg2.bin.gz").read_bytes()), doc)
+    if len(old) != len(cells):
+        raise ValueError("decoded trees differ in count from legacy trees")
+    if np.any(attrs[:, 1:] == 0):
+        raise ValueError("decoded trees have invalid display dimensions")
+    from scipy.spatial import cKDTree
+    new_xz = cells.astype(np.float64) / 2
+    distance, _ = cKDTree(new_xz).query(old[:, [0, 2]], k=1)
+    if len(distance) and float(distance.max()) > 0.5:
+        raise ValueError("decoded trees exceed 0.5 m horizontal displacement from legacy trees")
+    d = terrain.unpack(gzip.decompress((out / "terrain.bin.gz").read_bytes()))
+    g = d["grid"]
+    sampled = terrain.bilinear(terrain.Grid(g.x0, g.z0, g.cell, g.nx, g.nz), d["h"], new_xz[:, 0], new_xz[:, 1])
+    if not np.isfinite(sampled).all():
+        raise ValueError("decoded trees have non-finite terrain-derived ground")
+    # nearest is intentionally evaluated above on every legacy point; the new set is also covered when counts agree.
+    reverse, _ = cKDTree(old[:, [0, 2]]).query(new_xz, k=1)
+    if len(reverse) and float(reverse.max()) > 0.5:
+        raise ValueError("decoded trees exceed 0.5 m from every legacy tree (reverse coverage)")
+
+
+def _read_rgba(raw):
+    if len(raw) < 8:
+        raise ValueError("RGBA header is truncated")
+    w, h = struct.unpack_from("<II", raw)
+    if not 0 < w <= 65535 or not 0 < h <= 65535 or len(raw) != 8 + w * h * 4:
+        raise ValueError("RGBA dimensions or byte count")
+    return w, h, raw[8:]
+
+
+def _check_ortho_gzip(out):
+    for stem in ("roof_rgb", "ground_rgb"):
+        z_path = out / f"{stem}.bin.gz"
+        packed, dims = z_path.read_bytes(), None
+        raw = gzip.decompress(packed)
+        dims = _read_rgba(raw)
+        legacy_path = out / f"{stem}.bin"
+        if legacy_path.exists() and _read_rgba(legacy_path.read_bytes()) != dims:
+            raise ValueError(f"{stem}.bin.gz differs byte-for-byte from the legacy RGBA payload")
+
+
+def _check_legacy_compact(out, key, index, chunk, fmt):
+    doc = json.loads((out / index).read_text(encoding="utf-8"))
+    if doc.get("format") != fmt or doc.get("version") != 2 or doc.get("file") != chunk:
+        raise ValueError("format/version/file mismatch")
+    blob = (out / chunk).read_bytes()
+    if key == "roads2":
+        if len(compact.read_roads2(doc, blob)) != len(doc["ways"]):
+            raise ValueError("way count mismatch")
+    elif key == "veg2":
+        if len(compact.read_veg2(doc, blob)) != doc["count"]:
+            raise ValueError("item count mismatch")
+    else:
+        rows = compact.read_hdr18(blob)
+        w, h, n = doc["w"], doc["h"], doc["count"]
+        if len(rows) != n or n != w * h:
+            raise ValueError("grid length/count mismatch")
+        for i, row in enumerate(rows):
+            col, line = i % w, i // w
+            if (row["ortho"] != 1 or row["x"] != compact.dm(doc["x0"] + col * doc["cell"]) / 10
+                    or row["z"] != compact.dm(doc["z0"] + line * doc["cell"]) / 10):
+                raise ValueError("grid source/coordinate/order mismatch")
+
+
+def check_compact(out: Path, cfg: dict) -> list[str]:
+    """Validate selected compact packs and independently compare them to the same version's legacy files."""
+    errors = []
+    legacy = {"roads2": ("roads2.json", "roads0.bin", compact.ROADS_FORMAT),
+              "veg2": ("veg2.json", "veg0.bin", compact.VEG_FORMAT),
+              "ground2": ("ground2.json", "ground0.bin", "zagreb-ground2")}
+    for key, (index, chunk, fmt) in legacy.items():
+        if isinstance(cfg.get(key), str):
+            if cfg[key] != index:
+                errors.append(f"compact: {key} must name {index}")
+                continue
+            try:
+                _check_legacy_compact(out, key, index, chunk, fmt)
+            except (OSError, ValueError, TypeError, KeyError, IndexError, struct.error) as e:
+                errors.append(f"compact: {key}: {e}")
+    for key, expected_file, parity in (("roads2", "roads2.bin.gz", _check_road_parity),
+                                       ("veg2", "veg2.bin.gz", _check_tree_parity)):
+        if key not in cfg or isinstance(cfg.get(key), str):
+            continue
+        doc = cfg[key]
+        try:
+            if (not isinstance(doc, dict) or doc.get("format") != (compact.ROADS_FORMAT if key == "roads2" else compact.VEG_FORMAT)
+                    or doc.get("version") != 2 or doc.get("file") != expected_file):
+                raise ValueError("format/version/file mismatch")
+            parity(out, doc)
+        except (OSError, EOFError, ValueError, TypeError, KeyError, IndexError, struct.error) as e:
+            errors.append(f"compact: {key}: {e}")
+    if cfg.get("orthoGz") is True:
+        try:
+            _check_ortho_gzip(out)
+        except (OSError, EOFError, ValueError, TypeError, struct.error) as e:
+            errors.append(f"compact: orthoGz: {e}")
+    for key in ("roof2", "roof_rgb2", "ground_rgb2"):
+        if key in cfg:
+            errors.append(f"compact: unsupported or unverified field {key}")
+    return errors
+
+
 def validate(out: Path, data: Path = DATA, *, release: bool = False, sources: list[dict] | None = None,
              takedowns: list[dict] | None = None) -> list[str]:
     out, data = Path(out), Path(data)
@@ -1727,6 +1946,7 @@ def validate(out: Path, data: Path = DATA, *, release: bool = False, sources: li
     cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
     errors += check_sizes(out, cfg)
     errors += check_base(out, cfg)
+    errors += check_compact(out, cfg)
     errors += check_terrain(out, cfg, data, release=release, sources=sources)
     errors += check_attribution(cfg)
     attrs_path = out / "attrs.bin.gz"

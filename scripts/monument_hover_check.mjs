@@ -25,7 +25,22 @@ await page.evaluate(() => {
   d.controls.update(); d.camera.updateMatrixWorld(); M.place();
 });
 await page.waitForTimeout(2500);
-const at = await page.evaluate(() => window.__dbg.monuments.screenAt(window.__dbg.monuments.list.find(m => m.qid === 'Q121636557')));
+// The statue is a few pixels at this distance, and its screen point moves while the ground rises: find a pixel the
+// layer itself answers for, rather than trusting the projected centre.
+const findHit = () => page.evaluate(() => {
+  const M = window.__dbg.monuments, j = M.list.find(m => m.qid === 'Q121636557');
+  const p = M.screenAt(j);
+  for (let r = 0; r <= 8; r++) {
+    for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+      const x = Math.round(p[0] + dx), y = Math.round(p[1] + dy);
+      if (M.under(x, y)?.id === j.id) return [x, y];
+    }
+  }
+  return null;
+});
+const at = await findHit();
+if (!at) throw new Error('the Jelačić statue is not on screen');
 
 const tip = () => page.evaluate(() => {
   const t = document.querySelector('.mon-tip');
@@ -35,16 +50,25 @@ const tip = () => page.evaluate(() => {
     photo: img ? img.complete && img.naturalWidth > 0 : null, src: img?.getAttribute('src') || '' };
 });
 
+// The pointer must rest on it for a beat: pointermove asks monuments.under at most every 110 ms, so a move that lands
+// inside that window is dropped (a visitor's steady hand still gets an answer nine times a second).
+const hover = async ([x, y]) => {
+  await page.mouse.move(x - 40, y - 40);
+  await page.waitForTimeout(200);
+  await page.mouse.move(x, y, { steps: 2 });
+  await page.waitForTimeout(200);
+  await page.mouse.move(x + 1, y + 1);
+  await page.waitForTimeout(400);
+};
+
 const out = { statueAt: at, errors: [], failed };
-await page.mouse.move(at[0] - 40, at[1] - 40);
-await page.mouse.move(at[0], at[1], { steps: 4 });
-await page.waitForTimeout(500);
+await hover(at);
 out.onStatue = await tip();
 await page.mouse.move(at[0] + 300, at[1] + 200, { steps: 6 });
 await page.waitForTimeout(400);
 out.away = await tip();
-await page.mouse.move(at[0], at[1], { steps: 4 });
-await page.waitForTimeout(400);
+await page.mouse.move(at[0] - 1, at[1] - 1);
+await page.waitForTimeout(300);
 await page.mouse.click(at[0], at[1]);
 await page.waitForTimeout(700);
 out.afterClick = await tip();

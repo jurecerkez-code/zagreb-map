@@ -14,7 +14,7 @@ import { latLonToLocal, localToLatLon } from './sweref.js';
 import { makeT, legacy, pickLang } from './i18n.js';
 import { plaquesByGid, plaqueSection } from './plaque.js';
 import { makeFacts } from './facts.js';
-import { sunFor } from './sun.js';
+import { sunFor, sunVector, sunIsNight } from './sun.js';
 import { archaeologySection } from './archaeology.js';
 import { photoSlides, photoFigure } from './photos.js';
 import { metroOnFrom, metroHref, METRO_KEY, stationCard } from './metro.js';
@@ -28,13 +28,13 @@ import { tramInfo, tramHtml, tramClock, tramsDataPath } from './trams.js';
 import { makeRideHud } from './ride-hud.js';
 import { mountBoatTip } from './boat-tip.js';
 import { estimateTone, inkOn, rgba, luma, rgb, unknownFill } from './tone.js';
-import { THEMES, SHADING } from './themes.js';
+import { THEMES, SHADING, SUN_LIGHT } from './themes.js';
 import { createLooks } from './look.js';
 import { mountSwitcher } from './switcher.js';
 import { initialCollapsed, LEGEND_KEY, photoOnlyFrom, photoOnlyHref, markPhotos, plaquesOnFrom, plaquesHref, PLAQUE_KEY,
   questsOnFrom, QUESTS_KEY } from './panel.js';
 import { cityCount, layerCount, tallyTitle, tallyFromAttrs, periodCounts } from './count.js';
-import { placeLabels, labelAt, stepYear } from './timeline.js';
+import { placeLabels, labelAt, stepYear, filmYear, filmTimeAtYear, filmOrbit, filmOrbitProgress, countDatedAt } from './timeline.js';
 import { unknownShown, readPref, writePref, prefAfterClick, unknownHint, easeShown } from './unknown.js';
 import { makeGround, cutFactor, levelAt, LOD_TOL, parsePolygons, fadeWidth, fadeAtGrid, askWorker, withTimeout,
   FETCH_TIMEOUT_MS } from './terrain.js';
@@ -58,15 +58,30 @@ import { makeMonuments, monumentsOnFrom, monumentCard, MONUMENTS_KEY } from './m
 import { nextMonumentMediaTab } from './monument-preview.js';
 import { makeVeg } from './veg.js';
 import { makePosterPass, posterInks, posterColours, posterYear, nearestIndex } from './poster.js';
+import { DISPLAY_FOG_GLSL, syncDisplaySky } from './display-fog.js';
+import { makeStartupQueue, buildInfoAllowed } from './startup-load.js';
+import { makeMapUpdateMonitor, makeMapUpdateChip } from './cache-update.js';
+import { loadOrthoData } from './ortho-img.js';
 
-// Colours are authored in sRGB and drawn as they are.
-THREE.ColorManagement.enabled = false;
+// #24: authored sRGB becomes the renderer's working space. Every texture the city photographs (the roof and ground
+// bytes, the trees, the roads' taper, the labels) carries its space on the texture; every uniform colour is a
+// THREE.Color, so management converts it; every custom fragment shader ends in the tone-mapping + colourspace tail.
+// Nothing comes back: no convertSRGBToLinear, no manual conversions anywhere.
+THREE.ColorManagement.enabled = true;
 
 // Looks (web/themes.js), chosen in web/look.js: ?theme=arg|kalk|blatimme|paper, else the viewer's last choice, else
 // Ärg. THEME is the look on now (THEME.unknown: buildings with no year yet, a neutral grey apart from the maquette).
 // applyLook (see Looks below) re-applies a switch to everything drawn in the look's colours. The page's own colours
 // and font are set here already, before the city loads, so the loading line is drawn in the look.
 const looks = createLooks();
+// Noncritical city work waits for the reveal, with each idle job registered once.
+const afterReveal = makeStartupQueue({
+  order: ['restPacks', 'terrain', 'attributes', 'roads', 'trees', 'foto', 'cityHeight', 'monuments', 'facts', 'funicular', 'tour', 'trams'],
+  idle: () => new Promise(resolve => {
+    if ('requestIdleCallback' in window) requestIdleCallback(resolve, { timeout: 1500 });
+    else setTimeout(resolve, 0);
+  }),
+});
 let THEME_NAME, THEME, FONT;
 function applyPageLook(name) {
   THEME_NAME = name;
@@ -163,12 +178,19 @@ const current = await getJson('data/current.json', { cache: 'no-cache' }).catch(
 const { version } = current;
 // Which commit the page was built from (pages.yml stamps it). Console log and __dbg.__build, so "is it live?"
 // answers itself: a stale tab names its stale build instead of impersonating today's deploy.
-getJson('build.json', { cache: 'no-store' }).then(b => {
+if (buildInfoAllowed(location.hostname)) getJson('build.json', { cache: 'no-store' }).then(b => {
   window.__build = b;
   if (b?.sha) console.info(`build ${String(b.sha).slice(0, 7)} · ${b.date}`);
 }).catch(() => {});
 const DATA = `data/${version}/`;
 const TRAMS_DATA = tramsDataPath(current);
+// The update offer is passive: nothing reloads until the visitor clicks it.
+const offerMapUpdate = makeMapUpdateChip({ document, reload: () => location.reload() });
+const mapUpdates = makeMapUpdateMonitor({
+  currentVersion: version, serviceWorker: navigator.serviceWorker, fetchJson: getJson,
+  onNewVersion: offerMapUpdate,
+});
+function startMapUpdates() { mapUpdates.start().catch(e => console.warn('Map updates are unavailable.', e)); }
 // Load order: config, then pack0 (see Tiles). The other packs follow the first tile; land, water and labels follow the
 // first frame with buildings. The hot attributes come last, once the map stands: nothing on the first screen reads them.
 // The strings (web/i18n): both languages, a few KB, so the language switches without a reload.
@@ -264,7 +286,8 @@ const PARAMS = new URLSearchParams(location.search);
 const reliefMax = TERRAIN?.reliefMax ?? RELIEF_MAX;
 let relief = initialRelief(location.search, (() => { try { return localStorage.getItem(RELIEF_KEY); } catch { return null; } })(),
   TERRAIN?.relief ?? 0, reliefMax);
-let terrainState = 'flat';  // 'flat' (none yet, or none in this build), 'loading', 'ready' or 'failed' (still flat)
+let terrainState = 'flat'; // 'flat' (none yet, or none in this build), 'loading', 'ready' or 'failed' (still flat)
+let terrainRoadGrid = null; // The worker-fitted terrain grid; FLAT_GRID is the fallback for the roads.
 const TERRACE = ['full', 'true', 'none'].includes(PARAMS.get('terrace')) ? PARAMS.get('terrace') : TERRAIN?.terrace || 'full';
 const FADE_M = fadeWidth(PARAMS.get('fade'), TERRAIN?.fadeM ?? 400);
 // ?labels=top: names drawn over everything, as first specified (for comparison)
@@ -279,6 +302,13 @@ let renderer;
 // No WebGL: say so in the page's language, not that the data failed.
 // #23: start at min(dpr, 1.5) with MSAA stepping in below it (antialias only pays where the ratio is low).
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: devicePixelRatio < 1.5 }); } catch (e) { await halt(e, 'ui.nowebgl'); }
+// #24: filmic output. The renderer owns the display transform: the neutral curve (Khronos PBR Neutral) at unit
+// exposure. The light model already lands a lit surface on its own albedo, so exposure only has to place the
+// highlight roll-off; the curve leaves the midtones and the shade alone instead of lifting them. The pick pass
+// renders into a target and so stays raw and tone-mapping-free.
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.toneMappingExposure = 1;
 // The GPU's own name, read once: integrated chips (Intel, Mali, Adreno, Apple, ...) open the quality ladder one
 // notch down instead of learning the lesson at 13 fps.
 let gpuName = '';
@@ -305,7 +335,6 @@ canvas.addEventListener('webglcontextrestored', () => {
   el.setAttribute('aria-live', 'polite');
   el.hidden = true;
 });
-renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
 // dpr 1.5 at the top ladder step (0.85 of it on an integrated chip): the boost to full dpr is quality.js's to grant.
 const pxStart = Math.min(devicePixelRatio || 1, 1.5) * STEPS[gpuLow ? 1 : 0];
 renderer.setPixelRatio(pxStart);
@@ -440,6 +469,7 @@ function textureFor(L) {
   ctx.strokeText(L.name, LABEL_PX * 0.2, LABEL_PX / 2);
   ctx.fillText(L.name, LABEL_PX * 0.2, LABEL_PX / 2);
   t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;   // #24: canvas pixels are authored sRGB
   t.anisotropy = 4;
   t.userData = { aspect: c.width / c.height };
   labelTex.set(L.name + L.water, t);
@@ -461,6 +491,7 @@ labelPlane.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1);
 const TERRAIN_UNIFORMS = ['uTerrain', 'uGridO', 'uGridN', 'uCell', 'uRelief', 'uCutK'];
 function labelMaterial(map, onWater) {
   const m = new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false, depthTest: !LABELS_ON_TOP });
+  m.toneMapped = false;   // #24: labels are interface, not film: crisp ink, no tone curve over them
   m.userData.level = { value: 0 };
   m.onBeforeCompile = s => {
     for (const k of TERRAIN_UNIFORMS) s.uniforms[k] = uniforms[k];
@@ -532,7 +563,9 @@ if (plaqueList.length) {
   const ctx = c.getContext('2d');
   ctx.fillStyle = '#1f4e9c'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 6;
   ctx.beginPath(); ctx.arc(32, 32, 26, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  const mat = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), sizeAttenuation: false, depthTest: false });
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const mat = new THREE.SpriteMaterial({ map: tex, sizeAttenuation: false, depthTest: false });
   for (const p of plaqueList) {
     const s = new THREE.Sprite(mat);
     s.scale.set(0.022, 0.022, 1);
@@ -677,6 +710,8 @@ const uniforms = {
   uForce: { value: -1 },                           // the building picked from search: drawn whatever hides it
   uBlind: { value: 0 },
   uFogColor: { value: col(THEME.sky) },
+  // #24: display-space partner to the working colour. syncDisplaySky updates both sky paths.
+  uFogDisplay: { value: new THREE.Vector3() },
   uFog: { value: new THREE.Vector2(9000, 26000) },
   // Terrain: one texture of (true metres, terrace cut) per grid node, read with texelFetch, and the edge fade;
   // 1 x 1 placeholders until loadTerrain replaces them. uSun is the one sun buildings and ground share (themes.js
@@ -687,6 +722,10 @@ const uniforms = {
   uGridO: { value: new THREE.Vector2(0, 0) }, uGridN: { value: new THREE.Vector2(1, 1) }, uCell: { value: 1 },
   uEdgeBuildings: { value: 0 },
   uSun: { value: new THREE.Vector3(...SHADING.sun).normalize() },
+  // #24: the scene's one light, a near-white warm sun against a cool sky (#24). The walls' and roofs' shading
+  // (SHADING.wallMin/wallLit) is gone: lighting is the model below, sunAzimuth/sunAmt handled by their colours.
+  uSunCol: { value: new THREE.Color('#ffdcae') },
+  uSkyCol: { value: new THREE.Color('#b3c7dd') },
   // The Foto look (themes.js foto): the real photographed roof and ground colours from data/<version>/roof_rgb.bin
   // and ground_rgb.bin (pipeline/s06_zagreb_ortho.py, sampled by scripts/sample_ortho.py). uFoto 1 only in that look
   // and only once the files loaded; alpha 0 on a texel means "not sampled", so the period colour stays honest.
@@ -733,8 +772,11 @@ const TERRAIN_GLSL = /* glsl */`
     return mix(mix(hNode(i), hNode(i + ivec2(1, 0)), t.x), mix(hNode(i + ivec2(0, 1)), hNode(i + ivec2(1, 1)), t.x), t.y);
   }
   vec2 hEffGrad(vec2 w) {
-    ivec2 i = ivec2(floor((w - uGridO) / uCell + 0.5));
-    return vec2(hNode(i + ivec2(1, 0)) - hNode(i - ivec2(1, 0)), hNode(i + ivec2(0, 1)) - hNode(i - ivec2(0, 1))) / (2.0 * uCell);
+    vec2 g = (w - uGridO) / uCell, f = floor(g), t = g - f;
+    ivec2 i = ivec2(f);
+    float a = hNode(i), b = hNode(i + ivec2(1, 0)), c = hNode(i + ivec2(0, 1)), d = hNode(i + ivec2(1, 1));
+    return vec2((b - a) * (1.0 - t.y) + (d - c) * t.y,
+      (c - a) * (1.0 - t.x) + (d - b) * t.x) / uCell;
   }
   // how much the drawn ground varies over the cell under w: a wall's skirt reaches half of it further down
   float hRange(vec2 w) {
@@ -959,9 +1001,52 @@ const VERT = /* glsl */`
   }
 `;
 
+// #24: the city's height field casts shadows on every lit surface, not just on the ground. The roof
+// has to clear its own height before a blocker counts; walls keep a metre of numerical ground clearance.
+const SHADOW_GLSL = /* glsl */`
+  uniform sampler2D uHgt;
+  uniform vec2 uHgtN, uHgtO;
+  uniform float uHgtCell, uHgtOn;
+  float cityHeight(vec2 xz) {
+    vec2 uv = (xz - uHgtO) / (uHgtCell * uHgtN);
+    if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return -500.0;
+    vec4 s = texture(uHgt, uv);
+    return (s.r * 65280.0 + s.g * 255.0) * 0.1;
+  }
+  float sunShadow(vec3 p) {
+    if (uHgtOn < 0.5 || uNight > 0.5) return 1.0;
+    float horizontal = length(uSun.xz);
+    if (horizontal < 0.06) return 1.0;
+    vec2 dir = uSun.xz / horizontal;
+    float rise = uSun.y / horizontal;
+    float t = 10.0;
+    for (int i = 0; i < 20; i++) {
+      if (cityHeight(p.xz + dir * t) > p.y + t * rise + 1.5) return 0.0;
+      t += 14.0 + float(i) * 6.0;
+    }
+    return 1.0;
+  }
+`;
+
+// #24: one light model for buildings, terrain and boats, with the same measured
+// SUN_LIGHT pair. Shadow_GLSL occludes only the direct sun, never the sky's diffuse fill.
+// The photographed ground is the one surface that arrives as an appearance rather than reflectance
+// (pipeline/s06_zagreb_ortho.py stores the orthophoto's mean colour per node), so its sun has to be
+// divided back out before the model re-lights it. Measured against the picture gate's reference:
+// at GROUND_SUN the ground keeps the tonal register of the reference city while walls and roofs,
+// which are reflectance, sit where the light model puts them.
+const GROUND_SUN = 2.58;
+const LIGHT_GLSL = /* glsl */`
+  vec3 lighting(vec3 n, float visibility) {
+    vec3 direct = uSunCol * (max(dot(n, uSun), 0.0) * ${glf(SUN_LIGHT.direct)} * visibility);
+    vec3 ambient = uSkyCol * (mix(0.6, 1.0, n.y * 0.5 + 0.5) * ${glf(SUN_LIGHT.skyFill)});
+    return direct + ambient;
+  }`;
+
 const FRAG = /* glsl */`
   precision highp float;
   uniform vec3 uFogColor, uSun, uHoverTo;
+  uniform vec3 uSunCol, uSkyCol;
   uniform float uNight;                     // 1 in the Night mode: the walls lose the light with the ground
   uniform vec2 uFog;
   uniform sampler2D uRoof;
@@ -971,6 +1056,9 @@ const FRAG = /* glsl */`
   ${GRID_GLSL}
   ${FADE_GLSL}
   ${WEATHER_GLSL}
+  ${LIGHT_GLSL}
+  ${SHADOW_GLSL}
+  ${DISPLAY_FOG_GLSL}
   in vec3 vColor;
   in vec3 vWorld;
   in float vRel;
@@ -990,6 +1078,9 @@ const FRAG = /* glsl */`
       outColor = vec4(mod(id, 256.0), mod(floor(id / 256.0), 256.0), floor(id / 65536.0), 255.0) / 255.0;
     #elif defined(FAINT)
       outColor = vec4(uFaintColor, uFaint);   // flat: no light, hatch or outline
+      #define gl_FragColor outColor
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
     #else
       // n faces the camera (screen-space derivatives), so on every wall seen from outside it is the outward normal.
       vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
@@ -1059,12 +1150,10 @@ const FRAG = /* glsl */`
           base = col;
         }
       }
-      // Low afternoon sun from the south-west (uSun, shared with the ground), a soft sky from above. The foot darkens
-      // the first 12 m above the building's own base, and the skirt under it.
-      float sun = max(dot(n, uSun), 0.0);
-      float light = n.y > 0.9 ? 1.04 : ${glf(SHADING.wallMin)} + ${glf(SHADING.wallLit)} * sun;
+      // The shared light (LIGHT_GLSL) and city shadows (SHADOW_GLSL): warm sun, cool sky, every surface occluded.
+      // The foot darkens the first 12 m above the building's own base, and the skirt under it.
       float foot = mix(0.82, 1.0, clamp(vRel / 12.0, 0.0, 1.0));
-      vec3 c = base * light * foot;
+      vec3 c = base * lighting(n, sunShadow(vWorld)) * foot;
       // The weather (WEATHER_GLSL) on the roofs, the walls keeping their colour: darker in the rain; in the snow white in
       // drifts, at most SNOW.roof of the way. A hovered or selected roof's snow takes the same tint as the building
       // (vLit 1), so the hover reads on a snowy roof as on a wall; the quest's red building stays red (vLit -1).
@@ -1074,11 +1163,15 @@ const FRAG = /* glsl */`
         float lie = uSnow * ${glf(SNOW.roof)} * flatTop * step(-0.5, vLit) * mix(${glf(SNOW.patch)}, 1.0, drift(vWorld.xz));
         c = mix(c, mix(uSnowInk, uHoverTo, 0.35 * max(vLit, 0.0)), lie);
       }
-      c = mix(uFogColor, c, mix(1.0, fadeAt(vWorld.xz), uEdgeBuildings));   // ?edgebuildings=1: they fade at the edge too
-      c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, d));
-      // Night, after the fog so the whole frame cools together: the walls go with the ground.
-      c = mix(c, c * vec3(0.30, 0.36, 0.56), uNight);
       outColor = vec4(c, 1.0);
+      // #24: filmic output, the renderer's own curve; GLSL3 names its out, so the chunks' gl_FragColor is this one.
+      #define gl_FragColor outColor
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+      // Only the material takes the night tint. The dimmed sRGB background must not be darkened again.
+      outColor.rgb = mix(outColor.rgb, outColor.rgb * vec3(0.30, 0.36, 0.56), uNight);
+      // The background is unlit sRGB. Join it here, not in the pre-film working colour.
+      outColor.rgb = displayFog(outColor.rgb, d, mix(1.0, fadeAt(vWorld.xz), uEdgeBuildings));
     #endif
   }
 `;
@@ -1153,19 +1246,19 @@ async function loadMonuments() {
   scene.add(monuments.group);
   switcher.markLayers();
 }
-loadMonuments().catch(optional('The monuments'));
+// Registration is grouped near the reveal gate, after every loader has been declared.
 
 // ---------- The sun ----------
 // The map is lit by the sun that is actually over Zagreb at the date and hour asked for (web/sun.js, NOAA's solar
 // position), not by a fixed afternoon from the south-west: ?date=2026-06-21 and ?sun=07:30 set it, otherwise it is the
-// moment the visitor arrives. Below about ten degrees the shading keeps a low sun instead, because the map has no
-// night: no moon, no street lighting, and a black city would be a lie of a different kind.
+// moment the visitor arrives. #24: below six degrees there is no sun to shade with: the Night look takes over
+// (applySunMode), so the floor here only keeps the 6-degree band itself believable.
 let sunState = null;
 function setSun({ date = null, clock = null } = {}) {
   const s = sunFor({ date, clock });
   const [x, y, z] = s.vector;
-  const low = y < 0.17;
-  uniforms.uSun.value.set(x, low ? 0.17 : y, z).normalize();
+  const low = y < 0.105;
+  uniforms.uSun.value.set(x, low ? 0.105 : y, z).normalize();
   sunState = { ...s, clamped: low };
   return sunState;
 }
@@ -1201,24 +1294,39 @@ async function loadCityHeight() {
   uniforms.uHgtOn.value = QUERY.get('shadows') === '0' ? 0 : 1;
   sunState.height = meta;
 }
-loadCityHeight().catch(optional("The shadows"));
 
-// The sun's mode: live (the moment the visitor arrives, refreshed every minute), day (noon on the current date) or
-// night (the sun down, the city lit only by its own colours, cooled towards blue). Live is the default.
-let sunMode = ['live', 'day', 'night'].includes(QUERY.get('sunmode')) ? QUERY.get('sunmode') : 'live';
+
+
+// The sun's mode: golden (a fixed golden hour, 38° up, azimuth 225° — the default city most visitors see), live (the
+// moment they arrive, refreshed every minute), day (noon on the current date) or night (the sun down, the city lit
+// only by its own colours, cooled towards blue). #24: golden is the default; live under 6° is the Night look, the
+// exposure walks a little above its base at noon towards 5° so the low sun keeps its light.
+// Golden and day sit at unit exposure; the Night gets the same base, its own dimming comes after the tone curve.
+const SUN_EXPOSURE = { golden: 1, day: 1, night: 1 };   // live walks its own ramp by the elevation
+let sunMode = ['golden', 'live', 'day', 'night'].includes(QUERY.get('sunmode')) ? QUERY.get('sunmode') : 'golden';
 function applySunMode(mode = sunMode) {
   invalidate(600);   // the day's light (or the Night) lands on walls, roofs, sky (#23)
   sunMode = mode;
-  const night = mode === 'night';
-  uniforms.uNight.value = night ? 1 : 0;
-  if (night) {
-    // Below the horizon there is no sun to shade with: a high, cool light from the north keeps the relief readable.
-    uniforms.uSun.value.set(0.0, 0.62, -0.78).normalize();
-    sunState = { ...sunState, elevation: -6, azimuth: 0, clamped: true, mode };
+  if (mode === 'golden') {
+    // Golden's fixed direction uses the same coordinate convention as the real solar clock.
+    uniforms.uSun.value.set(...sunVector({ elevation: 38, azimuth: 225 })).normalize();
+    sunState = { ...sunState, elevation: 38, azimuth: 225, clamped: false, mode };
   } else {
     setSun({ date: QUERY.get('date'), clock: mode === 'day' ? '12:00' : QUERY.get('sun') });
     sunState.mode = mode;
   }
+  const night = sunIsNight(mode, sunState.elevation);
+  if (night) {
+    // Explicit Night and a live sun below six degrees share this vector, not the clamped grazing light.
+    uniforms.uSun.value.set(0.0, 0.62, -0.78).normalize();
+    sunState = { ...sunState, elevation: -6, azimuth: 0, clamped: true, mode };
+  }
+  uniforms.uNight.value = night ? 1 : 0;
+  // The mode's exposure: unit from golden hour to noon, up to 1.2 as the live sun touches 5°; the Night keeps the
+  // same base, and its cool dim lands after the tone curve, where it belongs.
+  renderer.toneMappingExposure = (mode === 'live' && !night)
+    ? 1 + 0.2 * Math.max(0, Math.min(60 - Math.max(sunState.elevation, 5), 55)) / 55
+    : SUN_EXPOSURE[night ? 'night' : mode];
   syncVegNight();        // the trees are unlit too: without this they would glow at night
   // The sky goes with the mode (skyNow reads uNight and applySky carries it to the clear colour and the fog). Both are
   // defined further down the file, so the call is guarded and the first look switch settles it.
@@ -1239,10 +1347,10 @@ setInterval(() => { if (sunMode === 'live' && !document.hidden) applySunMode('li
 // guard keeps the call harmless while it is not there yet, and the loader applies the mode once it is.
 function syncVegNight() {
   try {
-    veg.setNight(sunMode === 'night', THEME_NAME);
+    veg.setNight(!!uniforms.uNight.value, THEME_NAME);
   } catch { /* not built yet */ }
-  trams?.setNight(sunMode === 'night');   // the trams are unlit too
-  roads?.setNight(sunMode === 'night');   // and the street lamps are only lit then
+  trams?.setNight(!!uniforms.uNight.value);   // the trams are unlit too
+  roads?.setNight(!!uniforms.uNight.value);   // live below six degrees lights the lamps too
 }
 
 // ---------- The sun's button ----------
@@ -1278,7 +1386,7 @@ async function loadFacts() {
   facts.setYear(uniforms.uYear.value);
   scene.add(facts.group);
 }
-loadFacts().catch(optional('The history facts'));
+
 // ---------- The funicular ----------
 // The city model has no railway, so the shortest public funicular in the world was invisible on a map that names it.
 // Its two tracks are mapped in OpenStreetMap (scripts/build_funicular.py bakes them on the terrain's height) and one
@@ -1316,7 +1424,7 @@ async function loadFunicular() {
   }
   scene.add(group);
 }
-loadFunicular().catch(optional('The funicular'));
+
 
 // ---------- The sightseeing walk ----------
 // Ten of the map's own facts in walking order (data/tour.json, scripts/build_tour.py): a visitor's list with each stop's
@@ -1355,7 +1463,7 @@ async function loadTour() {
   }
   if (tourOpen) renderTour();
 }
-loadTour().catch(optional('The sightseeing walk'));
+
 
 function setTourOpen(on) {
   tourOpen = !!on && !!tour;
@@ -1413,9 +1521,8 @@ function setMonuments(v) {
 const meshes = [];
 const tileMsgs = [];   // the tiles' messages, for the roof years: built when the attributes land, they need them all
 let loaded = 0;
-const queue = [...config.tiles];
 const progressEl = document.getElementById('progress');
-const pool = Array.from({ length: WORKERS }, () => new Worker('worker.js', { type: 'module' }));
+const pool = Array.from({ length: WORKERS }, () => new Worker(new URL('worker.js', import.meta.url), { type: 'module' }));
 
 function addTile(m) {
   const g = new THREE.BufferGeometry();
@@ -1449,11 +1556,10 @@ function addTile(m) {
   meshes.push(mesh);
   roofYears?.addTile(m);
   tileMsgs.push(m);
-  fetchRestPacks();
 }
 
 // Tiles come in gzip packs (see pipeline/s03_tiles.py); offsets refer to the unpacked pack. pack0 is requested
-// at once, the others when the first tile is on the map (addTile), or sooner if a worker needs one.
+// at once; the other reveal packs when a worker needs one, the rest of the city only after the map has opened.
 // config.packs holds file names ("pack0.bin.gz"); a tile's `pack` names its pack (an index also works).
 const packs = {};
 const packName = p => (typeof p === 'string' ? p : p.file);
@@ -1509,6 +1615,11 @@ const revealAt = (() => {
   return config.tiles.filter(t => first.has(packOf(t))).length;
 })();
 let mapRevealed = false;
+// What the wait costs, and what it does not: until the map opens, a lane takes only the reveal packs' tiles, so the
+// periphery's packs are not on the wire before the first frame. The rest of the city starts at the reveal (below).
+const queue = config.tiles.filter(t => revealNames.has(packOf(t)));
+const restQueue = config.tiles.filter(t => !revealNames.has(packOf(t)));
+const pumpers = [];
 let restRequested = false;
 function fetchRestPacks() {
   if (restRequested) return;
@@ -1527,7 +1638,7 @@ function fetchRestPacks() {
 fetchPack(packName(config.packs[0]));
 for (const w of pool) {
   const next = async () => {
-    const t = queue.shift();
+    const t = queue.shift() ?? (mapRevealed ? restQueue.shift() : undefined);
     if (!t) return;
     try {
       const buf = (await fetchPack(packOf(t))).slice(t.offset, t.offset + t.length);
@@ -1542,12 +1653,15 @@ for (const w of pool) {
     if (!mapRevealed && loaded >= revealAt && !failedId) {   // a failure stays
       mapRevealed = true;
       document.getElementById('loading').hidden = true;
-      loadAttrs().catch(optional('The attributes'));   // cards, the roof years and the count, once the map stands
+      afterReveal.release();
+      startMapUpdates();
+      for (const pump of pumpers) pump();   // the lanes stopped at the reveal's edge: the rest of the city starts now
       document.getElementById('ready').textContent = T('ui.ready');   // the live region's "done" (finding 7)
       foldCreditSoon();
     }
     next();
   };
+  pumpers.push(next);
   next();
 }
 
@@ -1621,62 +1735,36 @@ const WATER_VERT = /* glsl */`
     gl_Position = projectionMatrix * viewMatrix * w;
   }
 `;
-// Ground in the look's land colour, shaded by the shared sun so that flat ground is exactly that colour (uShade, per
-// look); walls shaded like a slope where the bank is low (most shores are natural) and lit like the buildings' walls in
-// the look's quay colour where they stand over 3 m; water flat but for a slow shimmer (WAVE_GLSL); snow and rain on the
-// ground and the low banks (WEATHER_GLSL). The constants are themes.js SHADING, which the looks'
-// colour checks (web/test/themes.test.mjs) use too. All fade into the sky at the municipality's edge
+// Ground in the look's land colour, lit once by LIGHT_GLSL: the photographed colour is not multiplied by
+// the legacy directional term as well. Low banks keep the land colour; quays over 3 m turn to stone; water is
+// flat but for a slow shimmer (WAVE_GLSL); snow and rain affect the ground and low banks (WEATHER_GLSL).
+// Fog and the Night's one dim happen after the shared tone and output stage. All fade into the sky at the municipality's edge
 // and into the fog like the buildings. In the pick pass they write id 0 (nothing) with depth, so a hill hides what is
 // behind it.
 const TERRAIN_FRAG = /* glsl */`
   precision highp float;
   uniform vec3 uFogColor, uSun, uColour, uLand;
+  uniform vec3 uSunCol, uSkyCol;
   uniform vec2 uFog;
   uniform sampler2D uGround;
   uniform float uFoto, uFotoGround;
   uniform sampler2D uVegTex;
   uniform vec2 uVegN, uVegOrigin;
   uniform float uVegCell, uVegOn;
-  // The sun's shadows: the city's height per 16 m cell (ground or roof, whichever is taller) and the night flag.
-  uniform sampler2D uHgt;
-  uniform vec2 uHgtN, uHgtO;
-  uniform float uHgtCell, uHgtOn, uNight, uHgtShow;
-
-  // The tallest thing in the cell a point falls in, or well below ground outside the texture.
-  float cityHeight(vec2 xz) {
-    vec2 uv = (xz - uHgtO) / (uHgtCell * uHgtN);
-    if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) return -500.0;
-    vec4 s = texture(uHgt, uv);                  // decimetres split over two bytes, nearest sampled
-    return (s.r * 65280.0 + s.g * 255.0) * 0.1;
-  }
-
-  // Walk from a ground point towards the sun: if anything along the way stands above the line, it is in shadow.
-  // Twenty taps, fine near the point and growing out to about a kilometre, which is longer than any shadow the
-  // afternoon sun throws across this city.
-  float sunShadow(vec3 p) {
-    if (uHgtOn < 0.5 || uNight > 0.5) return 1.0;
-    float horizontal = length(uSun.xz);
-    if (horizontal < 0.06) return 1.0;                       // the sun nearly overhead: nothing to walk towards
-    vec2 dir = uSun.xz / horizontal;
-    float rise = uSun.y / horizontal;                        // tan of the elevation
-    float t = 10.0;
-    for (int i = 0; i < 20; i++) {
-      if (cityHeight(p.xz + dir * t) > p.y + t * rise + 1.5) return 0.0;
-      t += 14.0 + float(i) * 6.0;
-    }
-    return 1.0;
-  }
+  uniform float uNight, uHgtShow;
+  // uHgt and the shadow walk are shared with FRAG by SHADOW_GLSL, included below.
   uniform float uShade, uKind;   // uKind: 0 ground, 1 wall, 2 water
   ${GRID_GLSL}
   ${FADE_GLSL}
   ${WEATHER_GLSL}
+  ${LIGHT_GLSL}
+  ${SHADOW_GLSL}
+  ${DISPLAY_FOG_GLSL}
   ${WAVE_GLSL}
   in vec3 vWorld;
   in vec3 vNormal;
   in float vWallH;
   out vec4 outColor;
-  vec3 shaded(vec3 c, vec3 n) { return c * clamp(1.0 + uShade * (dot(n, uSun) - uSun.y),
-    1.0 - ${glf(SHADING.dark)} * uShade, 1.0 + ${glf(SHADING.light)} * uShade); }
   void main() {
     #ifdef PICK
       outColor = vec4(0.0);
@@ -1685,34 +1773,44 @@ const TERRAIN_FRAG = /* glsl */`
       if (uKind < 0.5) {
         // Foto: the ground in its photographed colour, one mean per terrain node (linear-filtered between nodes),
         // unless the Foto look is being judged with the look's own land (?fotoground=0).
-        if (uFoto > 0.5 && uFotoGround > 0.5) c = texture(uGround, ((vWorld.xz - uGridO) / uCell + 0.5) / uGridN).rgb;
+        vec4 photoGround = vec4(0.0);
+        if (uFoto > 0.5 && uFotoGround > 0.5) {
+          photoGround = texture(uGround, ((vWorld.xz - uGridO) / uCell + 0.5) / uGridN);
+          c = mix(c, photoGround.rgb, photoGround.a);
+        }
         // The mapped green cover (parks, meadows, the Medvednica forest) painted over the ground: a texture, not
         // geometry, so it follows the hills by construction and can never sink under them.
-        if (uVegOn > 0.5) {
+        // Foto keeps real coverage. Default mapped green only where there is no usable photograph.
+        if (uVegOn > 0.5 && (uFotoGround < 0.5 || photoGround.a < 0.5)) {
           vec2 muv = ((vWorld.xz - uVegOrigin) / uVegCell + 0.5) / uVegN;
           vec4 vg = texture(uVegTex, muv);
           c = mix(c, vg.rgb, vg.a);
         }
-        c = shaded(c, normalize(vNormal));
+        vec3 nG = normalize(vNormal);
+        // #24: one directional light, with sky fill. Only direct sunlight is occluded.
+        // The ground's stored means are the orthophoto's own colours, i.e. an appearance taken under the orthophoto's
+        // sun, while walls and roofs carry reflectance. Re-lighting an appearance double counts the sun, so divide it
+        // out first: GROUND_SUN is the orthophoto's sun measured in the light model's units.
+        c *= lighting(nG, sunShadow(vWorld)) / ${glf(GROUND_SUN)};
         c = weatherGround(c, vWorld.xz);
-        // The sun's own shadows: the streets a building keeps from the light (and the city a mountain does).
-        c *= mix(0.58, 1.0, sunShadow(vWorld));
         if (uHgtShow > 0.5) c = vec3(clamp(cityHeight(vWorld.xz) / 120.0, 0.0, 1.0), clamp(cityHeight(vWorld.xz) / 40.0, 0.0, 1.0), 0.15);
-        // Night: the map keeps its colours and loses the light, cooled towards blue.
-        c = mix(c, c * vec3(0.30, 0.36, 0.56), uNight);   // snow, or wet (WEATHER_GLSL)
       } else if (uKind < 1.5) {
         vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
-        c = mix(shaded(uLand, n), c * (${glf(SHADING.wallMin)} + ${glf(SHADING.wallLit)} * max(dot(n, uSun), 0.0)),
-          smoothstep(1.0, 3.0, vWallH));
+        c = mix(uLand, c, smoothstep(1.0, 3.0, vWallH));   // low banks keep the land, quays turn to stone
+        c *= lighting(n, sunShadow(vWorld));
         c = mix(weatherGround(c, vWorld.xz), c, smoothstep(1.0, 3.0, vWallH));   // a low bank takes the ground's weather
       } else {
         c = shimmer(c, vWorld.xz, length(vWorld - cameraPosition));   // the water's ripples (WAVE_GLSL)
+        c *= lighting(vec3(0.0, 1.0, 0.0), sunShadow(vWorld));   // #24: flat water in the same light as flat ground
       }
-      c = mix(uFogColor, c, fadeAt(vWorld.xz));
-      c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, length(vWorld - cameraPosition)));
-      // Night, after the fades: everything cools together, the sky included.
-      c = mix(c, c * vec3(0.30, 0.36, 0.56), uNight);
       outColor = vec4(c, 1.0);
+      // #24: filmic output; the pick pass renders to a target and stays raw on its own.
+      #define gl_FragColor outColor
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+      // Only the material takes the night tint. The city's separately dimmed sky stays exact.
+      outColor.rgb = mix(outColor.rgb, outColor.rgb * vec3(0.30, 0.36, 0.56), uNight);
+      outColor.rgb = displayFog(outColor.rgb, length(vWorld - cameraPosition), fadeAt(vWorld.xz));
     #endif
   }
 `;
@@ -1733,21 +1831,16 @@ async function loadPhotoColours() {
   if (photoTried) return;
   photoTried = true;
   try {
-    const [rb, gb] = await Promise.all([fetch(DATA + 'roof_rgb.bin'), fetch(DATA + 'ground_rgb.bin')]);
-    if (!rb.ok || !gb.ok) return;
-    const roofB = new Uint8Array(await rb.arrayBuffer());
-    const groundB = new Uint8Array(await gb.arrayBuffer());
-    const dims = b => { const v = new DataView(b.buffer, b.byteOffset, 8); return [v.getUint32(0, true), v.getUint32(4, true)]; };
-    const mk = (b, w, h) => {
-      const t = new THREE.DataTexture(b.subarray(8), w, h, THREE.RGBAFormat, THREE.UnsignedByteType);
+    const photos = await loadOrthoData(DATA, config);
+    const mk = ({ rgba, w, h }) => {
+      const t = new THREE.DataTexture(rgba, w, h, THREE.RGBAFormat, THREE.UnsignedByteType);
       t.colorSpace = THREE.SRGBColorSpace;
       t.minFilter = t.magFilter = THREE.LinearFilter;
       t.needsUpdate = true;
       return t;
     };
-    const [rw, rh] = dims(roofB), [gw, gh] = dims(groundB);
-    uniforms.uRoof.value = mk(roofB, rw, rh);
-    uniforms.uGround.value = mk(groundB, gw, gh);
+    uniforms.uRoof.value = mk(photos.roof);
+    uniforms.uGround.value = mk(photos.ground);
     uniforms.uFoto.value = looks.current === 'foto' ? 1 : 0;
     uniforms.uFotoGround.value = uniforms.uFoto.value && fotoGroundOn() ? 1 : 0;
   } catch (e) {
@@ -1765,7 +1858,7 @@ async function loadTerrain(base) {
     TERRAIN.file);
   const [buf, waterBuf] = await Promise.all([file, base]);
   // a worker that errs, refuses the file or hangs (WORKER_TIMEOUT_MS) rejects: the caller then loads the flat land
-  const m = await askWorker(new Worker('terrain-worker.js', { type: 'module' }), { terrain: buf, water: waterBuf.slice(0),
+  const m = await askWorker(new Worker(new URL('terrain-worker.js', import.meta.url), { type: 'module' }), { terrain: buf, water: waterBuf.slice(0),
     chunkCells: Math.round(TERRAIN.chunk / TERRAIN.cell), fadeM: FADE_M }, [buf]);
   const g = m.grid, RMAX = reliefMax;
   uniforms.uTerrain.value.dispose();
@@ -1851,7 +1944,7 @@ async function loadTerrain(base) {
   terrainState = 'ready';
   performance.measure('terrain', 'terrain-start');
   setRelief(relief, true);          // the city rises (at once for a visitor who asked for less motion)
-  startRoads({ tex: m.tex, x0: g.x0, z0: g.z0, cell: g.cell, nx: g.nx, nz: g.nz });   // the streets' worker needs this grid
+  terrainRoadGrid = { tex: m.tex, x0: g.x0, z0: g.z0, cell: g.cell, nx: g.nx, nz: g.nz };
 }
 
 // The relief: uRelief eases to the slider's value, 1.2 s when the terrain first rises, 0.6 s on a move (from where it
@@ -3035,7 +3128,9 @@ function discTexture(text, fill, ink) {
   g.lineWidth = 7; g.strokeStyle = '#ffffff'; g.stroke();
   g.fillStyle = ink; g.font = `800 44px ${getComputedStyle(document.body).fontFamily}`; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillText(text, 48, 51);
-  return new THREE.CanvasTexture(c);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 function drawWalk(w) {
   walkGroup.clear();
@@ -3432,9 +3527,17 @@ function drawHist() {
   const tally = tallyTitle({ from: Yf, to: Y, start: config.yearMin, end: config.yearMax,
     period: solo && { name: tr(solo, 'label'), from: solo.from, to: solo.to } }, t);
   const yearEl = document.getElementById('year');
-  yearEl.textContent = tally.title;
-  yearEl.classList.toggle('named', tally.kind === 'period');
-  document.getElementById('count').textContent = fmt(visibleCount());
+  yearEl.textContent = playing || !Number.isInteger(Y) ? String(Math.floor(Y)) : tally.title;
+  yearEl.classList.toggle('named', !playing && tally.kind === 'period');
+  // A natural finish keeps the dated tally under its arrival note until the next timeline interaction.
+  const filmTally = playing || !filmNote.hidden;
+  document.getElementById('count').textContent = filmTally
+    ? T('ui.film.known', { n: fmt(datedFilmCount()) })
+    : fmt(visibleCount());
+  if (playing) {
+    filmNote.hidden = false;
+    filmNote.textContent = T('ui.film.unknown', { n: fmt(unknownFilmCount()) });
+  }
   document.getElementById('tally-note').textContent = tally.note && ` · ${tally.note}`;
 }
 
@@ -3515,7 +3618,7 @@ function setHandle(which, y) {
 function moveHandle(x) { setHandle(handle, yearOf(x)); }
 function placeGrips() {
   const set = (el, k, v) => { if (el.getAttribute(k) !== v) el.setAttribute(k, v); };
-  const from = Math.round(uniforms.uYearFrom.value), to = Math.round(uniforms.uYear.value);
+  const from = Math.round(uniforms.uYearFrom.value), to = Math.floor(uniforms.uYear.value);
   // every position read before any is written: a write between two reads of the canvas's width forces a layout each
   // frame of Play
   const at = { uYearFrom: xOf(from), uYear: xOf(to) };
@@ -3555,37 +3658,106 @@ for (const [which, el] of Object.entries(grips)) {
   });
 }
 
-// Play: quickly through the sparse centuries, then slowly through the dense ones.
-let playing = false, playT0 = 0, playStart = 0;
+// Play: the whole story from 1200 to today. Shift-click or a long press keeps the handle-based start.
+let playing = false, playT0 = 0, playStart = 0, pausedFilm = null, filmOrbitFrame = null;
 const playBtn = document.getElementById('play');
 const playIcon = document.getElementById('play-icon');
 const DURATION = (+new URLSearchParams(location.search).get('film') || 30) * 1000; // ?film=6 for a short film
-function playYear(t) {
-  const k = 0.35; // share of time spent before 1850
-  return t < k ? T0 + (1850 - T0) * (t / k) : 1850 + (config.yearMax - 1850) * ((t - k) / (1 - k));
+const filmNote = document.createElement('small');
+filmNote.id = 'film-unknown-note';
+filmNote.hidden = true;
+filmNote.style.fontSize = '12px';
+filmNote.setAttribute('aria-live', 'off');
+document.getElementById('count').after(filmNote);
+let longPressTimer = null, longPressArmed = false, arrivalTimer = null;
+playBtn.title = T('ui.film.playHint');
+function playYear(t) { return filmYear(t, config.histogram, T0, config.yearMax); }
+const unknownFilmCount = () => config.unknown ?? config.stats?.unknown ?? 0;
+function datedFilmCount() {
+  return countDatedAt(uniforms.uYear.value, config.histogram, config.histogramEst);
 }
-function startPlay() {
-  playing = true; playStart = performance.now();
-  // From "Today" the film starts again, just after the from-handle: before it everything stays faded.
-  if (uniforms.uYear.value >= config.yearMax) uniforms.uYear.value = Math.max(T0, uniforms.uYearFrom.value + 1);
-  playT0 = 0;
-  while (playT0 < 1 && playYear(playT0) < uniforms.uYear.value) playT0 += 0.001;
+function showFilmArrival() {
+  invalidate(1000);   // the undated buildings' 0.88 s rise, plus scheduling slack (#25)
+  clearTimeout(arrivalTimer);
+  filmNote.hidden = false;
+  filmNote.textContent = T('ui.film.arrival');
+  arrivalTimer = setTimeout(() => { filmNote.hidden = true; }, 3000);
+}
+function startPlay(fromHandles = false) {
+  const paused = !fromHandles && pausedFilm !== null &&
+    (uniforms.uYear.value === pausedFilm.year || uniforms.uYear.value === Math.floor(pausedFilm.year)) ? pausedFilm : null;
+  if (paused) uniforms.uYear.value = paused.year;
+  else if (!fromHandles) {
+    setHandle('uYearFrom', FROM_REST);
+    uniforms.uYear.value = T0;
+  } else if (uniforms.uYear.value >= config.yearMax) {
+    // Preserve the old power-user behaviour: below Today, start at the current handle; from Today,
+    // start again just after the from-handle.
+    uniforms.uYear.value = Math.max(T0, uniforms.uYearFrom.value + 1);
+  }
+  pausedFilm = null;
+  playing = true;
+  // An idle frame sets frameDue to Infinity. Wake the scheduler, or Play stays at its first year forever.
+  frameDue = -1;
+  playT0 = filmTimeAtYear(uniforms.uYear.value, config.histogram, T0, config.yearMax);
+  const resumedOrbit = paused ? filmOrbitFrame : null;
+  const dx = camera.position.x - controls.target.x, dz = camera.position.z - controls.target.z;
+  filmOrbitFrame = {
+    azimuth: resumedOrbit?.azimuth ?? controls.getAzimuthalAngle() - filmOrbit(playT0, calm.matches),
+    horizontal: Math.hypot(dx, dz),
+    orbitT0: paused?.orbitT ?? playT0,
+    orbitT: paused?.orbitT ?? playT0,
+  };
   playIcon.setAttribute('d', 'M4 2.5h3v11H4zM9 2.5h3v11H9z');
   uniforms.uPlaying.value = 1;
   playBtn.setAttribute('aria-label', T('ui.pause'));
+  playBtn.title = T('ui.film.playHint');
+  drawHist();
+  // Never charge synchronous inversion or initialization to resumed film time.
+  playStart = performance.now();
 }
-function stopPlay() {
+function stopPlay(exactYear = false) {
+  pausedFilm = exactYear && playing && uniforms.uYear.value < config.yearMax
+    ? { year: uniforms.uYear.value, orbitT: filmOrbitFrame?.orbitT ?? playT0 } : null;
   playing = false;
+  // A manual pause keeps the exact orbit state for resume; every other stop resets the next film's camera arc.
+  if (!exactYear) filmOrbitFrame = null;
   uniforms.uPlaying.value = 0;
   uniforms.uRise.value = 0.01;
-  uniforms.uYear.value = Math.round(uniforms.uYear.value);
-  // The count follows the rounded year at once, as the title does: the count only redraws in a frame while the film
-  // plays, so a year rounded up left it one year behind the map (the slower frames of the terrain showed it).
+  // Only the Play button's pause action needs exact resume and monotonic samples. Handle movements and
+  // other cancellations retain the old rounding behavior before they choose a whole year.
+  if (!exactYear) uniforms.uYear.value = Math.round(uniforms.uYear.value);
+  clearTimeout(arrivalTimer);
+  filmNote.hidden = true;
   drawHist();
   playIcon.setAttribute('d', 'M4 2.5v11l9-5.5z');
-  playBtn.setAttribute('aria-label', T('ui.play'));   // in the page's language, not English
+  playBtn.setAttribute('aria-label', T('ui.play'));
+  playBtn.title = T('ui.film.playHint');
+  const paused = pausedFilm;
+  if (paused) queueMicrotask(() => {
+    if (playing || pausedFilm !== paused) return;
+    // The snapshot, not this display-only floor, owns resume time and orbit. Deferring the uniform change also lets
+    // the pause click finish at its sampled year; wake one idle frame to render the settled display.
+    uniforms.uYear.value = Math.floor(paused.year);
+    frameDue = -1;
+    drawHist();
+  });
 }
-playBtn.onclick = () => playing ? stopPlay() : startPlay();
+playBtn.onclick = event => {
+  if (longPressArmed) { event.preventDefault(); longPressArmed = false; return; }
+  if (playing) stopPlay(true);
+  else startPlay(event.shiftKey);
+};
+playBtn.addEventListener('pointerdown', event => {
+  if (event.button !== 0 || event.shiftKey) return;
+  longPressArmed = false;
+  longPressTimer = setTimeout(() => { longPressArmed = true; startPlay(true); }, 650);
+});
+playBtn.addEventListener('pointerup', () => clearTimeout(longPressTimer));
+for (const name of ['pointercancel', 'pointerleave']) playBtn.addEventListener(name, () => {
+  clearTimeout(longPressTimer);
+  longPressArmed = false;
+});
 
 // ---------- Buildings without a year ----------
 // Left alone they stand at "Today" and leave whenever the map shows the past: during Play, with the timeline dragged
@@ -3611,6 +3783,12 @@ let unknownSolo = false, unknownWas = null;
 function stepUnknown(dt) {
   const { shown, solo } = unknownNow();
   const u = uniforms.uShowUnknown;
+  // A target switch can be the only change on an idle map. Wake it and render the whole eased transition;
+  // solo and reduced-motion switches snap, so they need just this frame.
+  if (unknownWas !== null && (shown !== unknownWas || solo !== unknownSolo)) {
+    invalidate(calm.matches || solo !== unknownSolo ? 0 : 1000);
+    frameDue = -1;
+  }
   if (solo !== unknownSolo || calm.matches) u.value = shown ? 1 : 0;
   else u.value = easeShown(u.value, shown, dt);
   if (shown !== unknownWas || solo !== unknownSolo) syncUnknownSwitch();
@@ -4107,6 +4285,7 @@ function setLang(l) {
   const u = new URL(location.href);
   if (u.searchParams.has('lang')) { u.searchParams.delete('lang'); history.replaceState(null, '', u); }
   applyStaticText(); renderPanel(); drawHist();
+  playBtn.title = T('ui.film.playHint');
   if (sunButton) sunButton.title = sunLabel(sunMode);   // the sun's button follows the language too
   if (tourButton && tour) tourButton.textContent = T('ui.tour.open');
   if (tourOpen) renderTour();
@@ -4124,7 +4303,7 @@ document.querySelectorAll('.lang [data-lang]').forEach(b => b.onclick = () => se
 function applyLook(name) {
   invalidate(400);   // everything drawn in the look's colours re-inks; the new sky eases for a breath (#23)
   applyPageLook(name);
-  if (name === 'foto') loadPhotoColours();
+  if (name === 'foto') afterReveal.add('foto', loadPhotoColours);
   uniforms.uFoto.value = name === 'foto' && uniforms.uRoof.value ? 1 : 0;
   uniforms.uFotoGround.value = uniforms.uFoto.value && fotoGroundOn() ? 1 : 0;
   periods.forEach((p, i) => {
@@ -4171,14 +4350,20 @@ function applySky() {
   const sky = skyNow();
   renderer.setClearColor(sky);
   uniforms.uFogColor.value.set(sky);
+  syncDisplaySky(THREE, uniforms);
 }
 // Night: the sky's light gone, the fog with it, and the page's own ground (the canvas is transparent, the sky behind it
 // is --bg). Kept out of skyNow and applySky, which web/test/weather.test.mjs holds to their exact shape.
+// Night sky darkening happens in the colour space the visitors see: with colour management on, a linear multiply of
+// 0.14 would come back brighter than the sky it replaces, so dim the hex digits as they are authored.
+const dimSrgb = (hex, k) => '#' + hex.replace(/^#/, '').replace(/../g,
+  h => Math.round(parseInt(h, 16) * k).toString(16).padStart(2, '0'));
 function applyNightSky(night) {
   if (night) {
-    const dark = '#' + new THREE.Color(THEME.sky).multiplyScalar(0.14).getHexString();
+    const dark = dimSrgb(THEME.sky, 0.14);
     renderer.setClearColor(dark, 1);
     uniforms.uFogColor.value.set(dark);
+    syncDisplaySky(THREE, uniforms);
     document.documentElement.style.setProperty('--bg', dark);
   } else if (THEME?.ui?.['--bg']) {
     document.documentElement.style.setProperty('--bg', THEME.ui['--bg']);
@@ -4220,6 +4405,7 @@ looks.subscribe(applyLook);
 applyStaticText();
 renderPanel();
 if (photoOnly) setPhotoOnly(true);
+scheduleDeferredLayers();
 applyLook(looks.current);
 // Vegetation (web/veg.js): the real OSM trees and green areas of Zagreb. Loaded after the map stands, so the first
 // view is never delayed by it; a missing file leaves the map exactly as it was. ?veg=0 turns it off.
@@ -4232,13 +4418,19 @@ const vegDebug = new URLSearchParams(location.search).get('vegdebug') === '1'
   : null;
 if (vegDebug) document.body.appendChild(vegDebug);
 performance.mark('veg-start');
-makeVeg({ THREE, base: DATA, scene, uniforms, on: new URLSearchParams(location.search).get('veg') !== '0' })
-  .then(v => {
+async function loadTrees() {
+  try {
+    const v = await makeVeg({ THREE, base: DATA, scene, uniforms, config, surfaceAt,
+      on: new URLSearchParams(location.search).get('veg') !== '0' });
     performance.measure('veg', 'veg-start');
-    veg = v; v.retheme(looks.current); syncVegNight();   // Night, if that is the mode the visitor arrived in
+    veg = v;
+    v.retheme(looks.current);
+    syncVegNight();
     if (vegDebug) vegDebug.textContent = `veg: ${v.trees.toLocaleString()} trees, ${v.triangles.toLocaleString()} green tris, ${v.on ? 'ON' : 'OFF'}`;
-  })
-  .catch(e => { if (vegDebug) vegDebug.textContent = `veg: FAILED ${e && e.message ? e.message : e}`; });
+  } catch (error) {
+    if (vegDebug) vegDebug.textContent = `veg: FAILED ${error && error.message ? error.message : error}`;
+  }
+}
 // Trams (web/trams.js, web/trams-layer.js): ZET's real network, its timetable and its live vehicles. Loaded after the
 // map stands, like the vegetation, so the first view is never delayed by it; a missing file leaves the map as it was.
 // ?tram=0 turns it off. They show by the boats' rule (boatsShown): at Today only, never while the years play or in a
@@ -4246,29 +4438,63 @@ makeVeg({ THREE, base: DATA, scene, uniforms, on: new URLSearchParams(location.s
 const tramsOn = new URLSearchParams(location.search).get('tram') !== '0';
 const tramsShown = () => !!trams && boatsShown({ on: tramsOn, year: uniforms.uYear.value, yearMax: config.yearMax, playing,
   story: document.body.classList.contains('scene-on') });
-makeTrams({ THREE, base: TRAMS_DATA, scene, camera, surfaceAt, on: tramsOn })
-  .then(t => {
-    trams = t;
-    window.__trams = () => t;          // a dev hook: what the layer drew and what is under a point, for probes
-    t.setNight(sunMode === 'night');   // unlit materials glow in the Night mode without this
-    t.step(tramsShown());
-  })
-  .catch(e => console.warn('The trams did not load.', e));
+async function loadTrams() {
+  try {
+    trams = await makeTrams({ THREE, base: TRAMS_DATA, scene, camera, surfaceAt, on: tramsOn });
+    window.__trams = () => trams;      // a dev hook: what the layer drew and what is under a point, for probes
+    trams.setNight(!!uniforms.uNight.value);   // unlit materials glow in the Night mode without this
+    trams.step(tramsShown());
+  } catch (error) {
+    console.warn('The trams did not load.', error);
+  }
+}
 // The streets (pipeline/s17_zagreb_roads.py): 95,754 ways and 5,821 lamps, laid under the buildings, and lit in the
 // Night mode. Their mesher is web/roads-worker.js (#27): it needs the terrain's (t, cut) texture to pin every
 // vertex's ground, so they start where the terrain lands (startRoads below), not at boot.
+// The queued street loader receives a real grid after terrain succeeds, or the flat fallback after it fails.
 let roadsStarted = false;
-function startRoads(baseGrid) {
+async function startRoads(baseGrid) {
   if (roadsStarted) return;
   roadsStarted = true;
-  makeRoads({ THREE, base: DATA, baseGrid, scene, surfaceAt, uniforms })
-    .then(r => {
-      roads = r;
-      window.__roads = () => r;          // a dev hook: what was drawn, for probes
-      roads.setNight(sunMode === 'night');
-      console.log('streets', r.drawn);
-    })
-    .catch(e => console.warn('The streets did not load.', e));
+  try {
+    roads = await makeRoads({ THREE, base: DATA, baseGrid, scene, surfaceAt, uniforms, config });
+    window.__roads = () => roads;
+    roads.setNight(!!uniforms.uNight.value);
+    console.log('streets', roads.drawn);
+  } catch (error) {
+    console.warn('The streets did not load.', error);
+  }
+}
+const FLAT_GRID = { tex: new Float32Array(2), x0: 0, z0: 0, cell: 1, nx: 1, nz: 1 };
+function scheduleDeferredLayers() {
+  // The periphery's packs, once the eye has the centre: the two lanes would otherwise race the reveal for the line.
+  afterReveal.add('restPacks', fetchRestPacks);
+  afterReveal.add('terrain', async () => {
+    const base = loadBase();
+    base.catch(optional('The water (or the flat land)'));
+    loadLabels().catch(optional('The street names'));
+    if (FEATURES.ferries) loadFerries().catch(optional('The boats'));
+    terrainRoadGrid = FLAT_GRID;
+    if (!TERRAIN) return;
+    try { await loadTerrain(base); }
+    catch (e) {
+      terrainState = 'failed';
+      console.warn('The terrain did not load; the map stays flat.', e);
+      showFlat().catch(optional('The land'));
+      switcher.markRelief();
+    }
+  });
+  // Attributes follow terrain; they must not wait for the visual layers below.
+  afterReveal.add('attributes', () => loadAttrs().catch(optional('The attributes')));
+  afterReveal.add('roads', () => startRoads(terrainRoadGrid));
+  afterReveal.add('trees', loadTrees);
+  if (looks.current === 'foto') afterReveal.add('foto', loadPhotoColours);
+  afterReveal.add('cityHeight', () => loadCityHeight().catch(optional('The shadows')));
+  afterReveal.add('monuments', () => loadMonuments().catch(optional('The monuments')));
+  afterReveal.add('facts', () => loadFacts().catch(optional('The history facts')));
+  afterReveal.add('funicular', () => loadFunicular().catch(optional('The funicular')));
+  afterReveal.add('tour', () => loadTour().catch(optional('The sightseeing walk')));
+  afterReveal.add('trams', loadTrams);
 }
 // ?at=x,z (engine local metres, +x east, -z north) and &dist=meters: open the map over a chosen place, e.g. a park.
 {
@@ -4345,6 +4571,7 @@ function stats() {
   return {
     version, theme: THEME_NAME, tileSize: config.tileSize, calls: r.calls, triangles: r.triangles, geometries: m.geometries,
     textures: m.textures, fps: Math.round(fps * 10) / 10, tiles: loaded, tilesTotal: config.tiles.length,
+    assets: Math.max(0, config.tiles.length - loaded),   // #24: remaining tile work, never an undefined sentinel
     labels: labelsShown, roofYears: roofYears?.shown, distance: Math.round(camera.position.distanceTo(controls.target)), decoder: decoder(),
     pixelRatio: renderer.getPixelRatio(), viewport: [innerWidth, innerHeight],
     terrain: terrainState, relief: Math.round(uRelief.value * 100) / 100, terrainChunks: chunkMeshes.length,
@@ -4359,7 +4586,7 @@ if (new URLSearchParams(location.search).has('debug')) {
   setInterval(() => { el.querySelector('pre').textContent = JSON.stringify(stats(), null, 1).slice(2, -2); }, 500);
 }
 
-let frame = 0, deferredRequested = false;
+let frame = 0;
 let frameDue = -1, weatherMoved = false, lastDueAt = 0;   // #23 scheduling: timestamps belong to drawn frames
 renderer.setAnimationLoop(now => {
   frame++;
@@ -4431,32 +4658,28 @@ renderer.setAnimationLoop(now => {
   trams?.step(tramsShown());   // the trams: the timetable now, or ZET's live position where the feed has one
   facts?.setYear(uniforms.uYear.value);   // an event appears once the timeline reaches its year
   if (playing) {
-    const t = Math.min(1, playT0 + (now - playStart) / DURATION);
+    // A click can land inside a frame whose rAF timestamp predates playStart. Never let that frame rewind the film.
+    const t = Math.min(1, Math.max(playT0, playT0 + (now - playStart) / DURATION));
     uniforms.uYear.value = playYear(t);
     // A flight lasts about 0.8 s on screen whatever the film's pace: as many years as the film covers in that time.
     uniforms.uRise.value = Math.max(2, (playYear(Math.min(1, t + 800 / DURATION)) - playYear(t)));
-    if (t >= 1) stopPlay();
+    if (!calm.matches) {
+      filmOrbitFrame.orbitT = filmOrbitProgress(t, playT0, filmOrbitFrame.orbitT0);
+      const azimuth = filmOrbitFrame.azimuth + filmOrbit(filmOrbitFrame.orbitT, false);
+      camera.position.x = controls.target.x + filmOrbitFrame.horizontal * Math.sin(azimuth);
+      camera.position.z = controls.target.z + filmOrbitFrame.horizontal * Math.cos(azimuth);
+      controls.update();
+    }
+    if (t >= 1) {
+      stopPlay();
+      showFilmArrival();
+    }
     drawHist();
   }
   if (postcard.on) drawShot(); else renderer.render(scene, camera);
   // The poster's copy of the frame is as large as the screen's buffer: let go once the Poster is not on screen.
   if (!postcard.on || postcard.filter !== 'poster') posterPass.release();
-  if (!deferredRequested && meshes.length) {
-    deferredRequested = true;
-    if (!TERRAIN) startRoads({ tex: new Float32Array(2), x0: 0, z0: 0, cell: 1, nx: 1, nz: 1 });   // a flat build
-    const base = loadBase();
-    base.catch(optional('The water (or the flat land)'));
-    loadLabels().catch(optional('The street names'));
-    if (FEATURES.ferries) loadFerries().catch(optional('The boats'));
-    loadTerrain(base).catch(e => {
-      terrainState = 'failed';
-      console.warn('The terrain did not load; the map stays flat.', e);
-      showFlat().catch(optional('The land'));
-      switcher.markRelief();   // the slider is disabled and its line says the heights did not load
-      // The streets keep their old flat fallback: ground at zero everywhere, drawn at their own lift.
-      startRoads({ tex: new Float32Array(2), x0: 0, z0: 0, cell: 1, nx: 1, nz: 1 });
-    });
-  }
+  // Deferred loading is scheduled once, behind the reveal, by scheduleDeferredLayers.
 });
 
 // The tooltip steps that run frame-cheap even when the city idles.
@@ -4499,7 +4722,7 @@ const scenePlayer = mountScenePlayer({ THREE, scene: storyGroup, faint: setFaint
 
 window.__dbg = { get veg() { return veg; }, get facts() { return facts; }, pinFact, setFacts, setSun,
   get sun() { return sunState; }, applySunMode, get sunMode() { return sunMode; },
-  get monuments() { return monuments; }, pinMonument, setMonuments, scenePlayer, renderer, stats, goHome, viewAt, pick, uniforms, camera, controls, setLayer, layers, pinCard, showCard, building, attrTally, setHideEst, setPhotoOnly, setPlaques, get plaquesOn() { return plaquesOn; }, setMetro, get metroOn() { return metroOn; }, get storyLayers() { return [...storyLayers]; }, metroLayer,
+  get monuments() { return monuments; }, pinMonument, setMonuments, scenePlayer, renderer, stats, goHome, viewAt, pick, uniforms, camera, controls, setLayer, layers, pinCard, showCard, building, get attrTally() { return attrTally; }, setHideEst, setPhotoOnly, setPlaques, get plaquesOn() { return plaquesOn; }, setMetro, get metroOn() { return metroOn; }, get storyLayers() { return [...storyLayers]; }, metroLayer,
   get ferries() { return ferries; }, setBoats, get boatTip() { return boatTip.shown; }, get boatsOn() { return boatsOn; }, pinStation, plaqueGroup, get photoGids() { return photoGids; }, meshes, labelGroup, get labels() { return labels; }, flyTo, faceNorth, startPlay, questClick, startQuest, get quests() { return quests; },
   get trams() { return trams; }, get tramTip() { return tramTip.shown; }, tramOver,
   get riding() { return ride ? ride.trip : null; }, startRide, endRide,
@@ -4515,4 +4738,4 @@ window.__dbg = { get veg() { return veg; }, get facts() { return facts; }, pinFa
   rendered: () => renderer.info.render.frame,
   northAzimuth: () => controls.getAzimuthalAngle(),
   treeCount: () => veg?.trees,   // the veg build's own count, not a scene walk
-  playState: () => ({ playing, year: uniforms.uYear.value }) };
+  playState: () => ({ playing, year: !playing && pausedFilm ? pausedFilm.year : uniforms.uYear.value, playT0, playStart, now: performance.now() }) };
