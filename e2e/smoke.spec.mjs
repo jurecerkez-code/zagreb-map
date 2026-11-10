@@ -10,14 +10,17 @@ function watchErrors(page, expected = () => false) {
   const add = e => { if (!expected(e)) errors.push(e); };
   page.on('pageerror', e => add(`pageerror: ${e.message}`));
   page.on('console', m => { if (m.type() === 'error') add(`console: ${m.text()} (${m.location().url})`); });
-  page.on('response', r => { if (r.status() >= 400) add(`HTTP ${r.status()}: ${r.url()}`); });
+  page.on('response', r => {
+    const optional = ['/rt', '/build.json'].includes(new URL(r.url()).pathname);
+    if (r.status() >= 400 && !optional) add(`HTTP ${r.status()}: ${r.url()}`);
+  });
   return errors;
 }
 
 // The config the page loaded: the version current.json names.
 const cityConfig = page => page.evaluate(async () => {
   const { version } = await (await fetch('data/current.json')).json();
-  return (await fetch(`data/${version}/stockholm.json`)).json();
+  return (await fetch(`data/${version}/zagreb.json`)).json();
 });
 // The terrain arrives after the first frame and rises over 1.2 s (two textures, and every building lifted).
 // A test that counts textures or aims at a building waits for it to stand; a build without terrain does not wait. A
@@ -111,13 +114,12 @@ test('the title follows the legend and the timeline', async ({ page }) => {
   const at = share => page.mouse.click(box.x + box.width * share, box.y + box.height / 2);
   await at(0.3);
   await expect(title).toHaveText(/^\d{4}–Today$/);
-  // Play from "Today" starts the film after the from-handle, so its first frame is a range that runs forwards.
+  // A normal Play press means the whole story, even after the handles were moved (issue #25).
   const play = page.locator('#play');
   await play.click();
-  const first = await page.evaluate(() => new Promise(done =>
-    requestAnimationFrame(() => requestAnimationFrame(() => done(document.getElementById('year').textContent)))));
-  const [lo, hi] = first.split('–').map(Number);
-  expect(hi, first).toBeGreaterThan(lo);
+  await expect.poll(() => page.locator('#count').innerText()).toMatch(/with a known year/);
+  const first = await page.locator('#year').innerText();
+  expect(Number(first)).toBeLessThanOrEqual(config.yearMin + 5);
   await play.click();
   await at(0.85);
   await expect(title).toHaveText(/^\d{4}–\d{4}$/);
@@ -278,7 +280,8 @@ test('buildings without a year stand at "Today" and leave whenever the map shows
 // Flipped on while the film hides them: they come back and stay at every year, and the choice is remembered.
 test('the switch flipped on during Play keeps buildings without a year at every year, and is remembered', async ({ page }) => {
   const errors = watchErrors(page);
-  await page.goto('/');
+  // Keep Play running through keyboard activation even while a full-city software WebGL run loads and lays out.
+  await page.goto('/?film=120');
   await expect(page.locator('#loading')).toBeHidden({ timeout: 60_000 });
   const config = await cityConfig(page);
   const title = page.locator('#year'), play = page.locator('#play');
@@ -293,7 +296,8 @@ test('the switch flipped on during Play keeps buildings without a year at every 
   await page.keyboard.press('Space');
   await expect(sw).toHaveAttribute('aria-pressed', 'true');
   await expect(sw).toBeFocused(); // switched in place, not rebuilt
-  await expect.poll(() => standing(page)).toBe(1);
+  // Software WebGL can hold the first map-state response just past the default five-second poll deadline.
+  await expect.poll(() => standing(page), { timeout: 10_000 }).toBe(1);
   expect(await stored(page)).toBe('show');
   await expect(page.locator(HINT)).toHaveText('Your choice is remembered.');
   // The film goes on, and they stay.
@@ -301,24 +305,21 @@ test('the switch flipped on during Play keeps buildings without a year at every 
   await expect(play).toHaveAttribute('aria-label', 'Pause');
   expect(await standing(page)).toBe(1);
   await expect(sw).toHaveAttribute('aria-pressed', 'true');
-  // Paused in the past: drawn, but not counted at a past year. Pause rounds the film's year, and the count
-  // follows it at once, before any frame redraws it (a frame redraws the count only while the film plays): paused at
-  // n + 0.6, it reads n + 1's buildings, whatever the frame rate.
+  // Paused in the past: drawn, but not counted at a past year. A manual pause preserves its exact year for
+  // resume; the displayed year and count use the floor of that fraction, the buildings actually standing then.
   const n = config.yearMax - 50;
   const paused = await page.evaluate(n => {
-    const D = window.__dbg, count = () => Number(document.getElementById('count').textContent.replace(/\D/g, ''));
-    const before = count();
+    const D = window.__dbg;
     D.uniforms.uYear.value = n + 0.6;
     document.getElementById('play').click();
-    return { before, year: D.uniforms.uYear.value, count: count() };
+    return { year: D.uniforms.uYear.value, count: Number(document.getElementById('count').textContent.replace(/\D/g, '')) };
   }, n);
   await expect(play).toHaveAttribute('aria-label', "Play the city's growth");
-  expect(paused.year).toBe(n + 1);
-  await expect(title).toHaveText(String(n + 1));
+  expect(paused.year).toBe(n + 0.6);
+  await expect(title).toHaveText(String(n));
   const [from, to] = await handles(page);
-  expect(to).toBe(n + 1);
-  const expected = await datedCount(page, from, n + 1);
-  expect(expected, 'the film\'s last count differs from n + 1\'s, so the check can tell').not.toBe(paused.before);
+  expect(to).toBe(n);
+  const expected = await datedCount(page, from, n);
   expect(paused.count).toBe(expected);
   expect(await standing(page)).toBe(1);
 

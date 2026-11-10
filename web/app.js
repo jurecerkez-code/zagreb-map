@@ -34,7 +34,7 @@ import { mountSwitcher } from './switcher.js';
 import { initialCollapsed, LEGEND_KEY, photoOnlyFrom, photoOnlyHref, markPhotos, plaquesOnFrom, plaquesHref, PLAQUE_KEY,
   questsOnFrom, QUESTS_KEY } from './panel.js';
 import { cityCount, layerCount, tallyTitle, tallyFromAttrs, periodCounts } from './count.js';
-import { placeLabels, labelAt, stepYear } from './timeline.js';
+import { placeLabels, labelAt, stepYear, filmYear, filmTimeAtYear, filmOrbit, filmOrbitProgress, countDatedAt } from './timeline.js';
 import { unknownShown, readPref, writePref, prefAfterClick, unknownHint, easeShown } from './unknown.js';
 import { makeGround, cutFactor, levelAt, LOD_TOL, parsePolygons, fadeWidth, fadeAtGrid, askWorker, withTimeout,
   FETCH_TIMEOUT_MS } from './terrain.js';
@@ -3475,9 +3475,17 @@ function drawHist() {
   const tally = tallyTitle({ from: Yf, to: Y, start: config.yearMin, end: config.yearMax,
     period: solo && { name: tr(solo, 'label'), from: solo.from, to: solo.to } }, t);
   const yearEl = document.getElementById('year');
-  yearEl.textContent = tally.title;
-  yearEl.classList.toggle('named', tally.kind === 'period');
-  document.getElementById('count').textContent = fmt(visibleCount());
+  yearEl.textContent = playing || !Number.isInteger(Y) ? String(Math.floor(Y)) : tally.title;
+  yearEl.classList.toggle('named', !playing && tally.kind === 'period');
+  // A natural finish keeps the dated tally under its arrival note until the next timeline interaction.
+  const filmTally = playing || !filmNote.hidden;
+  document.getElementById('count').textContent = filmTally
+    ? T('ui.film.known', { n: fmt(datedFilmCount()) })
+    : fmt(visibleCount());
+  if (playing) {
+    filmNote.hidden = false;
+    filmNote.textContent = T('ui.film.unknown', { n: fmt(unknownFilmCount()) });
+  }
   document.getElementById('tally-note').textContent = tally.note && ` · ${tally.note}`;
 }
 
@@ -3558,7 +3566,7 @@ function setHandle(which, y) {
 function moveHandle(x) { setHandle(handle, yearOf(x)); }
 function placeGrips() {
   const set = (el, k, v) => { if (el.getAttribute(k) !== v) el.setAttribute(k, v); };
-  const from = Math.round(uniforms.uYearFrom.value), to = Math.round(uniforms.uYear.value);
+  const from = Math.round(uniforms.uYearFrom.value), to = Math.floor(uniforms.uYear.value);
   // every position read before any is written: a write between two reads of the canvas's width forces a layout each
   // frame of Play
   const at = { uYearFrom: xOf(from), uYear: xOf(to) };
@@ -3598,37 +3606,106 @@ for (const [which, el] of Object.entries(grips)) {
   });
 }
 
-// Play: quickly through the sparse centuries, then slowly through the dense ones.
-let playing = false, playT0 = 0, playStart = 0;
+// Play: the whole story from 1200 to today. Shift-click or a long press keeps the handle-based start.
+let playing = false, playT0 = 0, playStart = 0, pausedFilm = null, filmOrbitFrame = null;
 const playBtn = document.getElementById('play');
 const playIcon = document.getElementById('play-icon');
 const DURATION = (+new URLSearchParams(location.search).get('film') || 30) * 1000; // ?film=6 for a short film
-function playYear(t) {
-  const k = 0.35; // share of time spent before 1850
-  return t < k ? T0 + (1850 - T0) * (t / k) : 1850 + (config.yearMax - 1850) * ((t - k) / (1 - k));
+const filmNote = document.createElement('small');
+filmNote.id = 'film-unknown-note';
+filmNote.hidden = true;
+filmNote.style.fontSize = '12px';
+filmNote.setAttribute('aria-live', 'off');
+document.getElementById('count').after(filmNote);
+let longPressTimer = null, longPressArmed = false, arrivalTimer = null;
+playBtn.title = T('ui.film.playHint');
+function playYear(t) { return filmYear(t, config.histogram, T0, config.yearMax); }
+const unknownFilmCount = () => config.unknown ?? config.stats?.unknown ?? 0;
+function datedFilmCount() {
+  return countDatedAt(uniforms.uYear.value, config.histogram, config.histogramEst);
 }
-function startPlay() {
-  playing = true; playStart = performance.now();
-  // From "Today" the film starts again, just after the from-handle: before it everything stays faded.
-  if (uniforms.uYear.value >= config.yearMax) uniforms.uYear.value = Math.max(T0, uniforms.uYearFrom.value + 1);
-  playT0 = 0;
-  while (playT0 < 1 && playYear(playT0) < uniforms.uYear.value) playT0 += 0.001;
+function showFilmArrival() {
+  invalidate(1000);   // the undated buildings' 0.88 s rise, plus scheduling slack (#25)
+  clearTimeout(arrivalTimer);
+  filmNote.hidden = false;
+  filmNote.textContent = T('ui.film.arrival');
+  arrivalTimer = setTimeout(() => { filmNote.hidden = true; }, 3000);
+}
+function startPlay(fromHandles = false) {
+  const paused = !fromHandles && pausedFilm !== null &&
+    (uniforms.uYear.value === pausedFilm.year || uniforms.uYear.value === Math.floor(pausedFilm.year)) ? pausedFilm : null;
+  if (paused) uniforms.uYear.value = paused.year;
+  else if (!fromHandles) {
+    setHandle('uYearFrom', FROM_REST);
+    uniforms.uYear.value = T0;
+  } else if (uniforms.uYear.value >= config.yearMax) {
+    // Preserve the old power-user behaviour: below Today, start at the current handle; from Today,
+    // start again just after the from-handle.
+    uniforms.uYear.value = Math.max(T0, uniforms.uYearFrom.value + 1);
+  }
+  pausedFilm = null;
+  playing = true;
+  // An idle frame sets frameDue to Infinity. Wake the scheduler, or Play stays at its first year forever.
+  frameDue = -1;
+  playT0 = filmTimeAtYear(uniforms.uYear.value, config.histogram, T0, config.yearMax);
+  const resumedOrbit = paused ? filmOrbitFrame : null;
+  const dx = camera.position.x - controls.target.x, dz = camera.position.z - controls.target.z;
+  filmOrbitFrame = {
+    azimuth: resumedOrbit?.azimuth ?? controls.getAzimuthalAngle() - filmOrbit(playT0, calm.matches),
+    horizontal: Math.hypot(dx, dz),
+    orbitT0: paused?.orbitT ?? playT0,
+    orbitT: paused?.orbitT ?? playT0,
+  };
   playIcon.setAttribute('d', 'M4 2.5h3v11H4zM9 2.5h3v11H9z');
   uniforms.uPlaying.value = 1;
   playBtn.setAttribute('aria-label', T('ui.pause'));
+  playBtn.title = T('ui.film.playHint');
+  drawHist();
+  // Never charge synchronous inversion or initialization to resumed film time.
+  playStart = performance.now();
 }
-function stopPlay() {
+function stopPlay(exactYear = false) {
+  pausedFilm = exactYear && playing && uniforms.uYear.value < config.yearMax
+    ? { year: uniforms.uYear.value, orbitT: filmOrbitFrame?.orbitT ?? playT0 } : null;
   playing = false;
+  // A manual pause keeps the exact orbit state for resume; every other stop resets the next film's camera arc.
+  if (!exactYear) filmOrbitFrame = null;
   uniforms.uPlaying.value = 0;
   uniforms.uRise.value = 0.01;
-  uniforms.uYear.value = Math.round(uniforms.uYear.value);
-  // The count follows the rounded year at once, as the title does: the count only redraws in a frame while the film
-  // plays, so a year rounded up left it one year behind the map (the slower frames of the terrain showed it).
+  // Only the Play button's pause action needs exact resume and monotonic samples. Handle movements and
+  // other cancellations retain the old rounding behavior before they choose a whole year.
+  if (!exactYear) uniforms.uYear.value = Math.round(uniforms.uYear.value);
+  clearTimeout(arrivalTimer);
+  filmNote.hidden = true;
   drawHist();
   playIcon.setAttribute('d', 'M4 2.5v11l9-5.5z');
-  playBtn.setAttribute('aria-label', T('ui.play'));   // in the page's language, not English
+  playBtn.setAttribute('aria-label', T('ui.play'));
+  playBtn.title = T('ui.film.playHint');
+  const paused = pausedFilm;
+  if (paused) queueMicrotask(() => {
+    if (playing || pausedFilm !== paused) return;
+    // The snapshot, not this display-only floor, owns resume time and orbit. Deferring the uniform change also lets
+    // the pause click finish at its sampled year; wake one idle frame to render the settled display.
+    uniforms.uYear.value = Math.floor(paused.year);
+    frameDue = -1;
+    drawHist();
+  });
 }
-playBtn.onclick = () => playing ? stopPlay() : startPlay();
+playBtn.onclick = event => {
+  if (longPressArmed) { event.preventDefault(); longPressArmed = false; return; }
+  if (playing) stopPlay(true);
+  else startPlay(event.shiftKey);
+};
+playBtn.addEventListener('pointerdown', event => {
+  if (event.button !== 0 || event.shiftKey) return;
+  longPressArmed = false;
+  longPressTimer = setTimeout(() => { longPressArmed = true; startPlay(true); }, 650);
+});
+playBtn.addEventListener('pointerup', () => clearTimeout(longPressTimer));
+for (const name of ['pointercancel', 'pointerleave']) playBtn.addEventListener(name, () => {
+  clearTimeout(longPressTimer);
+  longPressArmed = false;
+});
 
 // ---------- Buildings without a year ----------
 // Left alone they stand at "Today" and leave whenever the map shows the past: during Play, with the timeline dragged
@@ -3654,6 +3731,12 @@ let unknownSolo = false, unknownWas = null;
 function stepUnknown(dt) {
   const { shown, solo } = unknownNow();
   const u = uniforms.uShowUnknown;
+  // A target switch can be the only change on an idle map. Wake it and render the whole eased transition;
+  // solo and reduced-motion switches snap, so they need just this frame.
+  if (unknownWas !== null && (shown !== unknownWas || solo !== unknownSolo)) {
+    invalidate(calm.matches || solo !== unknownSolo ? 0 : 1000);
+    frameDue = -1;
+  }
   if (solo !== unknownSolo || calm.matches) u.value = shown ? 1 : 0;
   else u.value = easeShown(u.value, shown, dt);
   if (shown !== unknownWas || solo !== unknownSolo) syncUnknownSwitch();
@@ -4150,6 +4233,7 @@ function setLang(l) {
   const u = new URL(location.href);
   if (u.searchParams.has('lang')) { u.searchParams.delete('lang'); history.replaceState(null, '', u); }
   applyStaticText(); renderPanel(); drawHist();
+  playBtn.title = T('ui.film.playHint');
   if (sunButton) sunButton.title = sunLabel(sunMode);   // the sun's button follows the language too
   if (tourButton && tour) tourButton.textContent = T('ui.tour.open');
   if (tourOpen) renderTour();
@@ -4481,11 +4565,22 @@ renderer.setAnimationLoop(now => {
   trams?.step(tramsShown());   // the trams: the timetable now, or ZET's live position where the feed has one
   facts?.setYear(uniforms.uYear.value);   // an event appears once the timeline reaches its year
   if (playing) {
-    const t = Math.min(1, playT0 + (now - playStart) / DURATION);
+    // A click can land inside a frame whose rAF timestamp predates playStart. Never let that frame rewind the film.
+    const t = Math.min(1, Math.max(playT0, playT0 + (now - playStart) / DURATION));
     uniforms.uYear.value = playYear(t);
     // A flight lasts about 0.8 s on screen whatever the film's pace: as many years as the film covers in that time.
     uniforms.uRise.value = Math.max(2, (playYear(Math.min(1, t + 800 / DURATION)) - playYear(t)));
-    if (t >= 1) stopPlay();
+    if (!calm.matches) {
+      filmOrbitFrame.orbitT = filmOrbitProgress(t, playT0, filmOrbitFrame.orbitT0);
+      const azimuth = filmOrbitFrame.azimuth + filmOrbit(filmOrbitFrame.orbitT, false);
+      camera.position.x = controls.target.x + filmOrbitFrame.horizontal * Math.sin(azimuth);
+      camera.position.z = controls.target.z + filmOrbitFrame.horizontal * Math.cos(azimuth);
+      controls.update();
+    }
+    if (t >= 1) {
+      stopPlay();
+      showFilmArrival();
+    }
     drawHist();
   }
   if (postcard.on) drawShot(); else renderer.render(scene, camera);
@@ -4549,7 +4644,7 @@ const scenePlayer = mountScenePlayer({ THREE, scene: storyGroup, faint: setFaint
 
 window.__dbg = { get veg() { return veg; }, get facts() { return facts; }, pinFact, setFacts, setSun,
   get sun() { return sunState; }, applySunMode, get sunMode() { return sunMode; },
-  get monuments() { return monuments; }, pinMonument, setMonuments, scenePlayer, renderer, stats, goHome, viewAt, pick, uniforms, camera, controls, setLayer, layers, pinCard, showCard, building, attrTally, setHideEst, setPhotoOnly, setPlaques, get plaquesOn() { return plaquesOn; }, setMetro, get metroOn() { return metroOn; }, get storyLayers() { return [...storyLayers]; }, metroLayer,
+  get monuments() { return monuments; }, pinMonument, setMonuments, scenePlayer, renderer, stats, goHome, viewAt, pick, uniforms, camera, controls, setLayer, layers, pinCard, showCard, building, get attrTally() { return attrTally; }, setHideEst, setPhotoOnly, setPlaques, get plaquesOn() { return plaquesOn; }, setMetro, get metroOn() { return metroOn; }, get storyLayers() { return [...storyLayers]; }, metroLayer,
   get ferries() { return ferries; }, setBoats, get boatTip() { return boatTip.shown; }, get boatsOn() { return boatsOn; }, pinStation, plaqueGroup, get photoGids() { return photoGids; }, meshes, labelGroup, get labels() { return labels; }, flyTo, faceNorth, startPlay, questClick, startQuest, get quests() { return quests; },
   get trams() { return trams; }, get tramTip() { return tramTip.shown; }, tramOver,
   get riding() { return ride ? ride.trip : null; }, startRide, endRide,
@@ -4565,4 +4660,4 @@ window.__dbg = { get veg() { return veg; }, get facts() { return facts; }, pinFa
   rendered: () => renderer.info.render.frame,
   northAzimuth: () => controls.getAzimuthalAngle(),
   treeCount: () => veg?.trees,   // the veg build's own count, not a scene walk
-  playState: () => ({ playing, year: uniforms.uYear.value }) };
+  playState: () => ({ playing, year: !playing && pausedFilm ? pausedFilm.year : uniforms.uYear.value, playT0, playStart, now: performance.now() }) };
