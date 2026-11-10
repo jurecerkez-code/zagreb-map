@@ -185,7 +185,7 @@ export async function makeTrams({ THREE, base, scene, camera, surfaceAt, on = tr
   // ZET's feed sends no CORS header, so a browser cannot read it directly and the dev server parses it at /rt. A
   // static host has no such endpoint, so a scheduled workflow publishes the same JSON to the `live` branch, and
   // raw.githubusercontent serves that with CORS. Local first, snapshot second.
-  const RT_SNAPSHOT = 'https://raw.githubusercontent.com/jurecerkez-code/zagreb-map/live/rt.json';
+  const RT_SNAPSHOT = 'https://raw.githubusercontent.com/jurecerkez-code/zagreb-map/refs/heads/live/rt.json';
   let liveVehicles = [];
   let liveAt = 0;
   async function fetchRt() {
