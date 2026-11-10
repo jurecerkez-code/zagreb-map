@@ -35,8 +35,10 @@ export function makeFacts({ THREE, list, surfaceAt, camera, renderer }) {
   ctx.arc(48, 48, 6.5, 0, Math.PI * 2);
   ctx.fillStyle = '#fffaf0';
   ctx.fill();
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace;
   const material = new THREE.SpriteMaterial({
-    map: new THREE.CanvasTexture(canvas), sizeAttenuation: false, depthTest: false, transparent: true,
+    map, sizeAttenuation: false, depthTest: false, transparent: true,
   });
 
   for (const fact of list) {

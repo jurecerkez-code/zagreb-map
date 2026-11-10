@@ -7,7 +7,7 @@
 // Freshness: GitHub throttles scheduled workflows hard at busy hours (sleeping runners show 1-2 h gaps), so the
 // bar is 3 h. The draw itself is the map's business; this probes the feed only.
 //   node scripts/trams_probe.mjs
-const RT = 'https://raw.githubusercontent.com/jurecerkez-code/zagreb-map/live/rt.json';
+const RT = 'https://raw.githubusercontent.com/jurecerkez-code/zagreb-map/refs/heads/live/rt.json';
 const MAX_AGE_S = 6 * 3600;
 
 const r = await fetch(`${RT}?t=${Date.now()}`, { cache: 'no-store' });

@@ -223,6 +223,7 @@ export function drawPoster(ctx, L, C) {
 // ---------- The pass ----------
 // The shader: each pixel of the copied frame to OKLab (sRGB decoded, LMS, cube roots: tone.js oklabLin's numbers), the
 // nearest match colour found, its ink written. uCount match colours are used of MAX_INKS.
+// #24: this pass reads and writes display bytes, so it must not get a tone/sRGB conversion tail.
 export const POSTER_FRAG = /* glsl */ `
 uniform sampler2D uFrame;
 uniform vec3 uMatch[${MAX_INKS}];
@@ -253,9 +254,10 @@ void main() {
 }`;
 
 // The pass: render(draw, inks) calls draw() (the frame, onto the canvas), copies the canvas into a texture and draws it
-// back through the inks (posterInks' result), one full-screen triangle pair. The renderer's colours are plain sRGB
-// (app.js: no colour management, linear output), so what is copied is what the screen shows, and the inks are written
-// as they are. The copy is as large as the drawing buffer, made again when that changes size and let go by release().
+// back through the inks (posterInks' result), one full-screen triangle pair. The canvas holds display sRGB bytes
+// (#24: the renderer's own tone map and encode wrote them there), so what is copied is what the screen shows, and the
+// inks are written raw: this pass is display-space by design and must NOT take the tone-mapping/colourspace tail.
+// The copy is as large as the drawing buffer, made again when that changes size and let go by release().
 export function makePosterPass(THREE, renderer) {
   let frame = null, labsFor = null;
   const size = new THREE.Vector2();

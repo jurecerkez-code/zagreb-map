@@ -7,12 +7,18 @@
 // Sizes: the tagged height (OSM or Wikidata P2048), else a typical height for the kind (pipeline side).
 // The timeline: a monument shows from its year (unveiling), and not in a `removed` span ([[1947, 1989]] for Jelačić);
 // one without a year always shows. Colours: bronze, stone and metal per look (MATERIALS), lit by the map's sun.
+import { DISPLAY_FOG_GLSL } from './display-fog.js';
+import { SUN_LIGHT } from './themes.js';
+
 export const MONUMENTS_KEY = 'hfh-monuments';
 export const monumentsOnFrom = stored => stored !== 'off';   // on by default
 
 // Per look: bronze, stone, metal (a figure's material), water (a fountain's basin). Unknown looks fall back to arg.
+// Foto shares Arg's woven materials because the two looks share their authored palette.
+const ARG_MATERIALS = { bronze: '#5f5340', stone: '#cdc6b8', metal: '#8c949a', gold: '#b8963e', water: '#4f8197' };
 export const MATERIALS = {
-  arg: { bronze: '#5f5340', stone: '#cdc6b8', metal: '#8c949a', gold: '#b8963e', water: '#4f8197' },
+  arg: ARG_MATERIALS,
+  foto: ARG_MATERIALS,
   kalk: { bronze: '#6a4f35', stone: '#e0d4bd', metal: '#8f969c', gold: '#bf9a45', water: '#7fa2b0' },
   blatimme: { bronze: '#a98656', stone: '#8d93a0', metal: '#a3afbf', gold: '#e6c066', water: '#3c6f9e' },
   paper: { bronze: '#57514b', stone: '#dddad2', metal: '#8f969a', gold: '#b39445', water: '#9fb9b8' },
@@ -156,7 +162,9 @@ export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, render
   group.name = 'monuments';
   const geos = shapes(THREE);
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uYear: uniforms.uYear, uSun: uniforms.uSun, uFog: uniforms.uFog, uFogColor: uniforms.uFogColor,
+    uniforms: { uYear: uniforms.uYear, uSun: uniforms.uSun, uSunCol: uniforms.uSunCol, uSkyCol: uniforms.uSkyCol,
+      uNight: uniforms.uNight, uFog: uniforms.uFog, uFogColor: uniforms.uFogColor,
+      uFogDisplay: uniforms.uFogDisplay,
       uYearMax: { value: yearMax }, uStone: { value: new THREE.Color() }, uFig: { value: [new THREE.Color(), new THREE.Color(), new THREE.Color()] },
       uWater: { value: new THREE.Color() }, uGold: { value: new THREE.Color() } },
     side: THREE.DoubleSide,
@@ -175,17 +183,24 @@ export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, render
         gl_Position = hidden ? vec4(2.0, 2.0, 2.0, 1.0) : projectionMatrix * mv;
       }`,
     fragmentShader: `
-      uniform vec3 uSun, uFogColor, uStone, uFig[3], uWater, uGold;
+      uniform vec3 uSun, uSunCol, uSkyCol, uFogColor, uStone, uFig[3], uWater, uGold;
+      uniform float uNight;
       uniform vec2 uFog;
+      ${DISPLAY_FOG_GLSL}
       varying vec3 vN; varying float vPart, vMat, vDEye, vY;
       void main() {
         vec3 n = normalize(vN) * (gl_FrontFacing ? 1.0 : -1.0);
         vec3 c = vPart < 0.5 ? uStone : vPart < 1.5 ? uFig[int(vMat + 0.5)] : vPart < 2.5 ? uWater : uGold;
-        float sun = max(dot(n, normalize(uSun)), 0.0), sky = 0.5 + 0.5 * n.y;
         float spec = vPart > 0.5 && vPart < 1.5 && vMat < 0.5 ? pow(max(dot(reflect(-normalize(uSun), n), vec3(0.0, 1.0, 0.0)), 0.0), 12.0) * 0.18 : 0.0;
-        c = c * (0.5 + 0.22 * sky + 0.42 * sun) + spec;
-        c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, vDEye));
+        vec3 direct = uSunCol * (max(dot(n, normalize(uSun)), 0.0) * ${SUN_LIGHT.direct.toFixed(1)});
+        vec3 ambient = uSkyCol * (mix(0.6, 1.0, n.y * 0.5 + 0.5) * ${SUN_LIGHT.skyFill.toFixed(1)});
+        c = c * (direct + ambient) + spec;
+        c = mix(c, c * vec3(0.30, 0.36, 0.56), uNight);
         gl_FragColor = vec4(c, 1.0);
+        // #24: the display transform is the renderer's own tail
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        gl_FragColor.rgb = displayFog(gl_FragColor.rgb, vDEye, 1.0);
       }`,
   });
   // One InstancedMesh per kind.

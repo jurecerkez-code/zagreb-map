@@ -115,4 +115,7 @@ export const SHADING = { dark: 0.6, light: 0.3, wallMin: 0.66, wallLit: 0.34, su
 // the explicit Lab map look swaps the photographic ground for navy. ?fotoground=0 keeps the look's light land for
 // viewers who find the photo ground competing with period colours.
 THEMES.foto = { ...THEMES.arg, name: 'Foto' };
-// Lab is an independent scene palette, with the same six CONFIG period slots as every look.
+
+// #24: measured directional light for the whole scene. Applied in working-linear space,
+// never as a second conversion or a per-view gamma adjustment.
+export const SUN_LIGHT = { direct: 1.8, skyFill: 0.2 };

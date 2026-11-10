@@ -402,13 +402,18 @@ for (const [, name, body] of src.matchAll(/const (\w+) = \/\* glsl \*\/`([\s\S]*
 const lines = (...ls) => new RegExp(ls.map(l => l.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('(?:\\s|//[^\\n]*)*'));
 
 test('the water shimmers in TERRAIN_FRAG\'s water branch, before the edge and distance fades', () => {
-  assert.match(glsl.TERRAIN_FRAG, /\$\{WEATHER_GLSL\}\s*\$\{WAVE_GLSL\}/);   // the shimmer uses WEATHER_GLSL's hash
+  assert.match(glsl.TERRAIN_FRAG, /\$\{WEATHER_GLSL\}\s*\$\{LIGHT_GLSL\}\s*\$\{SHADOW_GLSL\}\s*\$\{DISPLAY_FOG_GLSL\}\s*\$\{WAVE_GLSL\}/);   // the shimmer uses WEATHER_GLSL's hash
   assert.match(glsl.TERRAIN_FRAG, lines(
     '} else {',
     'c = shimmer(c, vWorld.xz, length(vWorld - cameraPosition));',
+    'c *= lighting(vec3(0.0, 1.0, 0.0), sunShadow(vWorld));',
     '}',
-    'c = mix(uFogColor, c, fadeAt(vWorld.xz));',
-    'c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, length(vWorld - cameraPosition)));',
+    'outColor = vec4(c, 1.0);',
+    '#define gl_FragColor outColor',
+    '#include <tonemapping_fragment>',
+    '#include <colorspace_fragment>',
+    'outColor.rgb = mix(outColor.rgb, outColor.rgb * vec3(0.30, 0.36, 0.56), uNight);',
+    'outColor.rgb = displayFog(outColor.rgb, length(vWorld - cameraPosition), fadeAt(vWorld.xz));',
   ));
   // two fields, tiled and moved by whole tiles per turn of uWave, faded where they would alias and far off
   assert.equal([...glsl.WAVE_GLSL.matchAll(/rippleField\(w, vec2\([-\d., ]+\), [\d.]+, -?\d+\.0\)/g)].length, 2);
@@ -429,17 +434,25 @@ test('snow and rain in the buildings\' FRAG: roofs only, after the light and bef
     'outColor = vec4(mod(id, 256.0), mod(floor(id / 256.0), 256.0), floor(id / 65536.0), 255.0) / 255.0;',
     '#elif defined(FAINT)',
     'outColor = vec4(uFaintColor, uFaint);',
+    '#define gl_FragColor outColor',   // #24: the tail follows into every non-PICK branch
+    '#include <tonemapping_fragment>',
+    '#include <colorspace_fragment>',
     '#else',
   ));
   assert.match(glsl.FRAG, lines(
-    'vec3 c = base * light * foot;',
+    'vec3 c = base * lighting(n, sunShadow(vWorld)) * foot;',
     'float flatTop = smoothstep(0.85, 0.95, n.y);',
     'c *= 1.0 - ${glf(WET.roof)} * uWet * flatTop;',
     'if (uSnow > 0.0) {',
     'float lie = uSnow * ${glf(SNOW.roof)} * flatTop * step(-0.5, vLit) * mix(${glf(SNOW.patch)}, 1.0, drift(vWorld.xz));',
     'c = mix(c, mix(uSnowInk, uHoverTo, 0.35 * max(vLit, 0.0)), lie);',
     '}',
-    'c = mix(uFogColor, c, mix(1.0, fadeAt(vWorld.xz), uEdgeBuildings));',
+    'outColor = vec4(c, 1.0);',
+    '#define gl_FragColor outColor',
+    '#include <tonemapping_fragment>',
+    '#include <colorspace_fragment>',
+    'outColor.rgb = mix(outColor.rgb, outColor.rgb * vec3(0.30, 0.36, 0.56), uNight);',
+    'outColor.rgb = displayFog(outColor.rgb, d, mix(1.0, fadeAt(vWorld.xz), uEdgeBuildings));',
   ));
   // the hover mark travels to the roof's snow: the same 35% as the vertex shader's hover mix; the quest's red building is
   // marked after the hover, so the pointer over it never brings the snow back onto its roof
@@ -447,7 +460,8 @@ test('snow and rain in the buildings\' FRAG: roofs only, after the light and bef
     'c = mix(c, uHoverTo, 0.35);', 'h = mix(h, uHoverTo, 0.35);', 'vLit = 1.0;', '}',
     'if (uBlind > 0.5 && vGid == uSelected) vLit = -1.0;'));
   assert.equal([...glsl.VERT.matchAll(/vLit = /g)].length, 3);
-  assert.match(glsl.TERRAIN_FRAG, lines('c = shaded(c, normalize(vNormal));', 'c = weatherGround(c, vWorld.xz);'));
+  assert.match(glsl.TERRAIN_FRAG, lines('vec3 nG = normalize(vNormal);',
+    'c *= lighting(nG, sunShadow(vWorld)) / ${glf(GROUND_SUN)};', 'c = weatherGround(c, vWorld.xz);'));
   assert.match(glsl.WEATHER_GLSL, /\$\{glf\(SNOW\.ground\)\}/);
 });
 
