@@ -8,13 +8,17 @@
 // The timeline: a monument shows from its year (unveiling), and not in a `removed` span ([[1947, 1989]] for Jelačić);
 // one without a year always shows. Colours: bronze, stone and metal per look (MATERIALS), lit by the map's sun.
 import { DISPLAY_FOG_GLSL } from './display-fog.js';
+import { SUN_LIGHT } from './themes.js';
 
 export const MONUMENTS_KEY = 'hfh-monuments';
 export const monumentsOnFrom = stored => stored !== 'off';   // on by default
 
 // Per look: bronze, stone, metal (a figure's material), water (a fountain's basin). Unknown looks fall back to arg.
+// Foto shares Arg's woven materials because the two looks share their authored palette.
+const ARG_MATERIALS = { bronze: '#5f5340', stone: '#cdc6b8', metal: '#8c949a', gold: '#b8963e', water: '#4f8197' };
 export const MATERIALS = {
-  arg: { bronze: '#5f5340', stone: '#cdc6b8', metal: '#8c949a', gold: '#b8963e', water: '#4f8197' },
+  arg: ARG_MATERIALS,
+  foto: ARG_MATERIALS,
   kalk: { bronze: '#6a4f35', stone: '#e0d4bd', metal: '#8f969c', gold: '#bf9a45', water: '#7fa2b0' },
   blatimme: { bronze: '#a98656', stone: '#8d93a0', metal: '#a3afbf', gold: '#e6c066', water: '#3c6f9e' },
   paper: { bronze: '#57514b', stone: '#dddad2', metal: '#8f969a', gold: '#b39445', water: '#9fb9b8' },
@@ -186,8 +190,8 @@ export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, render
         vec3 n = normalize(vN) * (gl_FrontFacing ? 1.0 : -1.0);
         vec3 c = vPart < 0.5 ? uStone : vPart < 1.5 ? uFig[int(vMat + 0.5)] : vPart < 2.5 ? uWater : uGold;
         float spec = vPart > 0.5 && vPart < 1.5 && vMat < 0.5 ? pow(max(dot(reflect(-normalize(uSun), n), vec3(0.0, 1.0, 0.0)), 0.0), 12.0) * 0.18 : 0.0;
-        vec3 direct = uSunCol * (max(dot(n, normalize(uSun)), 0.0) * 2.2);
-        vec3 ambient = uSkyCol * (mix(0.6, 1.0, n.y * 0.5 + 0.5) * 0.55);
+        vec3 direct = uSunCol * (max(dot(n, normalize(uSun)), 0.0) * ${SUN_LIGHT.direct.toFixed(1)});
+        vec3 ambient = uSkyCol * (mix(0.6, 1.0, n.y * 0.5 + 0.5) * ${SUN_LIGHT.skyFill.toFixed(1)});
         c = c * (direct + ambient) + spec;
         c = mix(c, c * vec3(0.30, 0.36, 0.56), uNight);
         gl_FragColor = vec4(c, 1.0);

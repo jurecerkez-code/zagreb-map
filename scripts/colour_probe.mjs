@@ -4,10 +4,10 @@
 //   1. roof: in the Foto look, render straight down over a roof and compare that pixel with the authored byte in
 //      roof_rgb.bin: the photographed roof stays the photograph (not washed out by the renderer, not darkened by
 //      the file's own encoding),
-//   2. asphalt: in the paper look, render straight down a residential road and compare the road's dominant pixel
+//   2. asphalt: in the Foto look, render straight down a residential road and compare the road's dominant pixel
 //      with its authored palette (#4f5450 in web/roads-layer.js).
 //
-// Both through the full pipe: GPU (SwiftShader in CI), AgX, exposure, encode. DeltaE 76 on sRGB (as themes.test.mjs
+// Both through the full pipe: GPU (SwiftShader in CI), the filmic map, exposure, and sRGB output. DeltaE 76 on sRGB (as themes.test.mjs
 // does it, 100 x OKLab distance). Exits 1 when a probe reads further off than its floor.
 //   node scripts/colour_probe.mjs [url]
 import { chromium } from 'playwright';
@@ -100,7 +100,8 @@ await settle();
   if (good.length < 2) worst = Math.max(worst, ...tried.map(t => t.dE));
 }
 
-// ---- Asphalt: paper look, the residential ribbon nearest the centre, read under the same fall.
+// ---- Asphalt: Foto look, the residential ribbon nearest the centre, read under the same golden light.
+
 const meta = JSON.parse(readFileSync(new URL(`../web/${DATA}roads.json`, import.meta.url), 'utf8'));
 const ptsRaw = new Uint8Array(readFileSync(new URL(`../web/${DATA}roads.bin.gz`, import.meta.url)));
 const pts = new Float32Array((await new Response(new Blob([ptsRaw]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer()));
@@ -112,7 +113,25 @@ for (const w of meta.ways.sort((a, b) => b.c - a.c || b.w - a.w)) {
   if (Math.hypot(x, z) < 1500 && Math.hypot(x, z) > 60) { spot = { x, z, cls: w.cls }; break; }
 }
 if (!spot) throw new Error('colour_probe: no quiet residential ribbon near the centre found');
-await ready(`?theme=paper&sunmode=golden&weather=none`);
+await ready(`?theme=foto&sunmode=golden&weather=none`);
+console.log('LIVE', JSON.stringify(await page.evaluate(() => {
+  const d = window.__dbg;
+  const roads = [];
+  const trees = [];
+  d.scene.traverse(m => {
+    if (Array.isArray(m.material?.uniforms?.uCls?.value)) {
+      const p = d.renderer.properties.get(m.material).currentProgram;
+      const fragment = p?.fragmentShader && d.renderer.getContext().getShaderSource(p.fragmentShader);
+      roads.push({ toneMapped: m.material.toneMapped, colours: m.material.uniforms.uCls.value.slice(0, 6).map(c => [c.r, c.g, c.b]),
+        fragmentTail: fragment?.slice(-1300) });
+    }
+    if (m.material?.uniforms?.uTint) trees.push(m.material.uniforms.uTint.value.toArray());
+  });
+  return { mode: d.sunMode, sun: d.sun, light: d.uniforms.uSun.value.toArray(),
+    sunColour: d.uniforms.uSunCol.value.toArray(), skyColour: d.uniforms.uSkyCol.value.toArray(),
+    night: d.uniforms.uNight.value, exposure: d.renderer.toneMappingExposure, tone: d.renderer.toneMapping,
+    camera: d.camera.position.toArray(), target: d.controls.target.toArray(), roads, trees };
+})));
 await page.evaluate(([a, b]) => window.__dbg.flyTo(a, b, null, 260, 0.92), [spot.x, spot.z]);
 await page.waitForTimeout(7000);
 await settle();

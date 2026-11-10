@@ -30,7 +30,7 @@ try {
       && (window.__roads?.().drawn.tiles ?? 0) > 0;
   }, null, { timeout: 300000 });
 
-  const frames = await page.evaluate(() => {
+  const frames = await page.evaluate(async () => {
     const d = window.__dbg;
     const read = mode => {
       if (mode) d.applySunMode(mode);
@@ -44,9 +44,13 @@ try {
         exposure: d.renderer.toneMappingExposure,
       };
     };
+    const source = await (await fetch('/app.js')).text();
+    // #24: golden and day sit at unit exposure; the Night keeps the same base. Read the constant rather than
+    // repeating it here, so a recipe change cannot leave this contract asserting a stale number.
+    const configuredGoldenExposure = Number(source.match(/const SUN_EXPOSURE = \{ golden: ([\d.]+)/)[1]);
     return {
       initialLive: read(), explicitNight: read('night'), liveNight: read('live'),
-      day: read('day'), golden: read('golden'),
+      day: read('day'), golden: read('golden'), configuredGoldenExposure,
     };
   });
   mkdirSync('shots', { recursive: true });
@@ -57,7 +61,7 @@ try {
   expectedNight.set([0, 0.62 / l, -0.78 / l]);
   assert.equal(frames.initialLive.night, 1, 'boot under a low live sun');
   assert.equal(frames.initialLive.lamps, true, 'lamps arrived after live night and must still turn on');
-  assert.equal(frames.initialLive.exposure, 1.3);
+  assert.equal(frames.initialLive.exposure, frames.configuredGoldenExposure);
   close(frames.initialLive.vector, expectedNight);
   for (const mode of ['initialLive', 'liveNight']) {
     close(frames[mode].vector, frames.explicitNight.vector);
@@ -70,7 +74,7 @@ try {
   assert.equal(frames.day.lamps, false);
   assert.equal(frames.golden.night, 0);
   close(frames.golden.vector, [-0.557208, 0.615661, 0.557208]);
-  assert.equal(frames.golden.exposure, 1.15);
+  assert.equal(frames.golden.exposure, frames.configuredGoldenExposure);
   assert.deepEqual(errors, []);
   console.log(JSON.stringify(frames, null, 1));
   console.log('night mode contract: PASS');

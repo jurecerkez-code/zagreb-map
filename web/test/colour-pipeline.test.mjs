@@ -136,12 +136,13 @@ test('golden uses the real 225 degree south-west vector, not a mirrored x', () =
 
 test('golden is the default sun mode and the four modes stand', () => {
   assert.match(app, /\['golden', 'live', 'day', 'night'\]\.includes\(QUERY\.get\('sunmode'\)\) \? QUERY\.get\('sunmode'\) : 'golden'/);
-  assert.match(app, /const SUN_EXPOSURE = \{ golden: 1\.15, day: 1\.15, night: 1\.3 \}/);
+  assert.match(app, /const SUN_EXPOSURE = \{ golden: 1, day: 1, night: 1 \}/);
   // live low sun: under 6 degrees the computed Night look takes over
   assert.match(app, /const night = sunIsNight\(mode, sunState\.elevation\)/);
 
-  // tone mapping is the renderer's: AgX, display sRGB
-  assert.match(app, /renderer\.toneMapping = THREE\.AgXToneMapping;/);
+  // #24: the neutral curve (mid-tones passed, highlights rolled off) at unit exposure, display in sRGB.
+  assert.match(app, /renderer\.toneMapping = THREE\.NeutralToneMapping;/);
+  assert.match(app, /renderer\.toneMappingExposure = 1;/);
   assert.match(app, /renderer\.outputColorSpace = THREE\.SRGBColorSpace;/);
 });
 

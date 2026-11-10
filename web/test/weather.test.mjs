@@ -460,8 +460,8 @@ test('snow and rain in the buildings\' FRAG: roofs only, after the light and bef
     'c = mix(c, uHoverTo, 0.35);', 'h = mix(h, uHoverTo, 0.35);', 'vLit = 1.0;', '}',
     'if (uBlind > 0.5 && vGid == uSelected) vLit = -1.0;'));
   assert.equal([...glsl.VERT.matchAll(/vLit = /g)].length, 3);
-  assert.match(glsl.TERRAIN_FRAG, lines('vec3 nG = normalize(vNormal);', 'c = shaded(c, nG);',
-    'c *= lighting(nG, sunShadow(vWorld));', 'c = weatherGround(c, vWorld.xz);'));
+  assert.match(glsl.TERRAIN_FRAG, lines('vec3 nG = normalize(vNormal);',
+    'c *= lighting(nG, sunShadow(vWorld)) / ${glf(GROUND_SUN)};', 'c = weatherGround(c, vWorld.xz);'));
   assert.match(glsl.WEATHER_GLSL, /\$\{glf\(SNOW\.ground\)\}/);
 });
 

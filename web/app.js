@@ -28,7 +28,7 @@ import { tramInfo, tramHtml, tramClock, tramsDataPath } from './trams.js';
 import { makeRideHud } from './ride-hud.js';
 import { mountBoatTip } from './boat-tip.js';
 import { estimateTone, inkOn, rgba, luma, rgb, unknownFill } from './tone.js';
-import { THEMES, SHADING } from './themes.js';
+import { THEMES, SHADING, SUN_LIGHT } from './themes.js';
 import { createLooks } from './look.js';
 import { mountSwitcher } from './switcher.js';
 import { initialCollapsed, LEGEND_KEY, photoOnlyFrom, photoOnlyHref, markPhotos, plaquesOnFrom, plaquesHref, PLAQUE_KEY,
@@ -282,12 +282,13 @@ let renderer;
 // No WebGL: say so in the page's language, not that the data failed.
 // #23: start at min(dpr, 1.5) with MSAA stepping in below it (antialias only pays where the ratio is low).
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: devicePixelRatio < 1.5 }); } catch (e) { await halt(e, 'ui.nowebgl'); }
-// #24: filmic output. The renderer owns the display transform: AgX with a per-mode exposure (sun modes further down
-// the file, 1.15 at golden hour), the canvas stays display sRGB. The pick pass renders into a target and so
-// automatically stays raw and tone-mapping-free.
+// #24: filmic output. The renderer owns the display transform: the neutral curve (Khronos PBR Neutral) at unit
+// exposure. The light model already lands a lit surface on its own albedo, so exposure only has to place the
+// highlight roll-off; the curve leaves the midtones and the shade alone instead of lifting them. The pick pass
+// renders into a target and so stays raw and tone-mapping-free.
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.AgXToneMapping;
-renderer.toneMappingExposure = 1.15;
+renderer.toneMapping = THREE.NeutralToneMapping;
+renderer.toneMappingExposure = 1;
 // The GPU's own name, read once: integrated chips (Intel, Mali, Adreno, Apple, ...) open the quality ladder one
 // notch down instead of learning the lesson at 13 fps.
 let gpuName = '';
@@ -751,8 +752,11 @@ const TERRAIN_GLSL = /* glsl */`
     return mix(mix(hNode(i), hNode(i + ivec2(1, 0)), t.x), mix(hNode(i + ivec2(0, 1)), hNode(i + ivec2(1, 1)), t.x), t.y);
   }
   vec2 hEffGrad(vec2 w) {
-    ivec2 i = ivec2(floor((w - uGridO) / uCell + 0.5));
-    return vec2(hNode(i + ivec2(1, 0)) - hNode(i - ivec2(1, 0)), hNode(i + ivec2(0, 1)) - hNode(i - ivec2(0, 1))) / (2.0 * uCell);
+    vec2 g = (w - uGridO) / uCell, f = floor(g), t = g - f;
+    ivec2 i = ivec2(f);
+    float a = hNode(i), b = hNode(i + ivec2(1, 0)), c = hNode(i + ivec2(0, 1)), d = hNode(i + ivec2(1, 1));
+    return vec2((b - a) * (1.0 - t.y) + (d - c) * t.y,
+      (c - a) * (1.0 - t.x) + (d - b) * t.x) / uCell;
   }
   // how much the drawn ground varies over the cell under w: a wall's skirt reaches half of it further down
   float hRange(vec2 w) {
@@ -1004,13 +1008,18 @@ const SHADOW_GLSL = /* glsl */`
   }
 `;
 
-// #24: one light model for the whole scene (copy in ferries-layer.js for the boats): a warm direct sun (2.2, its
-// warmth carried by uSunCol) plus a cool sky fill (0.55, leaning bluer in shade) over the fragment's own normal.
-// Buildings and terrain share SHADOW_GLSL. It occludes only direct sun, never the sky's diffuse fill.
+// #24: one light model for buildings, terrain and boats, with the same measured
+// SUN_LIGHT pair. Shadow_GLSL occludes only the direct sun, never the sky's diffuse fill.
+// The photographed ground is the one surface that arrives as an appearance rather than reflectance
+// (pipeline/s06_zagreb_ortho.py stores the orthophoto's mean colour per node), so its sun has to be
+// divided back out before the model re-lights it. Measured against the picture gate's reference:
+// at GROUND_SUN the ground keeps the tonal register of the reference city while walls and roofs,
+// which are reflectance, sit where the light model puts them.
+const GROUND_SUN = 2.58;
 const LIGHT_GLSL = /* glsl */`
   vec3 lighting(vec3 n, float visibility) {
-    vec3 direct = uSunCol * (max(dot(n, uSun), 0.0) * 2.2 * visibility);
-    vec3 ambient = uSkyCol * (mix(0.6, 1.0, n.y * 0.5 + 0.5) * 0.55);
+    vec3 direct = uSunCol * (max(dot(n, uSun), 0.0) * ${glf(SUN_LIGHT.direct)} * visibility);
+    vec3 ambient = uSkyCol * (mix(0.6, 1.0, n.y * 0.5 + 0.5) * ${glf(SUN_LIGHT.skyFill)});
     return direct + ambient;
   }`;
 
@@ -1269,8 +1278,9 @@ loadCityHeight().catch(optional("The shadows"));
 // The sun's mode: golden (a fixed golden hour, 38° up, azimuth 225° — the default city most visitors see), live (the
 // moment they arrive, refreshed every minute), day (noon on the current date) or night (the sun down, the city lit
 // only by its own colours, cooled towards blue). #24: golden is the default; live under 6° is the Night look, the
-// exposure walks from 1.15 at noon up to 1.35 at 5° so the low sun keeps its light instead of a knee-high glow.
-const SUN_EXPOSURE = { golden: 1.15, day: 1.15, night: 1.3 };   // live walks its own ramp by the elevation
+// exposure walks a little above its base at noon towards 5° so the low sun keeps its light.
+// Golden and day sit at unit exposure; the Night gets the same base, its own dimming comes after the tone curve.
+const SUN_EXPOSURE = { golden: 1, day: 1, night: 1 };   // live walks its own ramp by the elevation
 let sunMode = ['golden', 'live', 'day', 'night'].includes(QUERY.get('sunmode')) ? QUERY.get('sunmode') : 'golden';
 function applySunMode(mode = sunMode) {
   invalidate(600);   // the day's light (or the Night) lands on walls, roofs, sky (#23)
@@ -1290,11 +1300,11 @@ function applySunMode(mode = sunMode) {
     sunState = { ...sunState, elevation: -6, azimuth: 0, clamped: true, mode };
   }
   uniforms.uNight.value = night ? 1 : 0;
-  // The mode's film exposure: 1.15 from golden hour to noon, up to 1.35 as the live sun touches 5°; the Night keeps
-  // a lift over it, at 1.30, or its own colours would sink under the tone curve.
+  // The mode's exposure: unit from golden hour to noon, up to 1.2 as the live sun touches 5°; the Night keeps the
+  // same base, and its cool dim lands after the tone curve, where it belongs.
   renderer.toneMappingExposure = (mode === 'live' && !night)
-    ? 1.15 + 0.2 * Math.max(0, Math.min(60 - Math.max(sunState.elevation, 5), 55)) / 55
-    : (night ? 1.3 : SUN_EXPOSURE[mode]);
+    ? 1 + 0.2 * Math.max(0, Math.min(60 - Math.max(sunState.elevation, 5), 55)) / 55
+    : SUN_EXPOSURE[night ? 'night' : mode];
   syncVegNight();        // the trees are unlit too: without this they would glow at night
   // The sky goes with the mode (skyNow reads uNight and applySky carries it to the clear colour and the fog). Both are
   // defined further down the file, so the call is guarded and the first look switch settles it.
@@ -1697,11 +1707,10 @@ const WATER_VERT = /* glsl */`
     gl_Position = projectionMatrix * viewMatrix * w;
   }
 `;
-// Ground in the look's land colour, shaded by the shared sun so that flat ground is exactly that colour (uShade, per
-// look); walls shaded like a slope where the bank is low (most shores are natural) and lit like the buildings' walls in
-// the look's quay colour where they stand over 3 m; water flat but for a slow shimmer (WAVE_GLSL); snow and rain on the
-// ground and the low banks (WEATHER_GLSL). The constants are themes.js SHADING, which the looks'
-// colour checks (web/test/themes.test.mjs) use too. All fade into the sky at the municipality's edge
+// Ground in the look's land colour, lit once by LIGHT_GLSL: the photographed colour is not multiplied by
+// the legacy directional term as well. Low banks keep the land colour; quays over 3 m turn to stone; water is
+// flat but for a slow shimmer (WAVE_GLSL); snow and rain affect the ground and low banks (WEATHER_GLSL).
+// Fog and the Night's one dim happen after the shared tone and output stage. All fade into the sky at the municipality's edge
 // and into the fog like the buildings. In the pick pass they write id 0 (nothing) with depth, so a hill hides what is
 // behind it.
 const TERRAIN_FRAG = /* glsl */`
@@ -1728,8 +1737,6 @@ const TERRAIN_FRAG = /* glsl */`
   in vec3 vNormal;
   in float vWallH;
   out vec4 outColor;
-  vec3 shaded(vec3 c, vec3 n) { return c * clamp(1.0 + uShade * (dot(n, uSun) - uSun.y),
-    1.0 - ${glf(SHADING.dark)} * uShade, 1.0 + ${glf(SHADING.light)} * uShade); }
   void main() {
     #ifdef PICK
       outColor = vec4(0.0);
@@ -1752,17 +1759,17 @@ const TERRAIN_FRAG = /* glsl */`
           c = mix(c, vg.rgb, vg.a);
         }
         vec3 nG = normalize(vNormal);
-        c = shaded(c, nG);
-        // #24: only direct sunlight is occluded. The cool sky still reaches the shaded streets.
-        c *= lighting(nG, sunShadow(vWorld));
+        // #24: one directional light, with sky fill. Only direct sunlight is occluded.
+        // The ground's stored means are the orthophoto's own colours, i.e. an appearance taken under the orthophoto's
+        // sun, while walls and roofs carry reflectance. Re-lighting an appearance double counts the sun, so divide it
+        // out first: GROUND_SUN is the orthophoto's sun measured in the light model's units.
+        c *= lighting(nG, sunShadow(vWorld)) / ${glf(GROUND_SUN)};
         c = weatherGround(c, vWorld.xz);
         if (uHgtShow > 0.5) c = vec3(clamp(cityHeight(vWorld.xz) / 120.0, 0.0, 1.0), clamp(cityHeight(vWorld.xz) / 40.0, 0.0, 1.0), 0.15);
-        // Night: the map keeps its colours and loses the light, cooled towards blue.
-        c = mix(c, c * vec3(0.30, 0.36, 0.56), uNight);   // snow, or wet (WEATHER_GLSL)
       } else if (uKind < 1.5) {
         vec3 n = normalize(cross(dFdx(vWorld), dFdy(vWorld)));
-        c = mix(shaded(uLand, n), c * lighting(n, sunShadow(vWorld)),   // #24: above a metre the quay stands in the buildings' light
-          smoothstep(1.0, 3.0, vWallH));
+        c = mix(uLand, c, smoothstep(1.0, 3.0, vWallH));   // low banks keep the land, quays turn to stone
+        c *= lighting(n, sunShadow(vWorld));
         c = mix(weatherGround(c, vWorld.xz), c, smoothstep(1.0, 3.0, vWallH));   // a low bank takes the ground's weather
       } else {
         c = shimmer(c, vWorld.xz, length(vWorld - cameraPosition));   // the water's ripples (WAVE_GLSL)

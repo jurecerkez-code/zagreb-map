@@ -5,7 +5,7 @@
 //   node scripts/shots.mjs [url] --baseline                  # the baseline: e2e/__screenshots__/ + baseline.json
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import sharp from 'sharp';
 
 const url = process.argv[2] || 'http://127.0.0.1:8643/';
@@ -15,16 +15,25 @@ const out = arg('--out');
 const dir = baseline ? 'e2e/__screenshots__' : 'shots';
 const jsonPath = baseline ? 'e2e/__screenshots__/baseline.json' : (out || 'shots.json');
 mkdirSync(dir, { recursive: true });
+mkdirSync(dirname(jsonPath), { recursive: true });
 
 const browser = await chromium.launch({
   executablePath: process.env.CHROME || undefined,
   args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+page.on('console', m => { if (m.type() === 'warning' || m.type() === 'error') console.log('[capture-console]', m.text()); });
+page.on('pageerror', e => console.log('[capture-pageerror]', e.message));
 await page.goto(`${url}?theme=foto&sunmode=day&date=2026-06-21&veg=1`);
 await page.waitForFunction(() => document.getElementById('loading')?.hidden, null, { timeout: 180000 });
 await page.waitForFunction(() => { const s = window.__dbg?.stats(); return s && s.tiles >= s.tilesTotal && s.terrain === 'ready'; },
-  null, { timeout: 300000 });
+  null, { timeout: 300000 }).catch(error => {
+    console.log('[capture-ready-timeout]', error.message);
+    return page.evaluate(() => window.__dbg.stats()).then(s => {
+      console.log('[capture-ready-state]', JSON.stringify(s));
+      throw error;
+    });
+  });
 await page.waitForTimeout(8000);
 
 // The headless swiftshader draws about a frame a second, so after any camera move the wait is generous: the flight

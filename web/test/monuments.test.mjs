@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { shownAt, monumentsOnFrom, monumentCard, makeMonuments, NOMINAL, FIGURE_AT, MATERIALS } from '../monuments.js';
-import { THEMES } from '../themes.js';
+import { THEMES, SUN_LIGHT } from '../themes.js';
 import * as THREE from '../vendor/three.module.js';
 
 const jelacic = { name: 'Ban Josip Jelačić', kind: 'equestrian', year: 1866, removed: [[1947, 1989]], mat: 'bronze', h: 9,
@@ -42,8 +42,14 @@ test('monuments share the scene light and the buildings night attenuation', () =
   });
   const material = monuments.group.children[0].material;
   for (const key of ['uSun', 'uSunCol', 'uSkyCol', 'uNight']) assert.equal(material.uniforms[key], uniforms[key], key);
-  assert.match(material.fragmentShader, /uSunCol \* \(max\(dot\(n, normalize\(uSun\)\), 0\.0\) \* 2\.2\)/);
-  assert.match(material.fragmentShader, /uSkyCol \* \(mix\(0\.6, 1\.0, n\.y \* 0\.5 \+ 0\.5\) \* 0\.55\)/);
+  assert.ok(material.fragmentShader.includes(
+    `uSunCol * (max(dot(n, normalize(uSun)), 0.0) * ${SUN_LIGHT.direct.toFixed(1)})`,
+    'direct sunlight uses the same constant as the city',
+  ));
+  assert.ok(material.fragmentShader.includes(
+    `uSkyCol * (mix(0.6, 1.0, n.y * 0.5 + 0.5) * ${SUN_LIGHT.skyFill.toFixed(1)})`,
+    'sky fill uses the same constant as the city',
+  ));
   assert.match(material.fragmentShader, /mix\(c, c \* vec3\(0\.30, 0\.36, 0\.56\), uNight\)/);
 });
 
