@@ -286,6 +286,9 @@ export const PAINT = {
   blatimme: { hull: '#c9d2dc', upper: '#e8ecf1', windows: '#f2c66d', band: '#141d2b', wake: '#86a6c8' },
   paper: { hull: '#3c4a52', upper: '#ffffff', windows: '#4c5a62', band: '#2f3b42', wake: '#f6f9f8' },
 };
+// Foto shares Patina's water; Lab shares Blue hour's water, including all contrast decisions.
+PAINT.foto = { ...PAINT.arg };
+PAINT.lab = { ...PAINT.blatimme };
 export const PARTS = ['hull', 'upper', 'windows', 'band'];
 
 // ---------- Models ----------

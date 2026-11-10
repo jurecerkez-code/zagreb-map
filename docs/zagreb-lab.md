@@ -32,7 +32,7 @@ A remembered scene does not determine chrome independently: selecting a scene se
 | `--link` | `#8f96ff` | `#2F5FAE` |
 | `--line` | `#2b3170` | `#E5DED2` |
 
-`--card-bg`, `--card-ink` and `--card-ground` are also explicit in the shared objects. `--sky` always comes from the selected map look; the timeline, modes and legend use that variable rather than a late opaque theme block. `applySky()` also updates the CSS token when weather or sun changes the actual sky. `--surface-overlay` is the translucent chip layer; `--radius-chip` is `999px`, `--radius-ctrl` is `10px`. The static spec row prints the real token values and Inter, not live or measured readings.
+`--card-bg`, `--card-ink` and `--card-ground` are also explicit in the shared objects. `--sky` always comes from the selected map look; the timeline, modes and legend use that variable rather than a late opaque theme block. `applySky()` also updates the CSS token when weather or sun changes the actual sky. `--surface-overlay` is the translucent chip layer; `--radius-chip` is `999px`, `--radius-ctrl` is `12px`, the issue's panel radius. The static spec row prints the real token values and Inter, not live or measured readings.
 
 Paper adds `--muted-content:#665f58` and `--accent-content:#a82009` for small text. The exact reference `--muted:#77716A` is only 4.211:1 on the Paper ground and `--accent:#FE2A00` is 3.307:1 there, so using those accents indiscriminately for 10px labels would reduce accessibility. The derived text inks hold more than 4.5:1 on the ground and panel; the bright red remains available for graphic accents and active styling.
 
@@ -43,9 +43,9 @@ Inter uses a local optical-size cut and JetBrains Mono supplies the instrument v
 `THEMES.lab` is a sibling of the existing looks in `web/themes.js`:
 
 - Foto remains the default map under Lab chrome; `lab` is another offered map look in the existing Look dialog.
-`- Its violet-to-gold ramp is `#2d1b49`, `#583870`, `#4e3db9`, `#5c5cff`, `#8f96ff`, `#d8b55a`, chosen to meet the shared ordinary/CVD period and estimate checks.
-`- Unknown is `#2b3170` with a deliberate `#3d4791` hatch. The existing shared shape tests recognise Lab alongside Patina and Foto.
-`- Land is `#11144a`. The reference water `#161a78` needs only a small blue lift to clear slope checks; `#161a84` retains that navy identity. The tested `#4c4a4b` quay is preserved.
+- Its violet-to-gold ramp is `#2d1b49`, `#583870`, `#4e3db9`, `#5c5cff`, `#8f96ff`, `#d8b55a`, chosen to meet the shared ordinary/CVD period and estimate checks.
+- Unknown is `#2b3170` with a deliberate `#3d4791` hatch. The existing shared shape tests recognise Lab alongside Patina and Foto.
+- Land is `#11144a`. The reference water `#161a78` needs only a small blue lift to clear slope checks; `#161a84` retains that navy identity. The tested `#4c4a4b` quay is preserved.
 - Floors use `#536eaa`, `#849cc5`, `#bfc8df`, `#fff1cf`. Dates, data and the private-house policy are unchanged.
 
 ## Real component integration
@@ -65,9 +65,20 @@ Both `web/i18n/en.json` and `web/i18n/hr.json` contain the new control/spec labe
 
 Static checks also cover bounded focus behavior, translated About output and the ordered card record hierarchy. A pure-white composite behind the prescribed .72 glass is used to challenge small-label contrast; those labels and links use opaque `--ui-surface` inserts, and photo-arrow glyphs receive a contrasting dark ink. These do not replace browser verification of image rendering, overflow or hit areas.
 
+The browser check is the measured one: `glassContrast()` in `e2e/zagreb-lab.spec.mjs` hides a panel, photographs its rect, takes the brightest pixel behind it, composites each text leaf's own background chain over that pixel at .72 glass, and holds 4.5:1 (3:1 for large text). Measured on the whole city at 1440×900 in the Foto look, Chromium:
 
-`e2e/zagreb-lab.spec.mjs` is an independent Playwright file. It covers tokens and font resources, all five dock controls, Layers and Search behavior, More keyboard containment/focus restoration, Paper restoration, real Croatian labels, phone sizing/overflow, reduced motion, serious/critical axe findings and captured browser/page/asset errors. It is tagged `@zagreb-lab` with accessibility runs also tagged `@design-a11y`.
+| Panel | Text leaves | Weakest | Brightest pixel behind |
+|---|---|---|---|
+| Legend `#panel` | 21 | 6.54:1 | `rgb(217,223,227)` |
+| Record card `#card` | 13 | 6.52:1 | `rgb(192,190,184)` |
+| About `#about` | 177 | 6.52:1 | `rgb(236,235,247)` |
 
-Browser execution and screenshots remain the parent's verification responsibility. **This worker has run no browser process, Playwright, screenshots or axe checks.** Static Node tests and source inspection do not prove actual layout, zoom reflow, safe-area hit regions or visual equivalence, so no visual approval is declared here. Progress and remaining browser checks are recorded separately in `scratch/issue34-progress.md`.
+That measurement found three real failures the token arithmetic had missed, all fixed here rather than argued away:
 
-No physical-device test, performance improvement, historical linkage or production status is claimed.
+- the legend's "Hide the N estimated years" switch, the one text control on bare glass, read 3.38:1 over the pale sky — its label now carries `--ui-fg` (7.53:1 there);
+- the card head inherited its period band's ink, which is black on the light bands: 2.06:1 on glass — the head keeps `--ui-fg`, and its 12px mono kicker plus "Why?"/"Something wrong?" take the opaque insert (6.52:1);
+- the About tab strip read 3.18:1 — it takes the same insert (6.52:1).
+
+`e2e/zagreb-lab.spec.mjs` is an independent Playwright file. It covers tokens and font resources, all five dock controls, Layers and Search behavior, More keyboard containment/focus restoration, Paper restoration, real Croatian labels, phone sizing/overflow, reduced motion, the measured contrast table above, serious/critical axe findings and captured browser/page/asset errors. It is tagged `@zagreb-lab` with accessibility runs also tagged `@design-a11y`. Its `open()` waits up to 180s for the city's 437 packs: the whole city on a software-GL runner is a 15-minute load by `scripts/perf.mjs`'s own note, and a 60s ceiling failed the suite on a loaded laptop for reasons that had nothing to do with the app.
+
+Screenshots of the dressed map at 1440×900 and 390×844 are committed beside the picture-gate baselines in `e2e/__screenshots__/` (`lab-1440.png`, `lab-390.png`). They are evidence, not approval: no physical-device test, performance improvement, historical linkage or production status is claimed.

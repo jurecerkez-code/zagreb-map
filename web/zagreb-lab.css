@@ -327,6 +327,10 @@
 }
 [data-ui="lab"] .switch .toggle { border-color: var(--line); }
 [data-ui="lab"] .switch[aria-pressed="true"] .toggle { background: var(--accent); }
+/* The legend's "Hide the N estimated years" switch is the one text control that sits on bare glass: muted ink
+   over the palest Foto pixel behind the legend measures 3.38:1, so its label carries --ui-fg (7.5:1 there,
+   14.6:1 beside it on the swatches' opaque inserts). Measured in the browser; e2e/zagreb-lab.spec.mjs keeps it. */
+[data-ui="lab"] .panel .est-row .switch { color: var(--ui-fg); }
 
 /* Search stays the established combobox and focus trap, presented as a Lab
    worksheet at every width rather than a second desktop pill beside modes. */
@@ -699,6 +703,14 @@
 [data-ui="lab"] .about article { background: transparent; }
 [data-ui="lab"] .about :is(p, li) { color: var(--ui-muted); }
 [data-ui="lab"] .about :is(a, .about-tabs [aria-selected="true"]) { color: var(--ui-link); }
+/* The About tab strip sits on bare glass and its brightest ground is a pale sky: the 14px tabs measured 3.2:1
+   there, so the strip takes the same opaque insert as the panel's other small text. */
+[data-ui="lab"] .about-tabs {
+  padding-inline: 4px;
+  border-bottom-color: var(--ui-line);
+  background: var(--ui-surface);
+}
+[data-ui="lab"] .about-tabs [role="tab"] { color: var(--ui-muted); }
 [data-ui="lab"] .about h2, [data-ui="lab"] .about h3 { color: var(--ui-fg); font-family: var(--display); }
 .lab-quick-guide { margin: 0 0 24px; padding: 0 0 16px; border-bottom: 1px solid var(--ui-line); }
 .lab-quick-guide h3 { margin: 0 0 16px; }
@@ -849,6 +861,23 @@
 [data-ui="lab"] .card .dating,
 [data-ui="lab"] .about :is(.credit, .caveat, .note) { color: var(--ui-fg); }
 [data-ui="lab"] .card .dating a { color: inherit; }
+/* The card head sits on glass, not on its period band: the band's ink is black on the light bands, which is
+   2.1:1 there. The head keeps Lab ink; its 12px mono kicker and its two bare-glass actions ("Why?", "Something
+   wrong?") take the opaque insert small text needs. Measured in the browser; e2e/zagreb-lab.spec.mjs keeps it. */
+[data-ui="lab"] .card-head { color: var(--ui-fg); --band-ink: var(--ui-fg); }
+[data-ui="lab"] .card .lab-kicker {
+  padding: 2px 4px;
+  border-radius: 2px;
+  background: var(--ui-surface);
+  color: var(--ui-gold);
+}
+[data-ui="lab"] .card .dating a,
+[data-ui="lab"] .card .card-wrong {
+  padding: 1px 4px;
+  border-radius: 2px;
+  background: var(--ui-surface);
+}
+[data-ui="lab"] .card .card-wrong { color: var(--ui-link); }
 [data-ui="lab"] .modes::before { color: var(--ui-fg); }
 [data-ui="lab"] .card .photo .prev, [data-ui="lab"] .card .photo .next { color: #171717; }
 

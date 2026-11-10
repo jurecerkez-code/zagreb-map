@@ -17,6 +17,8 @@ export const MATERIALS = {
   blatimme: { bronze: '#a98656', stone: '#8d93a0', metal: '#a3afbf', gold: '#e6c066', water: '#3c6f9e' },
   paper: { bronze: '#57514b', stone: '#dddad2', metal: '#8f969a', gold: '#b39445', water: '#9fb9b8' },
 };
+MATERIALS.foto = { ...MATERIALS.arg };
+MATERIALS.lab = { ...MATERIALS.blatimme, gold: '#d8b55a' };
 const MAT_INDEX = { bronze: 0, stone: 1, metal: 2 };
 // Nominal height (m) each kind's shape is built at; an instance is scaled to its own height.
 export const NOMINAL = { equestrian: 9, statue: 7, bust: 3, column: 12, obelisk: 6, fountain: 2.5, sculpture: 3.5,

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { LAB_UI } from '../zagreb-lab.js';
-import { rgb, lin } from '../tone.js';
+import { rgb, lin, hex } from '../tone.js';
 
 const css = readFileSync(new URL('../zagreb-lab.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
 const app = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
@@ -98,4 +98,18 @@ test('Paper is a quiet, non-translucent alternative and the live truth comes fro
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*?\.ride-live-on::before\s*\{[^}]*animation:\s*none\s*!important/);
   assert.match(ride, /liveEl\.textContent = live \? 'LIVE' : T\('ui\.ride\.tt'\)/);
   assert.match(ride, /liveEl\.classList\.toggle\('ride-live-on', !!live\)/);
+});
+
+// Measured in the browser (e2e/zagreb-lab.spec.mjs keeps the live check): the legend's "Hide the N
+// estimated years" switch is the one text control left on bare glass. Its label takes --ui-fg; here the
+// arithmetic is stated at the strictest ground — the .72 glass over pure white, brighter than any Foto pixel.
+const wcag = c => 0.2126 * lin(c[0]) + 0.7152 * lin(c[1]) + 0.0722 * lin(c[2]);
+const ratio = (a, b) => { const [hi, lo] = [wcag(rgb(a)), wcag(rgb(b))].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
+
+test('the legend switch clears 4.5:1 on bare glass at the palest possible ground', () => {
+  const [alpha] = [...LAB_UI['--ui-glass'].matchAll(/[\d.]+/g)].slice(-1).map(m => Number(m[0]));
+  const ground = hex(rgb(LAB_UI['--ui-bg']).map(v => v * alpha + (1 - alpha)));
+  assert.ok(ratio(LAB_UI['--ui-fg'], ground) >= 4.5, `ink on glass over white: ${ratio(LAB_UI['--ui-fg'], ground).toFixed(2)}`);
+  assert.ok(ratio(LAB_UI['--muted'], ground) < 4.5, 'muted is the token that does not clear it');
+  assertProps('[data-ui="lab"] .panel .est-row .switch', 'color: var(--ui-fg)');
 });

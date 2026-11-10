@@ -466,7 +466,7 @@ test('the weather\'s uniforms are declared up front, and the hooks: one sky, the
   assert.match(src, /renderer\.setClearColor\(skyNow\(\), 1\);/);
   // the sky's one source; the look's own sky reaches the clear colour and the fog only through it
   assert.match(src, lines('const skyNow = () => weather.sky(THEME.sky);', 'function applySky() {', 'const sky = skyNow();',
-    'renderer.setClearColor(sky);', 'uniforms.uFogColor.value.set(sky);'));
+    "document.documentElement.style.setProperty('--sky', sky);", 'renderer.setClearColor(sky);', 'uniforms.uFogColor.value.set(sky);'));
   assert.doesNotMatch(src, /uFogColor\.value\.set\(THEME\.sky\)|setClearColor\(THEME\.sky, 1\)/);
   // #23: the loop's cheap block carries the fog every tick (the weather's own numbers, before any tiering), and the
   // easing step moves only on drawn frames — source order, not adjacency, is the invariant.
