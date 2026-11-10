@@ -9,6 +9,7 @@ const KIND_ORDER = { district: 0, building: 1, occupant: 1.5, street: 2 };
 export function prepare(index) {
   return {
     settings: index.settings, examples: index.examples || [], addressed: index.addressed || 0,
+    streetRef: index.street_ref || 0,     // buildings with no number found by their street (issue #30, step 4)
     districts: index.districts.map(([name, n, box], i) => ({ kind: 'district', name, n, box, i, f: fold(name) })),
     aliases: index.aliases.map(([name, ds]) => ({ name, ds, f: fold(name) })),
     outside: index.outside.map(name => ({ name, f: fold(name) })),

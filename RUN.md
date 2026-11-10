@@ -44,6 +44,26 @@ Overpass is not reachable from this laptop; the Geofabrik PBF replaces it.
   `Cesta` or infer that a range/slash value is another house number. Split aliases are still working shards; the
   canonical-name acceptance gate is not claimed as solved.
 
+## 1b. Addresses (issue #30)
+
+`pipeline/zagreb_addresses.py` canonicalises street names, puts a house number on every footprint an OSM address
+point covers, expands `addr:interpolation` ranges from numbered ends, lets a ≤ 30 m² structure inherit the address it
+shares an edge with, and gives every other footprint the street it stands by. It never invents a number.
+
+```bash
+cd address-worktree
+../engine/.venv/Scripts/python.exe -m pipeline.zagreb_addresses \
+  --buildings ../engine/data/buildings.parquet --existing ../engine/data/addresses.parquet \
+  --addresses data/raw/osm/addresses --streets data/raw/osm/streets \
+  --street-lines ../data/raw/osm/zg_osm_streets.parquet \
+  --out-addresses data/addresses.parquet --refs data/street_refs.parquet \
+  --evidence data/address_evidence.parquet --report data/address_report.json
+```
+
+`data/addresses.parquet` feeds s03/s14 (cards get `addr`/`addrn`, and `addrref` for a reference), `data/street_refs.parquet`
+feeds `search/ref/`, and `data/address_report.json` holds the before/after coverage on the issue's denominators.
+`s03_tiles`' `load_places` picks `street_refs.parquet` up from the same folder as `addresses.parquet`.
+
 ## 2. Build (about 3.5 min)
 
 ```bash

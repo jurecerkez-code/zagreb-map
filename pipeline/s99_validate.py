@@ -928,10 +928,10 @@ def check_cards(out: Path, a: np.ndarray, hidden: np.ndarray, allowed_names: set
             if not hidden[int(key)]:
                 continue
             # Each of them can state the exact year; the address too, when city.PRIVATE_ADDRESSES allows it
-            for f in HIDDEN_FIELDS + (() if city.PRIVATE_ADDRESSES else ("addr", "addrn")):
+            for f in HIDDEN_FIELDS + (() if city.PRIVATE_ADDRESSES else ("addr", "addrn", "addrref")):
                 if f in card:
                     what = ("links its RAÄ record" if f == "raa" else f"carries `{f}`"
-                            + (" (city.PRIVATE_ADDRESSES is False)" if f in ("addr", "addrn") else ""))
+                            + (" (city.PRIVATE_ADDRESSES is False)" if f in ("addr", "addrn", "addrref") else ""))
                     errors.append(f"cards: {p.name} {ref} is in a private-house category and {what}")
             if card.get("name") and card["name"] not in allowed_names:
                 errors.append(f"cards: {p.name} {ref} is in a private-house category and carries a name not on "

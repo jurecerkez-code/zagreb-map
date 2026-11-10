@@ -220,6 +220,9 @@ test('the place line: the first address, how many more, and the stadsdel, in Eng
   assert.equal(placeLine({ addr: 'Hornsgatan 30', addrn: 3, dist: 'Södermalm' }, SV), 'Hornsgatan 30 (och 2 till) · Södermalm');
   assert.equal(placeLine({ addr: 'Slottsbacken 1', dist: 'Gamla stan' }, EN), 'Slottsbacken 1 · Gamla stan');
   assert.equal(placeLine({ dist: 'Grimsta' }, SV), 'Grimsta');           // no OSM address: the stadsdel alone
+  // no house number but a street reference (issue #30, step 4): the street it stands by, never a invented number
+  assert.equal(placeLine({ addrref: 'Ilica', dist: 'Donji grad' }, EN), 'by Ilica · Donji grad');
+  assert.equal(placeLine({ addr: 'Ilica 25', addrref: 'Ilica', dist: 'Donji grad' }, EN), 'Ilica 25 · Donji grad');
   assert.equal(placeLine({}, EN), '');
   assert.equal(placeLine(undefined, EN), '');
 });

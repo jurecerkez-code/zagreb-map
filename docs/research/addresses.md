@@ -92,9 +92,10 @@ uv run python -m pipeline.address_sources \
   model, not a newly discovered official cadastre. Existing attribution and **CC BY-SA 4.0** are retained. Direct ZBSM
   address strings and addresses tagged on the matched OSM building remain tied to their existing joins; they are not
   retrospectively relabelled as `inside` or given invented source/match fields that the old table lacks.
-- **`addr:interpolation`:** not used to fill a coverage number. The current available input is address *points*, not a
-  validated interpolation-way extract with ranges and street-side geometry. Blindly expanding points would create
-  addresses rather than establish that they belong to these footprints.
+- **`addr:interpolation`:** used, from numbered ends only (see "Measured coverage" below). A way expands when both of
+  its ends carry a number — from an endpoint node, or, as Zagreb's Overpass extract has no node ids on its 22 ways,
+  from the nearest address point within 20 m of the end vertex. 110 numbers came out of 22 ways and 13 reached a
+  footprint; no number is placed without a mapper's number at both ends.
 
 ## Street normalization: what was and was not done
 
@@ -125,8 +126,28 @@ owner/person fields. The public addresses and search schema remain only `gid`, `
 privacy `withheld` flag. `source` and `withheld` are not alternatives: OSM/Grad Zagreb cadastral addresses coexist
 under the same privacy/takedown merge. A new source can never un-withhold a building.
 
-The live full-city geometric join against DGU/RPJ was **not run** because only the 20-row public test sample was in
-scope and the redistribution terms need human confirmation. Browser/e2e capture was paused at the parent's request
-while its terrain/capture gate ran. The unverified 95%, 80%, canonical-street, citywide random 30-address e2e, small
-building inheritance and street-reference-only gates are explicitly open. The largest measurable coverage gap remains
-268,148 of 298,675 buildings (165,203 of 195,245 over 30 m²), before any additional licensed source is joined.
+## Measured coverage, 2026-11-10 (whole city, real data)
+
+`python -m pipeline.zagreb_addresses` over `engine/data/buildings.parquet` (298,675 footprints), the OSM address
+points, the OSM street ways plus the PBF's `zg_osm_streets.parquet` (21,862 named ways for the whole city, where the
+dense Overpass box misses the periphery), and the 22 `addr:interpolation` ways. Denominators are the issue's.
+
+| | before | after, house number | after, number or street reference |
+|---|---|---|---|
+| all 298,675 | 30,527 — 10.22% | 41,051 — 13.74% | 280,748 — **94.00%** |
+| over 30 m²: 195,245 | 30,042 — 15.39% | 31,192 — 15.97% | 184,920 — **94.71%** |
+
+- `inside` 24,983 footprints (a point covered by exactly one footprint), `near` 1,022 (no cover, nearest footprint
+  within 25 m that also faces the address's own street), `inherited` 9,298 (a ≤ 30 m² structure sharing an edge with
+  an addressed building — the issue's "pripada zgradi Ilica 25"), interpolation 13 of 110 expanded numbers.
+- 23,970 buildings got a reference only; 17,927 (10,325 over 30 m²) have neither. Their median distance to the nearest
+  named street is **91.6 m**, 2,059 lie beyond 200 m, and the 60 m rule the issue sets is what keeps them out — an
+  industrial yard set back from the road is 60–100 m from it.
+- **95% is not reached: 94.71% over 30 m², 566 buildings short (0.29 pp).** The missing input is not a better join:
+  OSM has no address point for those footprints and no named way within 60 m. Reaching 95% needs either the City of
+  Zagreb / DGU address register (RPJ; the public sample is 20 rows and the full extract needs a human licence check)
+  or the city's own named-street network in the periphery, which OSM has not mapped. Widening the 60 m rule or
+  borrowing a number from a neighbouring street would fabricate the answer, so neither is done.
+- Gates still open: the ≥ 80% house-number gate (15.97% over 30 m²; OSM simply has no number for those buildings), the
+  Playwright `e2e/address.spec.mjs` over 30 sampled addresses (needs a version built with `data/addresses.parquet`),
+  and the About-page sentence, which now reports number-or-reference coverage from `index.street_ref`.

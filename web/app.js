@@ -2516,7 +2516,7 @@ function flyAbove(x, z, distance, done) {
   const s = n * t * distance / (up - n * t * Math.sqrt(1 - up * up));
   flyTo(x - f.x * s, z - f.z * s, done, distance, up);
 }
-async function pickResult(row, loadShard) {
+async function pickResult(row, loadShard, loadRef) {
   stopPlay();
   const my = ++pickSeq;
   if (row.gid !== undefined) {
@@ -2537,8 +2537,10 @@ async function pickResult(row, loadShard) {
   let box = row.box;
   if (row.kind === 'street') {
     const pairs = (await loadShard(row.shard).catch(() => ({})))[row.street] || [];
+    // a street with no house number at all: its shard holds [gid, stadsdel], and the pick still frames its buildings
+    const refs = pairs.length || !loadRef ? [] : (await loadRef(row.shard).catch(() => ({})))[row.street] || [];
     if (my !== pickSeq) return;            // the visitor picked or pinned something else meanwhile
-    const bs = pairs.map(p => building(p[1]));
+    const bs = [...pairs.map(p => building(p[1])), ...refs.map(p => building(p[0]))];
     if (!bs.length) return;
     box = [Math.min(...bs.map(b => b.x)), Math.min(...bs.map(b => b.z)), Math.max(...bs.map(b => b.x)), Math.max(...bs.map(b => b.z))];
   }
