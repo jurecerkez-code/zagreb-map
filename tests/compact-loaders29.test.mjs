@@ -43,6 +43,7 @@ test('runtime loads only the specified gzip roads, trees and RGB names without J
       Math.fround(0.03), Math.fround(-0.07)]);
     assert.ok(Math.abs(pts[6] - 1000) <= 0.05 && Math.abs(pts[7] - 1000) <= 0.05,
       `the far corner stays on its decimetre grid, got ${pts[6]}, ${pts[7]}`);
+    assert.deepEqual(street.meta.ways.map(way => way.cls), ['residential', 'service']);
     const trees = await loadVegetationData('/data/v1/', { veg2: veg }, () => 12.5);
     assert.deepEqual(Array.from(trees.trees), [0, 12.5, 0, 1, 12.5, 2]);
     const photos = await loadOrthoData('/data/v1/', { orthoGz: true });
