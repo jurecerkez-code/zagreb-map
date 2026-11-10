@@ -58,6 +58,9 @@ import { makeMonuments, monumentsOnFrom, monumentCard, MONUMENTS_KEY } from './m
 import { makeVeg } from './veg.js';
 import { makePosterPass, posterInks, posterColours, posterYear, nearestIndex } from './poster.js';
 import { DISPLAY_FOG_GLSL, syncDisplaySky } from './display-fog.js';
+import { makeStartupQueue, buildInfoAllowed } from './startup-load.js';
+import { makeMapUpdateMonitor, makeMapUpdateChip } from './cache-update.js';
+import { loadOrthoData } from './ortho-img.js';
 
 // #24: authored sRGB becomes the renderer's working space. Every texture the city photographs (the roof and ground
 // bytes, the trees, the roads' taper, the labels) carries its space on the texture; every uniform colour is a
@@ -70,6 +73,14 @@ THREE.ColorManagement.enabled = true;
 // applyLook (see Looks below) re-applies a switch to everything drawn in the look's colours. The page's own colours
 // and font are set here already, before the city loads, so the loading line is drawn in the look.
 const looks = createLooks();
+// Noncritical city work waits for the reveal, with each idle job registered once.
+const afterReveal = makeStartupQueue({
+  order: ['restPacks', 'terrain', 'attributes', 'roads', 'trees', 'foto', 'cityHeight', 'monuments', 'facts', 'funicular', 'tour', 'trams'],
+  idle: () => new Promise(resolve => {
+    if ('requestIdleCallback' in window) requestIdleCallback(resolve, { timeout: 1500 });
+    else setTimeout(resolve, 0);
+  }),
+});
 let THEME_NAME, THEME, FONT;
 function applyPageLook(name) {
   THEME_NAME = name;
@@ -166,12 +177,19 @@ const current = await getJson('data/current.json', { cache: 'no-cache' }).catch(
 const { version } = current;
 // Which commit the page was built from (pages.yml stamps it). Console log and __dbg.__build, so "is it live?"
 // answers itself: a stale tab names its stale build instead of impersonating today's deploy.
-getJson('build.json', { cache: 'no-store' }).then(b => {
+if (buildInfoAllowed(location.hostname)) getJson('build.json', { cache: 'no-store' }).then(b => {
   window.__build = b;
   if (b?.sha) console.info(`build ${String(b.sha).slice(0, 7)} · ${b.date}`);
 }).catch(() => {});
 const DATA = `data/${version}/`;
 const TRAMS_DATA = tramsDataPath(current);
+// The update offer is passive: nothing reloads until the visitor clicks it.
+const offerMapUpdate = makeMapUpdateChip({ document, reload: () => location.reload() });
+const mapUpdates = makeMapUpdateMonitor({
+  currentVersion: version, serviceWorker: navigator.serviceWorker, fetchJson: getJson,
+  onNewVersion: offerMapUpdate,
+});
+function startMapUpdates() { mapUpdates.start().catch(e => console.warn('Map updates are unavailable.', e)); }
 // Load order: config, then pack0 (see Tiles). The other packs follow the first tile; land, water and labels follow the
 // first frame with buildings. The hot attributes come last, once the map stands: nothing on the first screen reads them.
 // The strings (web/i18n): both languages, a few KB, so the language switches without a reload.
@@ -267,7 +285,8 @@ const PARAMS = new URLSearchParams(location.search);
 const reliefMax = TERRAIN?.reliefMax ?? RELIEF_MAX;
 let relief = initialRelief(location.search, (() => { try { return localStorage.getItem(RELIEF_KEY); } catch { return null; } })(),
   TERRAIN?.relief ?? 0, reliefMax);
-let terrainState = 'flat';  // 'flat' (none yet, or none in this build), 'loading', 'ready' or 'failed' (still flat)
+let terrainState = 'flat'; // 'flat' (none yet, or none in this build), 'loading', 'ready' or 'failed' (still flat)
+let terrainRoadGrid = null; // The worker-fitted terrain grid; FLAT_GRID is the fallback for the roads.
 const TERRACE = ['full', 'true', 'none'].includes(PARAMS.get('terrace')) ? PARAMS.get('terrace') : TERRAIN?.terrace || 'full';
 const FADE_M = fadeWidth(PARAMS.get('fade'), TERRAIN?.fadeM ?? 400);
 // ?labels=top: names drawn over everything, as first specified (for comparison)
@@ -1225,7 +1244,7 @@ async function loadMonuments() {
   scene.add(monuments.group);
   switcher.markLayers();
 }
-loadMonuments().catch(optional('The monuments'));
+// Registration is grouped near the reveal gate, after every loader has been declared.
 
 // ---------- The sun ----------
 // The map is lit by the sun that is actually over Zagreb at the date and hour asked for (web/sun.js, NOAA's solar
@@ -1273,7 +1292,8 @@ async function loadCityHeight() {
   uniforms.uHgtOn.value = QUERY.get('shadows') === '0' ? 0 : 1;
   sunState.height = meta;
 }
-loadCityHeight().catch(optional("The shadows"));
+
+
 
 // The sun's mode: golden (a fixed golden hour, 38° up, azimuth 225° — the default city most visitors see), live (the
 // moment they arrive, refreshed every minute), day (noon on the current date) or night (the sun down, the city lit
@@ -1364,7 +1384,7 @@ async function loadFacts() {
   facts.setYear(uniforms.uYear.value);
   scene.add(facts.group);
 }
-loadFacts().catch(optional('The history facts'));
+
 // ---------- The funicular ----------
 // The city model has no railway, so the shortest public funicular in the world was invisible on a map that names it.
 // Its two tracks are mapped in OpenStreetMap (scripts/build_funicular.py bakes them on the terrain's height) and one
@@ -1402,7 +1422,7 @@ async function loadFunicular() {
   }
   scene.add(group);
 }
-loadFunicular().catch(optional('The funicular'));
+
 
 // ---------- The sightseeing walk ----------
 // Ten of the map's own facts in walking order (data/tour.json, scripts/build_tour.py): a visitor's list with each stop's
@@ -1441,7 +1461,7 @@ async function loadTour() {
   }
   if (tourOpen) renderTour();
 }
-loadTour().catch(optional('The sightseeing walk'));
+
 
 function setTourOpen(on) {
   tourOpen = !!on && !!tour;
@@ -1499,9 +1519,8 @@ function setMonuments(v) {
 const meshes = [];
 const tileMsgs = [];   // the tiles' messages, for the roof years: built when the attributes land, they need them all
 let loaded = 0;
-const queue = [...config.tiles];
 const progressEl = document.getElementById('progress');
-const pool = Array.from({ length: WORKERS }, () => new Worker('worker.js', { type: 'module' }));
+const pool = Array.from({ length: WORKERS }, () => new Worker(new URL('worker.js', import.meta.url), { type: 'module' }));
 
 function addTile(m) {
   const g = new THREE.BufferGeometry();
@@ -1535,11 +1554,10 @@ function addTile(m) {
   meshes.push(mesh);
   roofYears?.addTile(m);
   tileMsgs.push(m);
-  fetchRestPacks();
 }
 
 // Tiles come in gzip packs (see pipeline/s03_tiles.py); offsets refer to the unpacked pack. pack0 is requested
-// at once, the others when the first tile is on the map (addTile), or sooner if a worker needs one.
+// at once; the other reveal packs when a worker needs one, the rest of the city only after the map has opened.
 // config.packs holds file names ("pack0.bin.gz"); a tile's `pack` names its pack (an index also works).
 const packs = {};
 const packName = p => (typeof p === 'string' ? p : p.file);
@@ -1595,6 +1613,11 @@ const revealAt = (() => {
   return config.tiles.filter(t => first.has(packOf(t))).length;
 })();
 let mapRevealed = false;
+// What the wait costs, and what it does not: until the map opens, a lane takes only the reveal packs' tiles, so the
+// periphery's packs are not on the wire before the first frame. The rest of the city starts at the reveal (below).
+const queue = config.tiles.filter(t => revealNames.has(packOf(t)));
+const restQueue = config.tiles.filter(t => !revealNames.has(packOf(t)));
+const pumpers = [];
 let restRequested = false;
 function fetchRestPacks() {
   if (restRequested) return;
@@ -1613,7 +1636,7 @@ function fetchRestPacks() {
 fetchPack(packName(config.packs[0]));
 for (const w of pool) {
   const next = async () => {
-    const t = queue.shift();
+    const t = queue.shift() ?? (mapRevealed ? restQueue.shift() : undefined);
     if (!t) return;
     try {
       const buf = (await fetchPack(packOf(t))).slice(t.offset, t.offset + t.length);
@@ -1628,12 +1651,15 @@ for (const w of pool) {
     if (!mapRevealed && loaded >= revealAt && !failedId) {   // a failure stays
       mapRevealed = true;
       document.getElementById('loading').hidden = true;
-      loadAttrs().catch(optional('The attributes'));   // cards, the roof years and the count, once the map stands
+      afterReveal.release();
+      startMapUpdates();
+      for (const pump of pumpers) pump();   // the lanes stopped at the reveal's edge: the rest of the city starts now
       document.getElementById('ready').textContent = T('ui.ready');   // the live region's "done" (finding 7)
       foldCreditSoon();
     }
     next();
   };
+  pumpers.push(next);
   next();
 }
 
@@ -1803,21 +1829,16 @@ async function loadPhotoColours() {
   if (photoTried) return;
   photoTried = true;
   try {
-    const [rb, gb] = await Promise.all([fetch(DATA + 'roof_rgb.bin'), fetch(DATA + 'ground_rgb.bin')]);
-    if (!rb.ok || !gb.ok) return;
-    const roofB = new Uint8Array(await rb.arrayBuffer());
-    const groundB = new Uint8Array(await gb.arrayBuffer());
-    const dims = b => { const v = new DataView(b.buffer, b.byteOffset, 8); return [v.getUint32(0, true), v.getUint32(4, true)]; };
-    const mk = (b, w, h) => {
-      const t = new THREE.DataTexture(b.subarray(8), w, h, THREE.RGBAFormat, THREE.UnsignedByteType);
+    const photos = await loadOrthoData(DATA, config);
+    const mk = ({ rgba, w, h }) => {
+      const t = new THREE.DataTexture(rgba, w, h, THREE.RGBAFormat, THREE.UnsignedByteType);
       t.colorSpace = THREE.SRGBColorSpace;
       t.minFilter = t.magFilter = THREE.LinearFilter;
       t.needsUpdate = true;
       return t;
     };
-    const [rw, rh] = dims(roofB), [gw, gh] = dims(groundB);
-    uniforms.uRoof.value = mk(roofB, rw, rh);
-    uniforms.uGround.value = mk(groundB, gw, gh);
+    uniforms.uRoof.value = mk(photos.roof);
+    uniforms.uGround.value = mk(photos.ground);
     uniforms.uFoto.value = looks.current === 'foto' ? 1 : 0;
     uniforms.uFotoGround.value = uniforms.uFoto.value && fotoGroundOn() ? 1 : 0;
   } catch (e) {
@@ -1835,7 +1856,7 @@ async function loadTerrain(base) {
     TERRAIN.file);
   const [buf, waterBuf] = await Promise.all([file, base]);
   // a worker that errs, refuses the file or hangs (WORKER_TIMEOUT_MS) rejects: the caller then loads the flat land
-  const m = await askWorker(new Worker('terrain-worker.js', { type: 'module' }), { terrain: buf, water: waterBuf.slice(0),
+  const m = await askWorker(new Worker(new URL('terrain-worker.js', import.meta.url), { type: 'module' }), { terrain: buf, water: waterBuf.slice(0),
     chunkCells: Math.round(TERRAIN.chunk / TERRAIN.cell), fadeM: FADE_M }, [buf]);
   const g = m.grid, RMAX = reliefMax;
   uniforms.uTerrain.value.dispose();
@@ -1921,7 +1942,7 @@ async function loadTerrain(base) {
   terrainState = 'ready';
   performance.measure('terrain', 'terrain-start');
   setRelief(relief, true);          // the city rises (at once for a visitor who asked for less motion)
-  startRoads({ tex: m.tex, x0: g.x0, z0: g.z0, cell: g.cell, nx: g.nx, nz: g.nz });   // the streets' worker needs this grid
+  terrainRoadGrid = { tex: m.tex, x0: g.x0, z0: g.z0, cell: g.cell, nx: g.nx, nz: g.nz };
 }
 
 // The relief: uRelief eases to the slider's value, 1.2 s when the terrain first rises, 0.6 s on a move (from where it
@@ -4251,7 +4272,7 @@ document.querySelectorAll('.lang [data-lang]').forEach(b => b.onclick = () => se
 function applyLook(name) {
   invalidate(400);   // everything drawn in the look's colours re-inks; the new sky eases for a breath (#23)
   applyPageLook(name);
-  if (name === 'foto') loadPhotoColours();
+  if (name === 'foto') afterReveal.add('foto', loadPhotoColours);
   uniforms.uFoto.value = name === 'foto' && uniforms.uRoof.value ? 1 : 0;
   uniforms.uFotoGround.value = uniforms.uFoto.value && fotoGroundOn() ? 1 : 0;
   periods.forEach((p, i) => {
@@ -4353,6 +4374,7 @@ looks.subscribe(applyLook);
 applyStaticText();
 renderPanel();
 if (photoOnly) setPhotoOnly(true);
+scheduleDeferredLayers();
 applyLook(looks.current);
 // Vegetation (web/veg.js): the real OSM trees and green areas of Zagreb. Loaded after the map stands, so the first
 // view is never delayed by it; a missing file leaves the map exactly as it was. ?veg=0 turns it off.
@@ -4365,13 +4387,19 @@ const vegDebug = new URLSearchParams(location.search).get('vegdebug') === '1'
   : null;
 if (vegDebug) document.body.appendChild(vegDebug);
 performance.mark('veg-start');
-makeVeg({ THREE, base: DATA, scene, uniforms, on: new URLSearchParams(location.search).get('veg') !== '0' })
-  .then(v => {
+async function loadTrees() {
+  try {
+    const v = await makeVeg({ THREE, base: DATA, scene, uniforms, config, surfaceAt,
+      on: new URLSearchParams(location.search).get('veg') !== '0' });
     performance.measure('veg', 'veg-start');
-    veg = v; v.retheme(looks.current); syncVegNight();   // Night, if that is the mode the visitor arrived in
+    veg = v;
+    v.retheme(looks.current);
+    syncVegNight();
     if (vegDebug) vegDebug.textContent = `veg: ${v.trees.toLocaleString()} trees, ${v.triangles.toLocaleString()} green tris, ${v.on ? 'ON' : 'OFF'}`;
-  })
-  .catch(e => { if (vegDebug) vegDebug.textContent = `veg: FAILED ${e && e.message ? e.message : e}`; });
+  } catch (error) {
+    if (vegDebug) vegDebug.textContent = `veg: FAILED ${error && error.message ? error.message : error}`;
+  }
+}
 // Trams (web/trams.js, web/trams-layer.js): ZET's real network, its timetable and its live vehicles. Loaded after the
 // map stands, like the vegetation, so the first view is never delayed by it; a missing file leaves the map as it was.
 // ?tram=0 turns it off. They show by the boats' rule (boatsShown): at Today only, never while the years play or in a
@@ -4379,29 +4407,63 @@ makeVeg({ THREE, base: DATA, scene, uniforms, on: new URLSearchParams(location.s
 const tramsOn = new URLSearchParams(location.search).get('tram') !== '0';
 const tramsShown = () => !!trams && boatsShown({ on: tramsOn, year: uniforms.uYear.value, yearMax: config.yearMax, playing,
   story: document.body.classList.contains('scene-on') });
-makeTrams({ THREE, base: TRAMS_DATA, scene, camera, surfaceAt, on: tramsOn })
-  .then(t => {
-    trams = t;
-    window.__trams = () => t;          // a dev hook: what the layer drew and what is under a point, for probes
-    t.setNight(!!uniforms.uNight.value);   // unlit materials glow in the Night mode without this
-    t.step(tramsShown());
-  })
-  .catch(e => console.warn('The trams did not load.', e));
+async function loadTrams() {
+  try {
+    trams = await makeTrams({ THREE, base: TRAMS_DATA, scene, camera, surfaceAt, on: tramsOn });
+    window.__trams = () => trams;      // a dev hook: what the layer drew and what is under a point, for probes
+    trams.setNight(!!uniforms.uNight.value);   // unlit materials glow in the Night mode without this
+    trams.step(tramsShown());
+  } catch (error) {
+    console.warn('The trams did not load.', error);
+  }
+}
 // The streets (pipeline/s17_zagreb_roads.py): 95,754 ways and 5,821 lamps, laid under the buildings, and lit in the
 // Night mode. Their mesher is web/roads-worker.js (#27): it needs the terrain's (t, cut) texture to pin every
 // vertex's ground, so they start where the terrain lands (startRoads below), not at boot.
+// The queued street loader receives a real grid after terrain succeeds, or the flat fallback after it fails.
 let roadsStarted = false;
-function startRoads(baseGrid) {
+async function startRoads(baseGrid) {
   if (roadsStarted) return;
   roadsStarted = true;
-  makeRoads({ THREE, base: DATA, baseGrid, scene, surfaceAt, uniforms })
-    .then(r => {
-      roads = r;
-      window.__roads = () => r;          // a dev hook: what was drawn, for probes
-      roads.setNight(!!uniforms.uNight.value);
-      console.log('streets', r.drawn);
-    })
-    .catch(e => console.warn('The streets did not load.', e));
+  try {
+    roads = await makeRoads({ THREE, base: DATA, baseGrid, scene, surfaceAt, uniforms, config });
+    window.__roads = () => roads;
+    roads.setNight(!!uniforms.uNight.value);
+    console.log('streets', roads.drawn);
+  } catch (error) {
+    console.warn('The streets did not load.', error);
+  }
+}
+const FLAT_GRID = { tex: new Float32Array(2), x0: 0, z0: 0, cell: 1, nx: 1, nz: 1 };
+function scheduleDeferredLayers() {
+  // The periphery's packs, once the eye has the centre: the two lanes would otherwise race the reveal for the line.
+  afterReveal.add('restPacks', fetchRestPacks);
+  afterReveal.add('terrain', async () => {
+    const base = loadBase();
+    base.catch(optional('The water (or the flat land)'));
+    loadLabels().catch(optional('The street names'));
+    if (FEATURES.ferries) loadFerries().catch(optional('The boats'));
+    terrainRoadGrid = FLAT_GRID;
+    if (!TERRAIN) return;
+    try { await loadTerrain(base); }
+    catch (e) {
+      terrainState = 'failed';
+      console.warn('The terrain did not load; the map stays flat.', e);
+      showFlat().catch(optional('The land'));
+      switcher.markRelief();
+    }
+  });
+  // Attributes follow terrain; they must not wait for the visual layers below.
+  afterReveal.add('attributes', () => loadAttrs().catch(optional('The attributes')));
+  afterReveal.add('roads', () => startRoads(terrainRoadGrid));
+  afterReveal.add('trees', loadTrees);
+  if (looks.current === 'foto') afterReveal.add('foto', loadPhotoColours);
+  afterReveal.add('cityHeight', () => loadCityHeight().catch(optional('The shadows')));
+  afterReveal.add('monuments', () => loadMonuments().catch(optional('The monuments')));
+  afterReveal.add('facts', () => loadFacts().catch(optional('The history facts')));
+  afterReveal.add('funicular', () => loadFunicular().catch(optional('The funicular')));
+  afterReveal.add('tour', () => loadTour().catch(optional('The sightseeing walk')));
+  afterReveal.add('trams', loadTrams);
 }
 // ?at=x,z (engine local metres, +x east, -z north) and &dist=meters: open the map over a chosen place, e.g. a park.
 {
@@ -4493,7 +4555,7 @@ if (new URLSearchParams(location.search).has('debug')) {
   setInterval(() => { el.querySelector('pre').textContent = JSON.stringify(stats(), null, 1).slice(2, -2); }, 500);
 }
 
-let frame = 0, deferredRequested = false;
+let frame = 0;
 let frameDue = -1, weatherMoved = false, lastDueAt = 0;   // #23 scheduling: timestamps belong to drawn frames
 renderer.setAnimationLoop(now => {
   frame++;
@@ -4586,22 +4648,7 @@ renderer.setAnimationLoop(now => {
   if (postcard.on) drawShot(); else renderer.render(scene, camera);
   // The poster's copy of the frame is as large as the screen's buffer: let go once the Poster is not on screen.
   if (!postcard.on || postcard.filter !== 'poster') posterPass.release();
-  if (!deferredRequested && meshes.length) {
-    deferredRequested = true;
-    if (!TERRAIN) startRoads({ tex: new Float32Array(2), x0: 0, z0: 0, cell: 1, nx: 1, nz: 1 });   // a flat build
-    const base = loadBase();
-    base.catch(optional('The water (or the flat land)'));
-    loadLabels().catch(optional('The street names'));
-    if (FEATURES.ferries) loadFerries().catch(optional('The boats'));
-    loadTerrain(base).catch(e => {
-      terrainState = 'failed';
-      console.warn('The terrain did not load; the map stays flat.', e);
-      showFlat().catch(optional('The land'));
-      switcher.markRelief();   // the slider is disabled and its line says the heights did not load
-      // The streets keep their old flat fallback: ground at zero everywhere, drawn at their own lift.
-      startRoads({ tex: new Float32Array(2), x0: 0, z0: 0, cell: 1, nx: 1, nz: 1 });
-    });
-  }
+  // Deferred loading is scheduled once, behind the reveal, by scheduleDeferredLayers.
 });
 
 // The tooltip steps that run frame-cheap even when the city idles.

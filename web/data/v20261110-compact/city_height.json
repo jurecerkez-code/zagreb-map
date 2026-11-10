@@ -1,0 +1,13 @@
+{
+ "w": 2326,
+ "h": 2809,
+ "x0": -16192.0,
+ "z0": -22416.0,
+ "cell": 16.0,
+ "units": 0.1,
+ "gz": true,
+ "min_m": 0.3,
+ "max_m": 920.2,
+ "buildings": 298675,
+ "source": "the terrain model (data/terrain.npz) and the rendered buildings (buildings.parquet, ground.parquet)"
+}

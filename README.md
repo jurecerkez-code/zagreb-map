@@ -19,7 +19,9 @@ No account or application server is required for normal map use. The viewer is `
 
 ## Current data
 
-The checked-in build is `web/data/v20261103-fix/`.
+The checked-in build is `web/data/v20261110-compact/`: the same city, with the roads in one ZGR2 stream (int16
+decimetre deltas instead of the float32 pair), the tree pack in half-metre cells, and the ground and roof imagery
+gzipped. It is ~12 MB smaller over the wire than `v20261103-fix`, which the app no longer asks for.
 
 | Measure | Count |
 |---|---:|

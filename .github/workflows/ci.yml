@@ -63,6 +63,12 @@ jobs:
       - name: Fetched files committed
         run: uv run python scripts/checks/site_fetches.py
 
+      - name: Bundle the deployed build exercised by every browser gate
+        run: |
+          npx --yes esbuild@0.27.0 web/app.js --bundle --format=esm --minify --splitting --outdir=web/dist --external:./vendor/*
+          npx --yes esbuild@0.27.0 web/worker.js web/terrain-worker.js web/roads-worker.js --bundle --format=esm --minify --splitting --outdir=web/dist --external:./vendor/*
+          node scripts/pages-dist.mjs
+
       - name: Chromium for the boot smoke
         run: npx playwright install --with-deps chromium
 
@@ -79,6 +85,13 @@ jobs:
           sleep 2
           node scripts/perf.mjs http://127.0.0.1:8644/ --budget scripts/perf-budget.json --out perf.json
 
+      - name: Second load at 4 Mbit/s (bundled build)
+        run: |
+          pkill -f "http.server 8684" || true
+          python3 -m http.server 8684 --directory web &
+          sleep 2
+          PROBE_BASE=http://127.0.0.1:8684/ npm run load:probe
+
       - name: Picture gate (contrast and brightness)
         run: |
           pkill -f "http.server 8644" || true
@@ -94,6 +107,7 @@ jobs:
             perf.json
             shots.json
             shots/*.png
+            shots/load-8684.json
 
       # Live trams die softly: the map falls back to the timetable and nothing says so. Read the published
       # snapshot the page reads, and fail if it is stale, empty or tram-less.

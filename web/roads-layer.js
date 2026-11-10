@@ -10,6 +10,35 @@ import { gunzip } from './veg.js';
 import { TILE, KERB, EDGE_W, LIFT, CLASSES, PAVEMENT } from './roads-worker.js';
 import { DISPLAY_FOG_GLSL } from './display-fog.js';
 import { SUN_LIGHT } from './themes.js';
+import { chooseDataFile, decodeRoads2, ROADS2_FORMAT } from './compact-data.js';
+
+async function dataJson(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`data ${response.status}: ${url}`);
+  return response.json();
+}
+
+// Name fetched here, not in a global config pointer: config belongs to this exact version. Old folders make the same
+// requests as before. A v2 index may name only roads0.bin beside itself, never a parent or another version.
+export async function loadStreetData(base, config = null) {
+  const packed = config?.roads2 && typeof config.roads2 === 'object' ? config.roads2 : null;
+  const file = chooseDataFile(config, 'roads2', 'roads.json', 'roads2.json');
+  const meta = packed ?? await dataJson(`${base}${file}`);
+  const compact = meta.format === ROADS2_FORMAT;
+  if (compact && !['roads0.bin', 'roads2.bin.gz'].includes(meta.file)) throw new Error('roads2: bad sibling file');
+  const [ptsBuf, lampBuf] = await Promise.all([compact ? meta.file : 'roads.bin.gz', 'lamps.bin.gz']
+    .map(async name => {
+      const response = await fetch(`${base}${name}`);
+      if (!response.ok) throw new Error(`data ${response.status}: ${name}`);
+      const bytes = await response.arrayBuffer();
+      return name.endsWith('.gz') ? gunzip(bytes) : bytes;
+    }));
+  if (compact) {
+    const decoded = decodeRoads2(meta, ptsBuf);
+    return { meta: { ...meta, ways: decoded.ways }, pts: decoded.pts, xyz: decoded.xyz, lampPts: new Float32Array(lampBuf) };
+  }
+  return { meta, pts: new Float32Array(ptsBuf), xyz: null, lampPts: new Float32Array(lampBuf) };
+}
 
 // The class palette: asphalt greys for the carriageway, warmer greys for the pavements: measured off Zagreb
 // (#4f5450 asphalt, #8d908e kerb side pavement), the motorway the darkest, a service lane the lightest. The row
@@ -41,12 +70,8 @@ function radialTexture(THREE, stops) {
 
 // The fetch lands as early as it can (the page hands the layer in at boot); the grid lands when the terrain
 // answers. The worker starts on the later of the two.
-export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt, uniforms, on = true }) {
-  const meta = await (await fetch(`${base}roads.json`)).json();
-  const [ptsBuf, lampBuf] = await Promise.all(['roads.bin.gz', 'lamps.bin.gz']
-    .map(f => fetch(`${base}${f}`).then(r => r.arrayBuffer()).then(gunzip)));
-  const pts = new Float32Array(ptsBuf);
-  const lampPts = new Float32Array(lampBuf);
+export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt, uniforms, on = true, config = null }) {
+  const { meta, pts, lampPts } = await loadStreetData(base, config);
 
   const group = new THREE.Group();
   group.name = 'roads';
@@ -246,7 +271,7 @@ export async function makeRoads({ THREE, base, baseGrid = null, scene, surfaceAt
   // The points transfer; the (t, cut) texture stays put for the ground's own shader, so it goes by clone. The
   // worker's round trip gets its own measure, reachable from perf.json as builders['roads-worker'].
   performance.mark('roads-worker-start');
-  const worker = new Worker('roads-worker.js', { type: 'module' });
+  const worker = new Worker(new URL('roads-worker.js', import.meta.url), { type: 'module' });
   const answer = await new Promise((resolve, reject) => {
     worker.onmessage = ({ data }) => resolve(data);
     worker.onerror = e => reject(e);
