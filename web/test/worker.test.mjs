@@ -25,6 +25,18 @@ function plan(m) {
   return a;
 }
 
+test('a v2 tile builds its real roof and keeps a flat roof for the far LOD', () => {
+  const b = readFileSync(new URL('./fixtures/tile_v2.bin', import.meta.url));
+  const m = build(parse(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)));
+  assert.equal(m.nB, 3);
+  assert.equal(m.top, 210);                       // gid 42 is still the tallest flat roof; the gable reaches 185
+  assert.ok(m.flatIdx && m.flatIdx.length > 0);
+  // Near and far both cover the same plan: the gable roof replaces the flat top, it does not add area.
+  assert.equal(plan(m), plan({ ...m, idx: m.flatIdx }));
+  const roof = [...m.idx].filter(i => m.pos[3 * i + 1] > 125);
+  assert.ok(roof.some(i => m.pos[3 * i + 1] === 185));
+});
+
 test('the fixture tile builds walls and roofs', () => {
   const m = build(parse(fixture()));
   // 15 edges: 4 wall vertices and 6 indices each. Roofs: 4 + 8 + 3 vertices, 2 + 8 + 1 triangles.

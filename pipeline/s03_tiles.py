@@ -50,7 +50,7 @@ import shapely
 from . import city, codes, contributions, io, name_fixes
 from .addresses import sharing
 from .sources import credit, load_sources
-from .tiles_decode import MAGIC
+from .tiles_decode import MAGIC, MAGIC2
 
 DATA = Path("data")
 SOURCES = Path(__file__).with_name("sources.yml")
@@ -103,13 +103,45 @@ def rings_of(geom):
             yield shapely.get_coordinates(hole)[:-1], 1
 
 
+def pack_roof(block, ox: float, oz: float) -> bytes:
+    """One building's roof block (tile v2): u32 nRV; i16 rxz[2*nRV] (decimetres from the tile origin);
+    u16 ry[nRV] (decimetres above the building's own ground); u32 nRT; u16 rtri[3*nRT], 4-byte aligned.
+    `block` is {"xz": (n, 2) EPSG:3011 E/N, "y": (n,) metres above the building's ground, "tri": (m, 3)
+    indices into them}. A building with no roof packs as one zero u32 (nRV = 0)."""
+    if not block:
+        return struct.pack("<I", 0)
+    xz = np.asarray(block["xz"], dtype=np.float64).reshape(-1, 2)
+    y = np.asarray(block["y"], dtype=np.float64).reshape(-1)
+    tri = np.asarray(block["tri"], dtype=np.int64).reshape(-1, 3)
+    n, m = len(xz), len(tri)
+    if n < 3 or m < 1 or len(y) != n:
+        return struct.pack("<I", 0)
+    x, z = city.to_local(xz[:, 0], xz[:, 1])
+    loc = np.round(np.c_[x - ox, z - oz] * 10.0)
+    if loc.min() < -32768 or loc.max() > 32767:
+        raise ValueError(f"a roof vertex is beyond i16 decimetres from tile origin ({ox}, {oz})")
+    ry = np.maximum(np.round(y * 10.0), 0.0)   # a roof vertex a decimetre under its ground is still its eave
+    if ry.max() > 65535:
+        raise ValueError(f"a roof vertex is {ry.min() / 10:.1f}..{ry.max() / 10:.1f} m above the ground: u16 "
+                         f"decimetres cannot hold it")
+    if tri.min() < 0 or tri.max() >= n:
+        raise ValueError(f"a roof triangle points outside its {n} roof vertices")
+    out = np.array([n], "<u4").tobytes() + loc.astype("<i2").tobytes() + ry.astype("<u2").tobytes()
+    out += b"\0" * (-len(out) % 4)
+    out += np.array([m], "<u4").tobytes() + tri.astype("<u2").tobytes()
+    return out + b"\0" * (-len(out) % 4)
+
+
 def pack_tile(origin, rows) -> bytes:
     """One tile. `origin` is the tile corner (x, z) in local metres. Each row is a dict with
     gid, year, yflag, period, floors, ground_dm, height (m) and geometry (EPSG:3011 Polygon/MultiPolygon), and
-    optionally parts: [(height (m), geometry)], the building's further parts (towers), drawn from its ground."""
+    optionally parts: [(height (m), geometry)], the building's further parts (towers), drawn from its ground,
+    and roof: pack_roof's block for its real LoD2 roof triangles. A tile where any row carries a roof is v2
+    (HFH2): every v1 section stays byte for byte and the roofs follow them."""
     ox, oz = float(origin[0]), float(origin[1])
     gid, year, yflag, period, floors, ground, part_start = [], [], [], [], [], [], [0]
     heights, ring_start, vert_start, holes, verts = [], [0], [0], [], []
+    roof_blocks = []
     for b in rows:
         gid.append(b["gid"])
         year.append(b["year"])
@@ -131,9 +163,11 @@ def pack_tile(origin, rows) -> bytes:
                 vert_start.append(vert_start[-1] + len(ring))
             ring_start.append(len(holes))
         part_start.append(len(heights))
+        roof_blocks.append(b.get("roof"))
+    has_roof = any(block is not None for block in roof_blocks)
     nB, nP, nR = len(gid), len(heights), len(holes)
     V = np.concatenate(verts) if verts else np.zeros((0, 2), "<i2")
-    out = struct.pack("<5I2f", MAGIC, nB, nP, nR, len(V), ox, oz)
+    out = struct.pack("<5I2f", MAGIC2 if has_roof else MAGIC, nB, nP, nR, len(V), ox, oz)
     out += pad4(np.array(gid, "<u4").tobytes())
     out += pad4(np.array(year, "<i2").tobytes())
     out += pad4(np.array(yflag, "u1").tobytes())
@@ -147,6 +181,12 @@ def pack_tile(origin, rows) -> bytes:
     out += pad4(np.array(vert_start, "<u4").tobytes())
     out += pad4(np.array(holes, "u1").tobytes())
     out += pad4(V.astype("<i2").tobytes())
+    if has_roof:
+        blocks = [pack_roof(block, ox, oz) for block in roof_blocks]
+        starts = [0]
+        for block in blocks:
+            starts.append(starts[-1] + len(block))
+        out += pad4(np.array(starts, "<u4").tobytes()) + b"".join(blocks)
     return out
 
 
@@ -346,6 +386,19 @@ def load_towers(data: Path = DATA) -> gpd.GeoDataFrame | None:
     return gpd.read_parquet(path)
 
 
+def load_roofs(data: Path = DATA) -> dict[int, dict]:
+    """s02_lod2's real roof triangles (data/roofs.npz), or {} when the build has none. The arrays stay in the
+    compressed store; per building they are views, and pack_roof rounds them to the tile's decimetres."""
+    path = data / "roofs.npz"
+    if not path.exists():
+        return {}
+    z = np.load(path)
+    gid, start, tstart = z["gid"], z["start"], z["tstart"]
+    xz, y, tri = z["xz"], z["y"], z["tri"]
+    return {int(g): {"xz": xz[start[i]:start[i + 1]], "y": y[start[i]:start[i + 1]],
+                     "tri": tri[tstart[i]:tstart[i + 1]] - start[i]} for i, g in enumerate(gid)}
+
+
 def tower_parts(df: pd.DataFrame, towers: pd.DataFrame | None) -> dict[int, list[tuple[float, object]]]:
     """{gid: [(drawn height (m), outline)]}: each laser part drawn from its building's settled ground to its top_z,
     cut to the footprint. A part on a `hidden` row (a private house), on no building of df, or not above the
@@ -372,10 +425,11 @@ def tower_parts(df: pd.DataFrame, towers: pd.DataFrame | None) -> dict[int, list
     return out
 
 
-def build_tiles(df: pd.DataFrame, tile: float, parts: dict | None = None) -> list[dict]:
+def build_tiles(df: pd.DataFrame, tile: float, parts: dict | None = None, roofs: dict | None = None) -> list[dict]:
     """Tiles by centroid, sorted centre-out by the distance of the tile centre from the origin. `parts`:
-    tower_parts(), the further parts per gid."""
+    tower_parts(), the further parts per gid; `roofs`: load_roofs(), the real LoD2 roof triangles."""
     parts = parts or {}
+    roofs = roofs or {}
     tx = np.floor(df.x.to_numpy() / tile).astype(int)
     tz = np.floor(df.z.to_numpy() / tile).astype(int)
     ground = np.round(df.ground.to_numpy(np.float64) * 10).astype(int)
@@ -388,7 +442,7 @@ def build_tiles(df: pd.DataFrame, tile: float, parts: dict | None = None) -> lis
         rows = [{"gid": int(df.gid.iat[i]), "year": int(df.year.iat[i]), "yflag": int(df.yflag.iat[i]),
                  "period": int(df.period.iat[i]), "floors": int(df.floors.iat[i]), "ground_dm": int(ground[i]),
                  "height": float(df.height.iat[i]), "geometry": df.geometry.iat[i],
-                 "parts": parts.get(int(df.gid.iat[i]), [])} for i in idx]
+                 "parts": parts.get(int(df.gid.iat[i]), []), "roof": roofs.get(int(df.gid.iat[i]))} for i in idx]
         data = pack_tile(origin, rows)
         dist = round(float(np.hypot(origin[0] + tile / 2, origin[1] + tile / 2)))
         tiles.append({"file": f"{a}_{b}.bin", "tx": int(a), "tz": int(b), "n": len(rows), "bytes": len(data),
@@ -730,7 +784,8 @@ def write_outputs(df: pd.DataFrame, out: Path, version: str, *, tile: float = ci
     archive = load_archive_photos() if archive is None else archive
     df = with_places(name_fixes.apply(with_wiki(df, wiki["table"]), fixes), places)
     parts = tower_parts(df, towers)
-    tiles = build_tiles(df, tile, parts)
+    roofs = load_roofs()
+    tiles = build_tiles(df, tile, parts, roofs)
     packs = assign_packs(tiles, n_packs)
     gz = [io.write_gz(out / f"pack{k}.bin.gz", p) for k, p in enumerate(packs)]
     attrs = attrs_array(df)
@@ -769,7 +824,8 @@ def write_outputs(df: pd.DataFrame, out: Path, version: str, *, tile: float = ci
     return {"tiles": len(tiles), "buildings": len(df), "max_tile": max(t["n"] for t in tiles),
             "packs_raw": sum(map(len, packs)), "packs_gz": sum(gz), "pack0_gz": gz[0],
             "attrs_raw": attrs.nbytes, "attrs_gz": attrs_gz, "config_gz": config_gz,
-            "first_load": config_gz + attrs_gz + gz[0], "towers": sum(map(len, parts.values()))}
+            "first_load": config_gz + attrs_gz + gz[0], "towers": sum(map(len, parts.values())),
+            "roofs": len(roofs)}
 
 
 def out_dir(version: str | None = None) -> Path:

@@ -32,6 +32,7 @@ DATA = Path("data")
 SRC_DIR = Path(__file__).resolve().parent.parent
 MIN_COVER = 0.3          # roof-face area / part area under this: the part keeps its LoD1 box
 CHUNKS = 64
+ROOF_RADIUS_M = 3500      # real roofs only where the near LOD can see them; farther tiles keep the flat roof
 MIN_HEIGHT_M = 0.5
 CHECK = {"cathedral": [92387], "sv_marko": [89124], "hnk": [53384], "zagrepcanka": [294236, 294237, 294238, 294239],
          "glavni_kolodvor": [52056]}
@@ -88,14 +89,60 @@ def parts_and_gids(b: gpd.GeoDataFrame, t0) -> gpd.GeoDataFrame:
     return out
 
 
+def _roof_triangles(fgid, face2d, unit, zmin, zmax, cent, grounds):
+    """Triangulate every roof face into planar triangles, grouped by gid; vertices are deduplicated at 0.1 m.
+    Returns {gid: {"xz": (n, 2) EPSG:3011 E/N, "y": (n,) metres above the building's drawn ground, "tri": (m, 3)}}."""
+    out = {}
+    for f in range(len(face2d)):
+        gid = int(fgid[f])
+        if gid < 0 or unit[f, 2] <= 0.05:
+            continue
+        face = face2d[f]
+        if face.is_empty or face.area < 0.01:
+            continue
+        try:
+            parts = shapely.get_parts(shapely.constrained_delaunay_triangles(face, only_edges=False))
+        except Exception:
+            parts = shapely.get_parts(shapely.delaunay_triangles(face, only_edges=False))
+        if not len(parts):
+            continue
+        cx, cy, cz = cent[f]
+        ux, uy, uz = unit[f]
+        g = grounds[f]
+        got = out.setdefault(gid, {"v": {}, "xz": [], "y": [], "tri": []})
+        for tri in parts:
+            if shapely.get_type_id(tri) != 3:
+                continue
+            c = shapely.get_coordinates(tri, include_z=False)
+            if len(c) < 3 or shapely.area(tri) < 0.05:
+                continue
+            ids = []
+            for x, y in c[:3]:
+                z = cz - (ux * (x - cx) + uy * (y - cy)) / uz
+                if not (g - 5.0 <= z <= g + 400.0):
+                    break
+                key = (round(x * 10), round(y * 10), round(z * 10))
+                if key not in got["v"]:
+                    got["v"][key] = len(got["xz"])
+                    got["xz"].append((x, y))
+                    got["y"].append(z - g)
+                ids.append(got["v"][key])
+            if len(set(ids)) == 3:
+                got["tri"].append(ids)
+    return {gid: {"xz": np.asarray(v["xz"], np.float64), "y": np.asarray(v["y"], np.float64),
+                  "tri": np.asarray(v["tri"], np.int64)} for gid, v in out.items() if v["tri"]}
+
+
 def _chunk(args):
-    """Worker: one chunk of gids → [(gid, base height a.s.l., [(height a.s.l., wkb)])]."""
-    gids, faces_wkb, unit, zmin, zmax, cent, fgid, foot_wkb = args
+    """Worker: one chunk of gids → [(gid, base height a.s.l., [(height a.s.l., wkb)], roof)]."""
+    gids, faces_wkb, unit, zmin, zmax, cent, fgid, foot_wkb, grounds, near = args
     face2d = shapely.from_wkb(faces_wkb)
     foot = dict(zip(gids, shapely.from_wkb(foot_wkb)))
     a = shapely.area(np.array(list(foot.values()), dtype=object))
     order = np.argsort(fgid, kind="stable")
     face2d, unit, zmin, zmax, cent, fgid = face2d[order], unit[order], zmin[order], zmax[order], cent[order], fgid[order]
+    grounds = grounds[order]
+    near = near[order]
     g = pd.DataFrame({"gid": fgid, "zmin": zmin, "zmax": zmax})
     r = g.groupby("gid").agg(r0=("zmin", "min"), r1=("zmax", "max"))
     area = pd.Series(a, index=list(foot.keys()))
@@ -106,6 +153,9 @@ def _chunk(args):
     df["w"] = df.slice * df.h
     bt = df.groupby(["gid", "k"]).agg(slice=("slice", "sum"), w=("w", "sum"), hm=("h", "mean")).reset_index()
     bt["h"] = np.where(bt.slice > 0, bt.w / bt.slice.where(bt.slice > 0, 1.0), bt.hm)
+    keep_roof = near
+    roofs = _roof_triangles(fgid[keep_roof], face2d[keep_roof], unit[keep_roof], zmin[keep_roof], zmax[keep_roof],
+                            cent[keep_roof], grounds[keep_roof])
     out = []
     rows_by_gid = df.groupby("gid").indices
     for gid, t in bt.groupby("gid"):
@@ -123,7 +173,7 @@ def _chunk(args):
             reg = L.region(k, sel, geoms, foot[gid])
             if reg is not None:
                 parts.append((h, shapely.to_wkb(reg)))
-        out.append((int(gid), float(base_h), parts))
+        out.append((int(gid), float(base_h), parts, roofs.get(int(gid))))
     return out
 
 
@@ -208,6 +258,10 @@ def main(argv: list[str] | None = None) -> None:
     cut = np.searchsorted(np.cumsum(nface), np.linspace(0, nface.sum(), CHUNKS + 1)[1:-1])
     foot_wkb = shapely.to_wkb(b.geometry.values)
     face_wkb = shapely.to_wkb(face2d)
+    grounds = (ground.ground.to_numpy(np.float64) + city.DATUM_M)
+    cen = shapely.centroid(b.geometry.values)
+    bx, bz = city.to_local(shapely.get_x(cen), shapely.get_y(cen))
+    near = np.hypot(bx, bz) < ROOF_RADIUS_M
     order = np.argsort(fgid, kind="stable")
     bounds = np.searchsorted(fgid[order], gids)
     jobs = []
@@ -219,7 +273,8 @@ def main(argv: list[str] | None = None) -> None:
         hi = bounds[g1 + 1] if g1 + 1 < len(gids) else len(order)
         sel = order[lo:hi]
         gg = gids[part_g]
-        jobs.append((gg, face_wkb[sel], unit[sel], zmin[sel], zmax[sel], cent[sel], fgid[sel], foot_wkb[gg]))
+        jobs.append((gg, face_wkb[sel], unit[sel], zmin[sel], zmax[sel], cent[sel], fgid[sel], foot_wkb[gg],
+                     grounds[fgid[sel]], near[fgid[sel]]))
     log(t0, f"{len(face2d):,} faces on {len(gids):,} buildings → {len(jobs)} chunks on {args.workers} workers")
     with ProcessPoolExecutor(args.workers) as ex:
         out = [r for chunk in ex.map(_chunk, jobs) for r in chunk]
@@ -228,10 +283,13 @@ def main(argv: list[str] | None = None) -> None:
     # ground.parquet: the footprint at the lowest band; towers.parquet: the higher bands
     base = np.full(len(b), np.nan)
     rows = []
-    for gid, bh, ps in out:
+    roof_rows = []
+    for gid, bh, ps, roof in out:
         base[gid] = bh
         for h, w in ps:
             rows.append((gid, h, w))
+        if roof:
+            roof_rows.append((gid, roof))
     g_drawn = ground.ground.to_numpy(np.float64)
     old_h = old_ground.height.to_numpy(np.float64)
     have = np.isfinite(base)
@@ -249,6 +307,26 @@ def main(argv: list[str] | None = None) -> None:
         towers = pd.concat([towers, old_towers[old_towers.gid.isin(no_faces)]], ignore_index=True)
         towers["part"] = np.arange(len(towers))
     towers.to_parquet(DATA / "towers.parquet", index=False)
+    # issue #32: the real roof surfaces, one block per building, for s03_tiles' HFH2 packer
+    if roof_rows:
+        gids_r = np.array([g for g, _ in roof_rows], np.int64)
+        order = np.argsort(gids_r, kind="stable")
+        roof_rows = [roof_rows[i] for i in order]
+        starts, tstarts = [0], [0]
+        xz, y, tri = [], [], []
+        for _, r in roof_rows:
+            xz.append(np.asarray(r["xz"], np.float32))
+            y.append(np.asarray(r["y"], np.float32))
+            tri.append(np.asarray(r["tri"], np.int32) + starts[-1])
+            starts.append(starts[-1] + len(r["xz"]))
+            tstarts.append(tstarts[-1] + len(r["tri"]))
+        np.savez_compressed(DATA / "roofs.npz", gid=np.array([g for g, _ in roof_rows], np.int64),
+                            start=np.array(starts, np.int64), tstart=np.array(tstarts, np.int64),
+                            xz=np.concatenate(xz), y=np.concatenate(y), tri=np.concatenate(tri))
+        (DATA / "roofs.json").write_text(json.dumps({"buildings": len(roof_rows), "vertices": int(sum(len(r["xz"]) for _, r in roof_rows)), "triangles": int(sum(len(r["tri"]) for _, r in roof_rows)), "source": "zg3d lod2"}, ensure_ascii=False) + "\n", encoding="utf-8")
+    else:
+        for p in (DATA / "roofs.npz", DATA / "roofs.json"):
+            p.unlink(missing_ok=True)
     (DATA / "towers.json").write_text(json.dumps({"buildings_sha256": sha(DATA / "buildings.parquet"),
                                                   "source": "zg3d lod2"}) + "\n", encoding="utf-8")
     # buildings.parquet is the identity: it must not have changed
