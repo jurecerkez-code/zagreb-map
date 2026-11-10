@@ -246,7 +246,7 @@ def test_config_follows_contract_c5(tmp_path):
     write(tmp_path)
     cfg = json.loads((tmp_path / "stockholm.json").read_text())
     assert set(cfg) == {"city", "name", "subtitle", "version", "tileSize", "origin", "crs", "home", "periods",
-                        "yearMin", "yearMax", "histogram", "histogramEst", "unknown", "attrStride", "tiles",
+                        "yearMin", "yearMax", "histogram", "histogramEst", "unknown", "bounds", "attrStride", "tiles",
                         "packs", "stats", "features", "attribution", "accuracy", "terrain", "links", "landmarks",
                         "districts", "langFromBrowser", "about", "accuracyLabels", "starts"}
     # About's own numbers, counted over what ships, and who made the map
@@ -286,7 +286,8 @@ def test_config_follows_contract_c5(tmp_path):
     assert (cfg["yearMin"], cfg["yearMax"]) == (1625, 1967)
     assert cfg["stats"] == {
         "buildings": 11,
-        "byFlag": {"exact": 4, "range": 1, "long": 1, "area": 1, "estimate": 1, "period": 1, "unknown": 2},
+        "byFlag": {"exact": 4, "range": 1, "long": 1, "area": 1, "estimate": 1, "period": 1, "unknown": 2, "bound": 0},
+        "byBound": {"pre1968": 0, "1968_2007": 0},
         "bySrc": {"none": 2, "curated": 1, "raa": 4, "raa_area": 1, "wikidata": 1, "estimate": 2, "raa_old": 0, "osm": 0, "reader": 0},
         "floorsOsm": 0, "floorsHeight": 11, "privateHouses": 3,
         "photos": 1, "extracts": {"sv": 2, "en": 1},

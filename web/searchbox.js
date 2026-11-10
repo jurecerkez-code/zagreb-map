@@ -112,7 +112,9 @@ export function mountSearch({ root, openButton, getJson, base, T, onPick, swatch
     if (!row) return;
     input.value = row.label;
     close();
-    if (isPhone()) input.blur();
+    // Blurring the hidden sheet falls back to body. Focus the real trigger before the
+    // card records its return target, so Escape never strands the keyboard on body.
+    if (isPhone()) leave();
     onPick(row, loadShard);
   }
 

@@ -15,9 +15,10 @@ function page(href = 'https://husforhus.se/', stored) {
 // localStorage throws in some private windows and with blocked site data.
 const broken = { getItem() { throw new Error('SecurityError'); }, setItem() { throw new Error('QuotaExceededError'); } };
 
-test('the default look is Foto', () => {
+test('the default map look stays Foto; the navy Lab map remains an explicit option', () => {
   assert.equal(DEFAULT_LOOK, 'foto');
   assert.ok(THEMES[DEFAULT_LOOK]);
+  assert.equal(THEMES.lab.name, 'Zagreb Lab');
 });
 
 // pipeline/city.py's PERIODS colours are the default look's, so the pipeline's stockholm.json and
@@ -26,7 +27,7 @@ test("city.py's PERIODS colours are the default look's period colours", () => {
   const py = readFileSync(new URL('../../pipeline/city.py', import.meta.url), 'utf8');
   const block = py.slice(py.indexOf('PERIODS = ['), py.indexOf(']', py.indexOf('PERIODS = [') + 12));
   const colours = [...block.matchAll(/^\s*\("p\d+",.*"(#[0-9a-f]{6})"\),$/gm)].map(m => m[1]);
-  assert.equal(colours.length, 12);
+  assert.equal(colours.length, 6, 'Zagreb has six dated construction bands');
   assert.deepEqual(colours, THEMES[DEFAULT_LOOK].periods);
 });
 
@@ -34,27 +35,28 @@ test('the first look: ?theme= wins, then the remembered choice, then the default
   assert.equal(initialLook('?theme=kalk', 'arg'), 'kalk');
   assert.equal(initialLook('?debug=1&theme=blatimme', null), 'blatimme');
   assert.equal(initialLook('', 'paper'), 'paper');
-  assert.equal(initialLook('?lang=sv', null), 'foto');
-  assert.equal(initialLook('', null), 'foto');
+  assert.equal(initialLook('?lang=sv', null), DEFAULT_LOOK);
+  assert.equal(initialLook('', null), DEFAULT_LOOK);
 });
 
 test('unknown names fall back: a dropped look in the URL or in storage is ignored', () => {
   assert.equal(initialLook('?theme=night', 'kalk'), 'kalk');
-  assert.equal(initialLook('?theme=__proto__', null), 'foto');
-  assert.equal(initialLook('?theme=', 'nordic'), 'foto');
-  assert.equal(initialLook('', 'toString'), 'foto');
+  assert.equal(initialLook('?theme=__proto__', null), DEFAULT_LOOK);
+  assert.equal(initialLook('?theme=', 'nordic'), DEFAULT_LOOK);
+  assert.equal(initialLook('', 'toString'), DEFAULT_LOOK);
 });
 
 test('the manager starts on the look the page asks for', () => {
   assert.equal(createLooks(page('https://husforhus.se/?theme=kalk', 'paper')).current, 'kalk');
   assert.equal(createLooks(page('https://husforhus.se/', 'paper')).current, 'paper');
-  assert.equal(createLooks(page()).current, 'foto');
+  assert.equal(createLooks(page()).current, DEFAULT_LOOK);
 });
 
 test('every look in web/themes.js, by its shown name; paper is "Classic"', () => {
   const looks = createLooks(page());
   assert.deepEqual(looks.items.map(l => [l.id, l.name]),
-    [['arg', 'Ärg'], ['kalk', 'Kalkfärg'], ['blatimme', 'Blå timmen'], ['paper', 'Classic']]);
+    [['lab', 'Zagreb Lab'], ['arg', 'Patina'], ['kalk', 'Limewash'], ['blatimme', 'Blue hour'],
+      ['paper', 'Classic'], ['foto', 'Foto']]);
 });
 
 test('switching notifies subscribers, remembers the choice and puts it in the URL, keeping the other parameters', () => {
@@ -64,12 +66,12 @@ test('switching notifies subscribers, remembers the choice and puts it in the UR
   looks.subscribe((id, was) => heard.push([id, was]));
   assert.equal(looks.set('blatimme'), true);
   assert.equal(looks.current, 'blatimme');
-  assert.deepEqual(heard, [['blatimme', 'foto']]);
+  assert.deepEqual(heard, [['blatimme', DEFAULT_LOOK]]);
   assert.equal(p.data.get(LOOK_KEY), 'blatimme');
   assert.equal(p.location.href, 'https://husforhus.se/?debug=1&lang=sv&theme=blatimme');
   looks.set('paper');
   assert.equal(p.location.href, 'https://husforhus.se/?debug=1&lang=sv&theme=paper'); // replaced, not added twice
-  assert.deepEqual(heard, [['blatimme', 'foto'], ['paper', 'blatimme']]);
+  assert.deepEqual(heard, [['blatimme', DEFAULT_LOOK], ['paper', 'blatimme']]);
 });
 
 test('an unknown look or the current one changes nothing', () => {
@@ -103,8 +105,8 @@ test('storage that throws does not break the looks', () => {
   assert.equal(looks.set('kalk'), true);
   assert.equal(heard, 1);
   assert.equal(p.location.href, 'https://husforhus.se/?theme=kalk');
-  assert.equal(createLooks({ ...page(), storage: broken }).current, 'foto');
-  assert.equal(createLooks({ ...page(), storage: null }).current, 'foto');
+  assert.equal(createLooks({ ...page(), storage: broken }).current, DEFAULT_LOOK);
+  assert.equal(createLooks({ ...page(), storage: null }).current, DEFAULT_LOOK);
 });
 
 test('atmospheres: only "none" for now, and an effect is started and stopped as it is switched', () => {
@@ -122,5 +124,5 @@ test('atmospheres: only "none" for now, and an effect is started and stopped as 
   assert.equal(atmos.set('none'), true);
   assert.deepEqual(calls, [['start', 'the scene'], ['stop']]);
   assert.deepEqual(heard, ['snow', 'none']);
-  assert.equal(looks.current, 'foto'); // the look is a separate choice
+  assert.equal(looks.current, DEFAULT_LOOK); // the look is a separate choice
 });

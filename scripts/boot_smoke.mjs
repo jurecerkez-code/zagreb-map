@@ -41,6 +41,11 @@ report(Number.isFinite(count) && count > 100000, 'header counts the city', count
 // needle must be able to face anywhere. Both go through real pointer input; document-level capture lets the
 // handlers outlive the header's redraws (the first era's bug), and the snap design has no turn state to stick (the
 // second era's). A three-generation ghost ("works on the first press, never again") makes the press loop essential.
+// Issue #34 moves the compass into the Lab "More" sheet: open that real dock first, then measure.
+if (await page.locator('#lab-more-button').isVisible()) {
+  await page.locator('#lab-more-button').click();
+  await page.locator('#lab-more').waitFor({ state: 'visible', timeout: 5000 });
+}
 const bb = await (await page.$('.north-open'))?.boundingBox();
 if (!bb) { report(false, 'compass button present'); await browser.close(); process.exit(1); }
 const cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;

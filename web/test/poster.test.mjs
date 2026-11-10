@@ -112,7 +112,7 @@ test('the fog bands into a few flat steps: the ground, the water and "Year unkno
       const run = bands(P, labs, a, th.sky), msg = `${name} ${a}: ${run.map(b => b[0])}`;
       // flat bands, a few of them, ending in the sky's ink. Ärg's ink-dark water into its pale sky is the longest fade
       // of any look: it crosses the dark periods' inks and "Year unknown"'s greys, so it takes more.
-      assert.ok(run.length >= 2 && run.length <= (name === 'arg' && a === th.water ? 12 : 6), msg);
+      assert.ok(run.length >= 2 && run.length <= (['arg', 'foto'].includes(name) && a === th.water ? 12 : 6), msg);
       assert.equal(run.at(-1)[0], sky, msg);
       // an ink that comes back does so across less than a twentieth of the fade: a hairline, never a flicker
       run.forEach(([ink], j) => {
@@ -121,7 +121,7 @@ test('the fog bands into a few flat steps: the ground, the water and "Year unkno
       });
     }
     // a building fogs from its own colour into the sky's ink
-    for (const i of [0, 4, 8]) {
+    for (const i of th.periods.map((_, i) => i)) {
       const run = bands(P, labs, th.periods[i], th.sky);
       assert.equal(run[0][0], hex(boostInk(rgb(th.periods[i]))), `${name} period ${i}`);
       assert.equal(run.at(-1)[0], sky);

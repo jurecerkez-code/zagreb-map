@@ -19,7 +19,7 @@ test('ysrc codes match', () => {
   for (const [k, v] of Object.entries(YSRC)) assert.equal(consts[`SRC_${k}`], v, k);
 });
 test('every Python code has its mirror (a code added only in codes.py would go unnoticed otherwise)', () => {
-  const flags = ['EXACT', 'RANGE', 'LONG', 'AREA', 'ESTIMATE', 'PERIOD', 'UNKNOWN'];
+  const flags = ['EXACT', 'RANGE', 'LONG', 'AREA', 'ESTIMATE', 'PERIOD', 'UNKNOWN', 'BOUND'];
   for (const k of Object.keys(consts)) {
     if (k.startsWith('SRC_')) assert.ok(k.slice(4) in YSRC, k);
     else if (k.startsWith('FLOORS_')) assert.ok(k.slice(7) in FSRC, k);

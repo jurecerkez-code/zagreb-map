@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const families = ['Albert Sans', 'Familjen Grotesk', 'Inter', 'Schibsted Grotesk'];
+const families = ['Albert Sans', 'Familjen Grotesk', 'Inter', 'JetBrains Mono', 'Schibsted Grotesk'];
 const croatian = 'čćđšžČĆĐŠŽ';
 
 test('every look renders Croatian letters from the self-hosted latin-ext font', async ({ page }) => {
@@ -18,7 +18,7 @@ test('every look renders Croatian letters from the self-hosted latin-ext font', 
     await document.fonts.ready;
     return families.map(family => ({ family, valid: document.fonts.check(`600 16px "${family}"`, croatian) }));
   }, { families, croatian });
-  const expectedFiles = ['albert-sans', 'familjen-grotesk', 'inter', 'schibsted-grotesk']
+  const expectedFiles = ['albert-sans', 'familjen-grotesk', 'inter', 'jetbrains-mono', 'schibsted-grotesk']
     .map(family => `${family}-latin-ext-wght-normal.woff2`).sort();
   expect([...loadedFiles].filter(file => file.includes('-latin-ext-')).sort()).toEqual(expectedFiles);
   expect(results).toEqual(families.map(family => ({ family, valid: true })));
