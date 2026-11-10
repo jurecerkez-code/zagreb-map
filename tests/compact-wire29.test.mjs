@@ -13,7 +13,7 @@ test('ZGR2 shared bytes preserve way order and quantise inside the decimetre gri
   const doc = { version: 2, format: ROADS2_FORMAT, file: 'roads2.bin.gz', count: 4,
     classes: ['residential', 'service'] };
   const got = decodeRoads2(doc, bytes('zgr2_hex'));
-  assert.deepEqual(got.ways.map(w => [w.o, w.c, w.w, w.cls]), [[0, 2, 1.5, 0], [2, 2, 2.25, 1]]);
+  assert.deepEqual(got.ways.map(w => [w.o, w.c, w.w, w.cls]), [[0, 2, 1.5, 'residential'], [2, 2, 2.25, 'service']]);
   // A first point off the 1.6 m cells and a 1 km step are quantised, not escaped: the 5 cm grid bound is the
   // contract (see pack_roads2), so compare inside it rather than to the legacy float32 bits.
   const want = [[0, 0], [0.1, -0.1], [0.03, -0.07], [1000, 1000]];
