@@ -59,6 +59,9 @@ export function sunVector({ elevation, azimuth }) {
   return [Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)];
 }
 
+// Explicit Night, or Live after its sun has dropped below the city-lighting limit. Other modes keep their own light.
+export const sunIsNight = (mode, elevation) => mode === 'night' || (mode === 'live' && elevation < 6);
+
 // Zagreb, and the clock Croatia keeps: UTC+2 between the last Sunday of March and the last Sunday of October, UTC+1
 // otherwise. (CET/CEST, the rule the country still follows.)
 export const ZAGREB = { lat: 45.8150, lon: 15.9819 };

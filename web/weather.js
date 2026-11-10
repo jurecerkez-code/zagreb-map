@@ -192,6 +192,9 @@ const FLAKE_FRAG = /* glsl */`
     a *= vAlpha * uAmount * uAlpha;
     if (a < 0.004) discard;
     outColor = vec4(uInk, a);
+    #define gl_FragColor outColor
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
   }
 `;
 

@@ -64,7 +64,7 @@ export function makeRoofYears(THREE, { attrs, stride, count, camera, renderer, u
 
   // ---- The glyph atlas: red = the ink's coverage, green = the halo's.
   const canvas = document.createElement('canvas');
-  const tex = new THREE.CanvasTexture(canvas);
+  const tex = new THREE.CanvasTexture(canvas); // #24: data texture, not display colour
   tex.generateMipmaps = true;
   tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
@@ -151,6 +151,10 @@ export function makeRoofYears(THREE, { attrs, stride, count, camera, renderer, u
         float a = ${halo ? 't.g * 0.92' : 't.r'} * vA;
         if (a < 0.01) discard;
         gl_FragColor = vec4(${halo ? 'uHalo' : 'uInk'}, a);
+        // #24: the display transform is the renderer's own tail. The atlas stays untagged: red and green are
+        // coverage, data, not colour, and must not be decoded as sRGB.
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
       }`,
   });
   const haloMesh = new THREE.Mesh(geo, material(true)), inkMesh = new THREE.Mesh(geo, material(false));

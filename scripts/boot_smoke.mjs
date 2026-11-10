@@ -79,18 +79,28 @@ const offAfterDrag = toCardinal(((await az()) ?? 9) - Math.PI / 2);
 report(Number.isFinite(offAfterDrag) && offAfterDrag < 0.15, 'compass: needle dragged east, the map faces east',
   `off by ${offAfterDrag.toFixed(3)}`);
 
-// A press asks the camera back (issue #22): during a ride the same click ends the ride and walks to the next side.
-// A synthetic trip id is fine: the ride holds its view for RIDE_GONE_MS (12 s) when the layer cannot draw a trip,
-// far longer than this block. The map is now east-facing from the drag, so the click must land on south.
+// A press asks the camera back (issue #22): a click on the map during a ride ends the ride and gives the camera
+// back where the ride found it. It used to press the compass instead, which ends the ride only through the
+// compass's endHolds hook and turns the map at the same time, so the check passed or failed depending on whether
+// the trams layer had arrived and which handler the press reached first. The map click is the documented way out
+// (app.js's canvas pointerup), and the compass is contracted by the four clicks above.
+// With no trams layer the ride is ended on the next frame (stepRide's `!trams?.on`), and a click would be given
+// the credit for it: wait for the layer, so the ride really is standing when the map is pressed.
+const layer = await page.waitForFunction(() => !!window.__dbg?.trams, null, { timeout: 90000 })
+  .then(() => true).catch(() => false);
+if (!layer) report(false, 'the trams layer arrives after the reveal (a ride needs it)');
+const azBeforeRide = await az();
 await page.evaluate(() => window.__dbg.startRide({ trip: '__smoke__', heading: 0 }));
 const riding = await page.evaluate(() => !!window.__dbg.riding);
-await page.mouse.click(cx, cy);
-await page.waitForTimeout(600);
-const rideEnded = !(await page.evaluate(() => !!window.__dbg.riding));
-const offRideClick = toCardinal(((await nAz()) ?? 9) - Math.PI);
-report(riding && rideEnded && Number.isFinite(offRideClick) && offRideClick < 0.01,
-  'compass: a click in a ride ends the ride and faces the next side (south)',
-  `riding started: ${riding}, ended: ${rideEnded}, off by ${(offRideClick ?? NaN).toFixed?.(4)}`);
+await page.mouse.click(cx + 200, cy + 200);   // the map, clear of the compass and of the panels
+// Poll on a timer, not on animation frames: the press is handled between frames, and a runner that spends seconds
+// in the first ride frame would otherwise report "not ended" for a ride that has already ended.
+const rideEnded = await page.waitForFunction(() => !window.__dbg.riding, null,
+  { timeout: 20000, polling: 100 }).then(() => true).catch(() => false);
+const azBack = Math.abs(((await az()) - azBeforeRide + Math.PI) % (2 * Math.PI) - Math.PI) < 0.02;
+report(riding && rideEnded && azBack,
+  'compass: a click on the map ends a ride and gives the camera back',
+  `riding started: ${riding}, ended: ${rideEnded}, camera back: ${azBack}`);
 
 await browser.close();
 console.log(failed ? `boot smoke FAILED (${bad.length} bad responses, ${pageErrors.length} page errors)` : 'boot smoke passed');
