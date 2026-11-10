@@ -22,6 +22,8 @@ const config = page => page.evaluate(async () => {
 const camera = page => page.evaluate(() => window.__dbg.camera.position.toArray().map(v => Math.round(v)));
 
 test('the handles are sliders: keys move the years, read them out, and never move the map', async ({ page }) => {
+  // A software-rendered map spends seconds on the ground-rise settle and on each handle key: same budget as the film.
+  test.setTimeout(240_000);
   const errors = watchErrors(page);
   await page.goto('/');
   await expect(page.locator('#loading')).toBeHidden({ timeout: 60_000 });
@@ -87,7 +89,8 @@ test('the legend counts each period within the range', async ({ page }) => {
   await expect.poll(() => n(index)).toBe(0);
   await page.keyboard.press('End');
   await expect(to).toHaveAttribute('aria-valuenow', String(cfg.yearMax));
-  await expect.poll(() => n(index)).toBe(count);
+  // The undated buildings rise at "Today" and hold the main thread on a software renderer: let the count land.
+  await expect.poll(() => n(index), { timeout: 20_000 }).toBe(count);
   expect(errors).toEqual([]);
 });
 
