@@ -27,9 +27,12 @@ Overpass is not reachable from this laptop; the Geofabrik PBF replaces it.
     --out data/addresses.parquet --audit data/address_evidence.parquet --report data/address_report.json
   ```
 
-- For the full city pipeline, set `SOURCE["rpj_addresses"]` to that local source only after confirming its licence and
-  documenting it in `sources.yml`. The accessible public ArcGIS schema is not itself a publication licence. DGU access,
-  source capabilities, timestamps and the unresolved permission are in `docs/research/addresses.md`.
+- For the full city pipeline, `SOURCE["rpj_addresses"]` points at `../data/raw/zagreb/rpj_kucni_broj.geojson` and
+  `pipeline/sources.yml` records the publisher's permission (Grad Zagreb, confirmed 2026-11-10, credited "Grad Zagreb").
+  The accessible public ArcGIS schema is not itself a publication licence; the permission is the recorded basis.
+- Measured on 2026-11-10 (all footprints / footprints over 30 m²): 117,345 / 115,803 have a house number (39.3% / 59.3%);
+  282,995 / 187,325 have a number or a street reference (94.75% / 95.94%). The RPJ register has 136,448 points, so the
+  issue's 80%-house-number gate is arithmetically unreachable by one point per footprint; no number is invented.
 - New point attribution accepts only a point covered by exactly one footprint (`unique_covered_by`), with explicit CRS
   conversion. No nearest/smallest-overlap assignment: outside and ambiguous points do not get an address. Candidates
   and zero-metre coverage evidence are logged locally in `data/address_evidence.parquet`, not copied to the web.

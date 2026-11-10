@@ -1244,9 +1244,16 @@ def check_search(out: Path, cfg: dict, a: np.ndarray, hidden: np.ndarray,
             shards[p.stem] = s
         else:
             errors.append(f"search: addr/{p.name} is not an object")
+    ref_shards = {}
+    for p, s in read_shards(folder / "ref"):
+        if isinstance(s, dict):
+            ref_shards[p.stem] = s
+        else:
+            errors.append(f"search: ref/{p.name} is not an object")
     for i, s in enumerate(listed("streets")):
-        if not (isinstance(s, list) and len(s) == 4 and isinstance(s[0], str) and s[0] in shards.get(str(s[3]), {})):
-            errors.append(f"search: street entry {i} has no numbers in the shard it names")
+        if not (isinstance(s, list) and len(s) == 4 and isinstance(s[0], str)
+                and (s[0] in shards.get(str(s[3]), {}) or s[0] in ref_shards.get(str(s[3]), {}))):
+            errors.append(f"search: street entry {i} has no numbers or references in the shard it names")
     taken = None
     for p, shard in sorted(shards.items()):
         for j, (street, pairs) in enumerate(shard.items()):

@@ -34,6 +34,13 @@ export function parse(q, min = 2) {
   const y = f.match(/^(\d{4})(?: ?(?:s|tal|talet))?$/);
   if (y && +y[1] >= 1000 && +y[1] <= 2100) return { kind: 'year', f, year: +y[1] };
   if (/^\d{1,4}(?: \d{1,4})?( ?[a-z]{1,3})?$/.test(f)) return { kind: 'number', f };
+  // A slash address (69/2) is one house number, not 69 followed by a second number. Read it before fold turns
+  // the slash into a space.
+  const slash = String(q).trim().match(/^(.*\D)\s+(\d{1,4})([a-z]{1,3})?\s*\/\s*(\d{1,4})([a-z]{1,3})?$/i);
+  if (slash) {
+    const number = `${Number(slash[2])}${(slash[3] || '').toUpperCase()}/${Number(slash[4])}${(slash[5] || '').toUpperCase()}`;
+    return { kind: 'address', f, street: fold(slash[1]).trim().replace(/ (?:nr|no)$/, ''), number, letter: '' };
+  }
   const address = f.replace(/ \d{1,2} ?(?:tr|trappa|trappor)$/, '');
   const m = address.match(/^(.*\D) (\d{1,4})(?: \d{1,4}(?: ?[a-z]{1,3})?| ?([a-z]{1,3}))?$/);
   if (m) {
@@ -145,15 +152,17 @@ const num = value => {
   return m ? [Number(m[1]), (m[2] || '').toUpperCase()] : [0, ''];
 };
 const identity = value => {
-  const m = String(value).trim().match(/^0*(\d{1,4})(?:\s*([a-z]{1,3}))?$/i);
-  return m ? `${Number(m[1])}${(m[2] || '').toUpperCase()}` : '';
+  const m = String(value).trim().replace(/\s+/g, '').match(/^0*(\d{1,4})([a-z]{1,3})?(?:\/(\d{1,4})([a-z]{1,3})?)?$/i);
+  if (!m) return '';
+  const tail = m[3] === undefined ? '' : `/${Number(m[3])}${(m[4] || '').toUpperCase()}`;
+  return `${Number(m[1])}${(m[2] || '').toUpperCase()}${tail}`;
 };
 
 // An exact (case/space-insensitive) alphanumeric number comes first. Any other same-base or neighbouring record is
 // explicitly marked `near`, including a slash/range form that is not the requested identity.
 export function findNumber(pairs, number, letter = '') {
   if (!pairs?.length) return null;
-  const want = +number, requested = number + letter;
+  const want = +String(number).split('/')[0], requested = number + letter;
   const own = pairs.find(p => identity(p[0]) === requested);
   if (own) return { pair: own, near: null };
   const sameBase = pairs.filter(p => num(p[0])[0] === want);

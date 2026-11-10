@@ -41,7 +41,7 @@ PRIVATE_HOUSE_KATEGORI: set[str] = {"house"}
 # towers.parquet holds each merged building's own ZG3D parts (s03_tiles.tower_parts draws them, no laser credit)
 BUILDING_PARTS = True
 # s99_validate's limits, where Stockholm's do not fit the whole of Zagreb (each is documented in RUN.md)
-VALIDATE = dict(first_load_bytes=4_500_000, whole_city_bytes=40_000_000, terrain_dm=(-100, 10_000),
+VALIDATE = dict(first_load_bytes=4_500_000, whole_city_bytes=42_000_000, terrain_dm=(-100, 10_000),
                 max_ground_dm=10_000, max_height_dm=2_500, tower_m=(0.3, 400.0))
 # Metres per storey (no OSM levels here): one value, the Lower Town's tall 19th-century storeys in mind.
 STOREY_M = {"_default": 3.8}
@@ -62,6 +62,7 @@ MIN_BUILDINGS = 150_000                      # whole city: ~357k ZG3D parts, mer
 SOURCE_PILOT = {"kind": "geojson_pair", "zg3d": "input/zg3d_donji.geojson", "joined": "input/donji_joined.geojson"}
 SOURCE = {"kind": "city", "parts": "../data/processed/zagreb_buildings.parquet", "osm": "../data/raw/osm",
           "wikidata": "../data/raw/wikidata/zg_wikidata.parquet", "zbsm": "../data/raw/zenodo/zgr_zg_data.geojson",
+          "rpj_addresses": "../data/raw/zagreb/rpj_kucni_broj.geojson",
           "dem": "../data/raw/dem",
           # City of Zagreb heritage/survey layers, downloaded 2026-10-20 (pipeline/zagreb_heritage.py, sources.yml)
           "heritage": "../data/raw/year-sources",

@@ -78,7 +78,7 @@ SRC_NAMES = ["none", "curated", "raa", "raa_area", "wikidata", "estimate", "raa_
 KNOWN_FLAGS = (codes.EXACT, codes.RANGE, codes.LONG, codes.BOUND)  # bounded classes join the film at their bound
 ESTIMATED_FLAGS = (codes.AREA, codes.ESTIMATE, codes.PERIOD)
 CARD_FIELDS = ("name", "en", "architects", "raa", "prot", "since", "qid", "wp", "photo", "nofloors", "rebuilt",
-               "cellars", "addr", "addrn", "tower", "yrd", "br", "arch", "sat")
+               "cellars", "addr", "addrn", "addrref", "tower", "yrd", "br", "arch", "sat")
 # sat (Zagreb): the satellite lower bound, 1990 or 2000 (pipeline/zagreb_sat.py, data/sat.parquet): "the land was still
 # empty in <sat>". Card text only, and only on a building with no other year (yflag UNKNOWN); never a year or colour.
 SAT_YEARS = (1990, 2000)

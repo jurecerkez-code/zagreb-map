@@ -62,16 +62,17 @@ uv run python -m pipeline.address_sources \
   record IDs and reprojected explicitly to the building CRS. All 20 were covered by exactly one footprint, producing
   20 matched rows on 20 distinct gids. Merging into a read-only copy of the current table added **13 new gids**
   (30,540 in this sample union). No citywide improvement is estimated from this deliberately bounded sample.
-- **Terms / blocker:** the ArcGIS item is `access=public` and allows anonymous `Query`, but its `licenseInfo`, item
+- **Terms and permission:** the ArcGIS item is `access=public` and allows anonymous `Query`; its `licenseInfo`, item
   `accessInformation`, layer `copyrightText`, and service `copyrightText` are empty ([ArcGIS item
   metadata](https://www.arcgis.com/sharing/rest/content/items/15e459400c774a8bafc4393b3435413f)). Public GET access is
-  not an open-content licence. **Needs human:** Grad Zagreb/opendata clarification of reuse, modification and
-  redistribution of the point data and a derived address/search index before it is promoted into
-  `pipeline/sources.yml` or published. The local adapter deliberately performs no network download. A bounded sample
-  was used for evidence/testing only; the full city extract is not committed or published.
+  not an open-content licence. Grad Zagreb approved reuse of the layer for this project on 2026-11-10; the permission
+  is recorded in `pipeline/sources.yml` (`gz_rpj`) and the required credit is **"Grad Zagreb"**. The source is named in
+  the attribution shown by the map. The project publishes a derived address/search index, not a redistribution of the
+  raw points.
+- The local adapter downloads nothing. The permitted full extract was fetched to
+  `../data/raw/zagreb/rpj_kucni_broj.geojson` (136,448 points) and is not committed.
 - The [Geoportal catalogue](https://geoportal.zagreb.hr/) describes house-number layers in its cadastre/RPJ map. The
-  tested ArcGIS feature layer is concrete evidence of a usable schema; the public-facing metadata absence above is the
-  unresolved release gate, not something the code works around.
+  tested ArcGIS feature layer is concrete evidence of a usable schema; the permission above is the release basis.
 
 ### 3. Existing OSM / Geofabrik and ZBSM
 
@@ -130,24 +131,24 @@ under the same privacy/takedown merge. A new source can never un-withhold a buil
 
 `python -m pipeline.zagreb_addresses` over `engine/data/buildings.parquet` (298,675 footprints), the OSM address
 points, the OSM street ways plus the PBF's `zg_osm_streets.parquet` (21,862 named ways for the whole city, where the
-dense Overpass box misses the periphery), and the 22 `addr:interpolation` ways. Denominators are the issue's.
+dense Overpass box misses the periphery), the 22 `addr:interpolation` ways, and the permitted Grad Zagreb
+`RPJKucniBroj` extract (136,448 points). Denominators are the issue's. The source credit is **"Grad Zagreb"**.
 
 | | before | after, house number | after, number or street reference |
 |---|---|---|---|
-| all 298,675 | 30,527 — 10.22% | 41,051 — 13.74% | 280,748 — **94.00%** |
-| over 30 m²: 195,245 | 30,042 — 15.39% | 31,192 — 15.97% | 184,920 — **94.71%** |
+| all 298,675 | 30,527, 10.22% | 117,345, **39.29%** | 282,995, **94.75%** |
+| over 30 m²: 195,245 | 30,042, 15.39% | 115,803, **59.31%** | 187,325, **95.94%** |
 
-- `inside` 24,983 footprints (a point covered by exactly one footprint), `near` 1,022 (no cover, nearest footprint
-  within 25 m that also faces the address's own street), `inherited` 9,298 (a ≤ 30 m² structure sharing an edge with
-  an addressed building — the issue's "pripada zgradi Ilica 25"), interpolation 13 of 110 expanded numbers.
-- 23,970 buildings got a reference only; 17,927 (10,325 over 30 m²) have neither. Their median distance to the nearest
-  named street is **91.6 m**, 2,059 lie beyond 200 m, and the 60 m rule the issue sets is what keeps them out — an
-  industrial yard set back from the road is 60–100 m from it.
-- **95% is not reached: 94.71% over 30 m², 566 buildings short (0.29 pp).** The missing input is not a better join:
-  OSM has no address point for those footprints and no named way within 60 m. Reaching 95% needs either the City of
-  Zagreb / DGU address register (RPJ; the public sample is 20 rows and the full extract needs a human licence check)
-  or the city's own named-street network in the periphery, which OSM has not mapped. Widening the 60 m rule or
-  borrowing a number from a neighbouring street would fabricate the answer, so neither is done.
-- Gates still open: the ≥ 80% house-number gate (15.97% over 30 m²; OSM simply has no number for those buildings), the
-  Playwright `e2e/address.spec.mjs` over 30 sampled addresses (needs a version built with `data/addresses.parquet`),
-  and the About-page sentence, which now reports number-or-reference coverage from `index.street_ref`.
+- The 95% gate is met over 30 m² (187,325 of 195,245; 7,920 neither) and is not met city-wide (94.75%; 15,680
+  neither). Those are real counts, not rounded up.
+- RPJ matching: 136,448 points, 133,089 unique `inside` or `near` covers, 931 ambiguous covers, 2,428 outside every
+  footprint, 114,744 distinct buildings matched. The remaining points are unmatched or duplicate addresses.
+- The 80% house-number gate is **not reachable with this register**: 136,448 points cannot cover 195,245 footprints
+  over 30 m², so the arithmetic ceiling is 69.9% even if every point were unique. The measured 59.31% is the real
+  result; no number was invented and no near number was promoted to an exact one.
+- Slash addresses are one identity (`102A/1` is not `102A` plus `1`); the parser and `findNumber` keep the whole form,
+  so the exact row wins and a base-number row is marked `near` only when the exact form is absent.
+- `e2e/address.spec.mjs` passed over 30 addresses sampled from this build with a fixed seed. The sample is stored in
+  `e2e/fixtures/addresses.json`; each search flew to its own `gid` and opened the card. The About and search coverage
+  sentences read `index.addressed` and `index.street_ref` from the same build.
+

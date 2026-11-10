@@ -123,7 +123,8 @@ test('croatian street forms and alphanumeric house numbers resolve without mergi
     [['Ulica Đakovačka 18aa', 4, null]]);
   assert.deepEqual((await addressRows(p, parse('ul. Đakovačka 18ab'), load)).map(r => [r.gid, r.near]), [[4, '18AB']]);
   assert.deepEqual((await addressRows(p, parse('Grgura Ninskog 7'), load)).map(r => r.gid), [6]);
-  assert.deepEqual((await addressRows(p, parse('Dakovacka 23/1'), load)).map(r => [r.gid, r.near]), [[5, '23']]);
+  assert.deepEqual((await addressRows(p, parse('Dakovacka 23/1'), load)).map(r => [r.gid, r.near]), [[5, null]]);
+  assert.equal(parse('Dakovacka 23/1').number, '23/1');
   assert.equal(findNumber([['12a', 4, 0]], '12', 'A').near, null);
   assert.equal(findNumber([['12ab', 4, 0]], '12', 'AB').near, null);
   assert.equal(findNumber([['23/1', 4, 0]], '23', '').near, '23');

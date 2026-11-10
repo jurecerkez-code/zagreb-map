@@ -117,7 +117,7 @@
   "search.cancel": "Odustani",
   "search.list": "Rezultati pretrage",
   "search.try": "Pokušajte:",
-  "search.coverage": "Adrese i ulice dolaze iz OpenStreetMapa; broj kuće ili ulicu ima oko {share} % zgrada.",
+  "search.coverage": "Adrese dolaze iz OpenStreetMapa i registra kućnih brojeva Grada Zagreba; broj kuće ili ulicu ima oko {share} % zgrada.",
   "search.loading": "Učitavanje popisa adresa…",
   "search.failed": "Pretragu nije bilo moguće učitati. Provjerite vezu i pokušajte ponovno.",
   "search.results": "{n} rezultata",
