@@ -2,9 +2,10 @@ import { test, expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import sharp from 'sharp';
 
-// This file runs against the whole city, not a fixture: perf.mjs budgets 180s for that load alone, and axe over the
-// result takes tens of seconds more on a software-GL runner. 240s is the load budget plus the assertions.
-test.describe.configure({ timeout: 240_000 });
+// This file runs against the whole city, not a fixture: perf.mjs budgets 180s for that load alone, axe over the
+// result takes tens of seconds more on a software-GL runner, and the measured-contrast test photographs three
+// panels. 600s is the load budget plus the assertions, not slack for a slow app.
+test.describe.configure({ timeout: 600_000 });
 
 // Deliberately separate from e2e/a11y.spec.mjs so this issue remains independent
 // of the parent's current fixture and browser work. Run with scripts/serve.mjs.
@@ -158,9 +159,12 @@ test('@zagreb-lab @design-a11y text on glass clears 4.5:1 over the brightest Fot
   // Three panels, each measured from a real screenshot of the ground behind it: the load is the whole city,
   // and a software-GL runner photographs slowly, so this one is budgeted, not retried.
   test.setTimeout(600_000);
-  await open(page);
+  await open(page, '?lang=en&photos=1&try=scenes,search,walks');
   expect(offenders(await glassContrast(page, '#panel')), 'legend').toEqual([]);
-  await page.evaluate(() => window.__dbg.pinCard(window.__dbg.photoGids[0], innerWidth / 2, innerHeight / 2));
+  // photoGids is a Set that arrives with photo-gids.json on the ?photos=1 path, after the reveal: wait for a real
+  // gid rather than assume it is there.
+  await expect.poll(() => page.evaluate(() => window.__dbg.photoGids?.size ?? 0), { timeout: 120_000 }).toBeGreaterThan(0);
+  await page.evaluate(() => window.__dbg.pinCard([...window.__dbg.photoGids][0], innerWidth / 2, innerHeight / 2));
   await expect(page.locator('#card')).toBeVisible();
   expect(offenders(await glassContrast(page, '#card')), 'record card').toEqual([]);
   await page.keyboard.press('Escape');
