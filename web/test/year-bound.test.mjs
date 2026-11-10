@@ -70,6 +70,10 @@ test('the bound legend has a heading and a count for each class', () => {
   assert.match(chart, /buildBoundLegend/);
   assert.match(chart, /ui\.legend\.bounds/);
   assert.match(chart, /boundCounts\(/);
+  // The refresher must read the legend body that exists (`panel`), not an undeclared root: the boot smoke caught
+  // `panels is not defined` when this line named a container the app never had.
+  assert.match(chart, /syncBoundCounts\(panel\)/);
+  assert.doesNotMatch(chart, /\bpanels\./);
   assert.match(en('ui.legend.bounds.pre1968'), /1968/);
   assert.match(en('ui.legend.bounds.1968_2007'), /Before 2007/);
   assert.match(hr('ui.legend.bounds.1968_2007'), /Prije 2007/);

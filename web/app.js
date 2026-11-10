@@ -3182,7 +3182,8 @@ const estTotal = estTotals.reduce((a, b) => a + b, 0);
 // "Today" with the from-handle at rest they are the periods' totals.
 const legendCounts = () => attrTally ? periodCounts(attrTally, uniforms.uYearFrom.value, uniforms.uYear.value, { est: estShown() }) : periods.map(() => 0);
 function syncLegendCounts() {
-  if (panels.period?.children[0]) syncBoundCounts(panels.period.children[0]);
+  // The headed bound rows live in the same legend body as the period swatches.
+  syncBoundCounts(panel);
   const n = legendCounts();
   panel.querySelectorAll('.swatch[data-i]').forEach(b => {
     const i = +b.dataset.i;
