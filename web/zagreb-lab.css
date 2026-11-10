@@ -861,10 +861,18 @@
 [data-ui="lab"] .card .dating,
 [data-ui="lab"] .about :is(.credit, .caveat, .note) { color: var(--ui-fg); }
 [data-ui="lab"] .card .dating a { color: inherit; }
+/* The rebuilt line ("Extended 1768") is the card's only muted text on the card's own glass: the sections under it
+   carry the opaque insert, so --ui-muted reads 6.54:1 there, but over .72 glass on a pale photograph the ground is
+   rgb(69,72,100) and the same tone reads 3.38:1. Its markup sets its ink from --muted inline, so the tone is set
+   here, where the Lab sheet already owns every ink decision. */
+[data-ui="lab"] .card .rebuilt { --muted: var(--ui-fg); }
 /* The card head sits on glass, not on its period band: the band's ink is black on the light bands, which is
    2.1:1 there. The head keeps Lab ink; its 12px mono kicker and its two bare-glass actions ("Why?", "Something
-   wrong?") take the opaque insert small text needs. Measured in the browser; e2e/zagreb-lab.spec.mjs keeps it. */
-[data-ui="lab"] .card-head { color: var(--ui-fg); --band-ink: var(--ui-fg); }
+   wrong?") take the opaque insert small text needs. Measured in the browser; e2e/zagreb-lab.spec.mjs keeps it.
+   The band also has to stop painting: Foto's period colours are pale (rgb(142,211,208) for "Before 1800"), and light
+   Lab ink on one reads 1.44:1. Transparent hands the head the card's own .72 glass as its ground (7.53:1 over the
+   palest pixel behind the card, measured by the same spec). */
+[data-ui="lab"] .card-head { color: var(--ui-fg); --band-ink: var(--ui-fg); background: transparent; }
 [data-ui="lab"] .card .lab-kicker {
   padding: 2px 4px;
   border-radius: 2px;

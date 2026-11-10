@@ -70,13 +70,13 @@ The browser check is the measured one: `glassContrast()` in `e2e/zagreb-lab.spec
 | Panel | Text leaves | Weakest | Brightest pixel behind |
 |---|---|---|---|
 | Legend `#panel` | 21 | 6.54:1 | `rgb(217,223,227)` |
-| Record card `#card` | 13 | 6.52:1 | `rgb(192,190,184)` |
+| Record card `#card` | 26 | 6.52:1 | `rgb(217,223,227)` |
 | About `#about` | 177 | 6.52:1 | `rgb(236,235,247)` |
 
 That measurement found three real failures the token arithmetic had missed, all fixed here rather than argued away:
 
 - the legend's "Hide the N estimated years" switch, the one text control on bare glass, read 3.38:1 over the pale sky — its label now carries `--ui-fg` (7.53:1 there);
-- the card head inherited its period band's ink, which is black on the light bands: 2.06:1 on glass — the head keeps `--ui-fg`, and its 12px mono kicker plus "Why?"/"Something wrong?" take the opaque insert (6.52:1);
+- the card head inherited its period band's ink, which is black on the light bands: 2.06:1 on glass — the head keeps `--ui-fg`, and its 12px mono kicker plus "Why?"/"Something wrong?" take the opaque insert (6.52:1); keeping `--ui-fg` also means the band cannot paint, since Foto's pale bands (`rgb(142,211,208)` for "Before 1800") put light ink at 1.44:1 — in Lab the head is transparent and the card's own glass is its ground (7.53:1 at the palest pixel behind the card);
 - the About tab strip read 3.18:1 — it takes the same insert (6.52:1).
 
 `e2e/zagreb-lab.spec.mjs` is an independent Playwright file. It covers tokens and font resources, all five dock controls, Layers and Search behavior, More keyboard containment/focus restoration, Paper restoration, real Croatian labels, phone sizing/overflow, reduced motion, the measured contrast table above, serious/critical axe findings and captured browser/page/asset errors. It is tagged `@zagreb-lab` with accessibility runs also tagged `@design-a11y`. Its `open()` waits up to 180s for the city's 437 packs: the whole city on a software-GL runner is a 15-minute load by `scripts/perf.mjs`'s own note, and a 60s ceiling failed the suite on a loaded laptop for reasons that had nothing to do with the app.

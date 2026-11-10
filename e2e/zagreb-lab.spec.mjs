@@ -243,6 +243,9 @@ test.describe('@zagreb-lab phone', () => {
     await page.locator('#lab-more-button').click();
     const dialog = page.locator('#lab-more');
     await expect(dialog).toBeVisible();
+    // The sheet rises 6px as it opens (zagreb-lab-fade, 180ms). Measured mid-rise its bottom reads 848 on an 844px
+    // viewport, which is the entrance and not the layout, so the geometry waits for the sheet to land.
+    await expect.poll(() => dialog.evaluate(el => el.getAnimations().some(a => a.playState === 'running'))).toBe(false);
     const box = await dialog.boundingBox();
     expect(box.x).toBeGreaterThanOrEqual(-1);
     expect(box.width).toBeGreaterThanOrEqual(389);

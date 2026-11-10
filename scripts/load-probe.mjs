@@ -3,6 +3,10 @@ import fs from 'node:fs';
 import { NETWORK_4MBIT, loadProbeFailures } from './load-gates.mjs';
 
 const base = process.env.PROBE_BASE || 'http://127.0.0.1:8684/';
+// A gate that hangs is worse than a gate that fails: it costs CI its whole job timeout and reports nothing. Each phase
+// below already has its own ceiling (180s reveal, 240s full, 180s cached reveal; the 4 Mbit/s run takes about 70s on a
+// runner), so this is one ceiling over all of them, and it fails loudly at the phase it was stuck in.
+const DEADLINE_MS = Number(process.env.PROBE_DEADLINE_MS) || 600_000;
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: 1 });
 const errors = [], missing = [], rejected = [];
@@ -19,6 +23,17 @@ page.on('requestfinished', async r => {
   try { r.__response = await r.response(); } catch { /* already closed */ }
 });
 const result = { base, network: '4 Mbit/s CDP', phases: {}, errors, missing, rejected };
+let phase = 'launch';
+const deadline = setTimeout(() => {
+  result.fatal = `probe did not finish within ${DEADLINE_MS} ms (stuck in "${phase}")`;
+  console.error(`LOAD BUDGET: probe failed: ${result.fatal}`);
+  try {
+    fs.mkdirSync('shots', { recursive: true });
+    fs.writeFileSync(`shots/load-${new URL(base).port}.json`,
+      JSON.stringify({ ...result, failures: loadProbeFailures(result) }, null, 2));
+  } catch { /* the exit code is the gate */ }
+  process.exit(1);
+}, DEADLINE_MS);
 await context.addInitScript(() => {
   window.__loadAudit = { revealedAt: null, requests: [] };
   const sample = () => {
@@ -34,11 +49,13 @@ await context.addInitScript(() => {
   }, { once: true });
 });
 try {
+  phase = 'first navigation';
   await page.goto(`${base}?weather=none`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.getElementById('loading')?.hidden, null, { timeout: 180_000 });
   result.phases.revealMs = Date.now() - started;
   result.phases.criticalRequests = await page.evaluate(() => window.__loadAudit.requests);
   result.phases.criticalBytes = result.phases.criticalRequests.reduce((n, row) => n + row.bytes, 0);
+  phase = 'full city (first load)';
   await page.waitForFunction(() => {
     const s = window.__dbg?.stats();
     return s && s.tiles >= s.tilesTotal && s.terrain === 'ready';
@@ -47,11 +64,14 @@ try {
   result.stats = await page.evaluate(() => window.__dbg.stats());
   await page.waitForTimeout(3000);
   const reloadAt = Date.now();
+  phase = 'second navigation (reload)';
   await page.reload({ waitUntil: 'domcontentloaded' });
+  phase = 'second reveal';
   await page.waitForFunction(() => document.getElementById('loading')?.hidden, null, { timeout: 180_000 });
   result.phases.cachedRevealMs = Date.now() - reloadAt;
   result.phases.cachedRequests = await page.evaluate(() => window.__loadAudit.requests);
   result.phases.cachedCriticalBytes = result.phases.cachedRequests.reduce((n, row) => n + row.bytes, 0);
+  phase = 'service worker';
   result.worker = await page.evaluate(async () => {
     if (!('serviceWorker' in navigator)) return { supported: false };
     const reg = await navigator.serviceWorker.getRegistration();
@@ -61,6 +81,7 @@ try {
   result.fatal = error.stack || String(error);
   process.exitCode = 1;
 } finally {
+  clearTimeout(deadline);
   const failures = loadProbeFailures(result);
   if (failures.length) {
     result.failures = failures;
