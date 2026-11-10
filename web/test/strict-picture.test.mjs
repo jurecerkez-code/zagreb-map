@@ -26,13 +26,14 @@ function run(files, strict) {
   });
 }
 
-test('strict picture gate refuses a loss the older three-percent tolerance allowed', () => {
-  const files = inputs(80, 40 * 0.99);
+test('strict picture gate refuses a loss beyond renderer noise', () => {
+  const files = inputs(80, 40 * 0.989);
   const legacy = run(files, false);
   assert.equal(legacy.status, 0, legacy.stderr);
   const strict = run(files, true);
   assert.equal(strict.status, 1, strict.stderr);
   assert.match(strict.stdout + strict.stderr, /picture gate FAILED/);
+  assert.equal(run(inputs(80, 40 * 0.995), true).status, 0, '0.5% is SwiftShader noise, not a regression');
 });
 
 test('strict picture gate permits equal baseline and its 1.25 mean ceiling, not 1.251', () => {
@@ -51,5 +52,5 @@ test('CI invokes the picture comparison with the strict gate, not just support f
   const command = workflow.split(/\r?\n/).find(line => line.includes('node scripts/shots-compare.mjs'));
   assert.ok(command, 'the workflow must include a picture comparison step');
   assert.match(command, /node\s+scripts\/shots-compare\.mjs\s+.*\s--strict(?:\s|$)/,
-    'the CI command must opt into no contrast loss and the 1.00x to 1.25x mean bounds');
+    'the CI command must opt into the 1% noise floor and the 1.00x to 1.25x mean bounds');
 });
