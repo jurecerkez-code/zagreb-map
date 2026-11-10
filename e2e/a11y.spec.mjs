@@ -9,6 +9,21 @@ async function open(page, query = '') {
   await page.goto('/' + query);
   await expect(page.locator('#loading')).toBeHidden({ timeout: 60_000 });
 }
+// #34 moves secondary actions into the real More dialog. Open that dock first;
+// the focus, naming and dialog assertions themselves stay unchanged.
+const more = page => page.locator('#lab-more');
+async function openMore(page) {
+  if (await page.locator('#lab-more-button').isVisible() && !(await more(page).isVisible()))
+    await page.locator('#lab-more-button').click();
+}
+async function closeMore(page) {
+  if (await more(page).isVisible()) await page.keyboard.press('Escape');
+}
+async function dock(page, selector) {
+  if (['.about-open', '.north-open', '.postcard-open', '.stories-open', '.lang [data-lang]'].includes(selector))
+    await openMore(page);
+  return page.locator(selector);
+}
 const photoGid = page => page.evaluate(async () => {
   const { version } = await (await fetch('data/current.json')).json();
   return (await (await fetch(`data/${version}/photo-gids.json`)).json())[0];
@@ -36,8 +51,24 @@ test('Tab reaches every control, each visibly focused', async ({ page }) => {
     if (f) seen.set(f.key, f.ring);
     if (seen.has('.grip') && seen.has('#scene') && seen.size > 12 && f?.key === '#scene') break;   // round the page once
   }
+  if (await page.locator('#lab-more-button').isVisible()) {
+    await page.locator('.search-open').click();
+    for (let i = 0; i < 6; i++) {
+      const f = await focused(page);
+      if (f) seen.set(f.key, f.ring);
+      await page.keyboard.press('Tab');
+    }
+    await page.locator('.search-cancel').click();
+    await openMore(page);
+    for (let i = 0; i < 24; i++) {
+      await page.keyboard.press('Tab');
+      const f = await focused(page);
+      if (f) seen.set(f.key, f.ring);
+    }
+    await closeMore(page);
+  }
   const must = ['#scene', '.search-input', '[data-mode="0"]', '[data-mode="1"]', '.north-open', '.look-open', '.about-open',
-    '[data-lang="sv"]', '.sheet-handle', '#play', '.grip'];
+    '#lab-more-button', '[data-lang="hr"]', '.sheet-handle', '#play', '.grip'];
   for (const k of must) expect([...seen.keys()], `${k} is reached by Tab`).toContain(k);
   expect([...seen].filter(([, ring]) => !ring).map(([k]) => k), 'every focused control shows a ring').toEqual([]);
 });
@@ -68,12 +99,13 @@ test('search results work with the arrows and Enter; Escape closes the card and 
 test('Escape closes About and Look, and the focus returns to their buttons', async ({ page }) => {
   await open(page);
   for (const [button, dialog] of [['.about-open', '#about'], ['.look-open', '#look']]) {
-    await page.locator(button).focus();
+    await (await dock(page, button)).focus();
     await page.keyboard.press('Enter');
     await expect(page.locator(dialog)).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(page.locator(dialog)).toBeHidden();
     await expect(page.locator(button)).toBeFocused();
+    await closeMore(page);
   }
 });
 
@@ -98,20 +130,21 @@ const names = page => page.evaluate(() => [...document.querySelectorAll('button,
     return { what: el.className || el.id || el.tagName, name: n.trim(), pressed: el.getAttribute('aria-pressed') };
   }));
 
-for (const lang of ['en', 'sv']) {
+for (const lang of ['en', 'hr']) {
   test(`controls, switches, the card and About are named in ${lang}`, async ({ page }) => {
-    await open(page, lang === 'sv' ? '?lang=sv' : '');
-    if (lang === 'sv') {
-      if (await page.locator('html').getAttribute('lang') !== 'sv') await page.locator('.lang [data-lang="sv"]').click();
-      await expect(page.locator('html')).toHaveAttribute('lang', 'sv');
+    await open(page, lang === 'hr' ? '?lang=hr' : '');
+    if (lang === 'hr') {
+      if (await page.locator('html').getAttribute('lang') !== 'hr')
+        await (await dock(page, '.lang [data-lang]')).filter({ hasText: 'HR' }).click();
+      await expect(page.locator('html')).toHaveAttribute('lang', 'hr');
     }
     expect((await names(page)).filter(c => !c.name), 'every control has a name').toEqual([]);
     for (const sw of ['#photo-only', '.swatch.unknown .switch']) {
       const el = page.locator(sw);
       if (await el.count()) await expect(el).toHaveAttribute('aria-pressed', /^(true|false)$/);
     }
-    if (lang === 'sv') {
-      await expect(page.locator('.north-open')).toHaveAttribute('aria-label', 'Vänd mot norr');
+    if (lang === 'hr') {
+      await expect(page.locator('.north-open')).toHaveAttribute('aria-label', 'Kompas: klik okreće na sljedeću stranu (S → I → J → Z), povuci iglu za slobodno okretanje, tipke N/E/S/W');
       await expect(page.locator('#play')).not.toHaveAttribute('aria-label', "Play the city's growth");
     }
     // the card: a dialog named by its title, its photo's alt the building's name
@@ -129,7 +162,7 @@ for (const lang of ['en', 'sv']) {
     expect((await names(page)).filter(c => !c.name)).toEqual([]);
     await page.keyboard.press('Escape');
     // About: a dialog named by its heading
-    await page.locator('.about-open').click();
+    await (await dock(page, '.about-open')).click();
     const heading = await page.locator('#about-title').innerText();
     await expect(page.getByRole('dialog', { name: heading })).toBeVisible();
   });
@@ -147,7 +180,7 @@ for (const [what, phone] of [['desktop', false], ['phone', true]]) {
     await expect(page.locator('#card.pinned')).toBeVisible();
     expect(await serious()).toEqual([]);
     await page.keyboard.press('Escape');
-    await page.locator('.about-open').click();
+    await (await dock(page, '.about-open')).click();
     await expect(page.locator('#about')).toBeVisible();
     expect(await serious()).toEqual([]);
     await ctx.close();

@@ -4,14 +4,20 @@
 // test that measures the camera or takes a "before" screenshot must wait for this, not only for #loading.
 import { expect } from '@playwright/test';
 
-export async function settled(page) {
+// `terrain: false` for a spec that never measures the ground (the monument cards draw their own offscreen render):
+// under software GL the heights can take minutes to arrive on a slow machine, and a card test would time out waiting
+// for a rise it does not read. Everything else, including the settle that asks for frames, still happens.
+export async function settled(page, { terrain = true } = {}) {
   await expect(page.locator('#loading')).toBeHidden({ timeout: 60_000 });
-  await expect.poll(() => page.evaluate(() => {
-    const t = window.__dbg.terrain();
-    if (!t.source) return true;                                   // a build without terrain
-    if (t.state === 'failed') return true;
-    return t.state === 'ready' && Math.abs(t.relief - window.__dbg.relief) < 1e-6;
-  }), { timeout: 120_000 }).toBe(true);   // software GL + the tile stream can hold the relief up for a minute
+  if (terrain) {
+    await expect.poll(() => page.evaluate(() => {
+      const t = window.__dbg.terrain();
+      if (!t.source) return true;                                   // a build without terrain
+      if (t.state === 'failed') return true;
+      if (t.state === 'flat') return false;                         // still to start: the tiles come first
+      return t.state === 'ready' && Math.abs(t.relief - window.__dbg.relief) < 1e-6;
+    }), { timeout: 120_000 }).toBe(true);   // software GL + the tile stream can hold the relief up for a minute
+  }
   // #23: an idle map draws nothing until it is asked — the settle is the moment after the last change, so ask for
   // the frames any test's "before" count or screenshot waits on. Without this a measured idle page reads as 0 fps.
   await page.evaluate(() => window.__dbg.invalidate(2000));

@@ -23,7 +23,7 @@ export const WEATHER_KEY = 'hfh-weather';
 export const WEATHER = {
   none: { fog: [1.6, 4] },
   snow: { light: '#8c98a7', dark: '#2b3749', mix: 0.6, fog: [1.1, 3.2], falls: 'snow' },
-  rain: { light: '#6f7984', dark: '#0b1018', mix: 0.7, fog: [1.0, 3.0], falls: 'rain' },
+  rain: { light: '#6f7984', dark: '#0b1018', deep: '#060713', mix: 0.7, fog: [1.0, 3.0], falls: 'rain' },
   fog: { light: '#c3c8cc', dark: '#353e4a', mix: 0.85, fog: [0.7, 2.2] },
 };
 export const KINDS = Object.keys(WEATHER);
@@ -51,8 +51,11 @@ const mixHex = (a, b, k) => { const p = rgb(a), q = rgb(b); return hex(p.map((v,
 export const isDark = sky => luma(rgb(sky)) < 0.4;
 // The sky in full weather, for a look's sky.
 export const weatherSky = (sky, kind) => {
-  const w = WEATHER[kind];
-  return w?.mix ? mixHex(sky, isDark(sky) ? w.dark : w.light, w.mix) : sky;
+  const w = WEATHER[kind], dark = isDark(sky);
+  // The navy Lab already sits below Blue hour's storm grey: use its deeper target,
+  // not a fractionally lighter navy that would violate the weather's own meaning.
+  const target = dark && w.deep && luma(rgb(sky)) < 0.08 ? w.deep : dark ? w.dark : w.light;
+  return w?.mix ? mixHex(sky, target, w.mix) : sky;
 };
 // The sky now: the look's sky moved towards each kind's by how far that kind has come in (levels: 0 to 1 per kind;
 // two are above 0 only during a switch). The look's own sky, exactly, when the weather is Clear.
@@ -192,6 +195,9 @@ const FLAKE_FRAG = /* glsl */`
     a *= vAlpha * uAmount * uAlpha;
     if (a < 0.004) discard;
     outColor = vec4(uInk, a);
+    #define gl_FragColor outColor
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
   }
 `;
 

@@ -19,13 +19,15 @@ No account or application server is required for normal map use. The viewer is `
 
 ## Current data
 
-The checked-in build is `web/data/v20261103-fix/`.
+The checked-in build is `web/data/v20261110-bounds/`: the whole city with 3,824 buildings bounded by the cadastre's two registers (before 1968 and before 2007), plus the compact road, tree and gzip layout. It is ~37 MB over the wire.
 
 | Measure | Count |
 |---|---:|
 | Buildings | 298,675 |
-| Records with a year, range or period | 4,401 |
-| Explicitly unknown construction years | 294,274 |
+| Records with a year, range, period or bound | 8,195 |
+| Bounded before 1968 | 2,769 |
+| Bounded 1968 to 2007 | 1,055 |
+| Explicitly unknown construction years | 290,480 |
 
 A period is not an exact construction year. Where reliable records are absent, the building is marked **Unknown** instead of inventing one. The city does not record exact construction years for most buildings.
 

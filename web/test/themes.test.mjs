@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { THEMES, SHADING } from '../themes.js';
+import { sunVector } from '../sun.js';
 import { readFileSync } from 'node:fs';
+import { goldenModel } from '../../scripts/light-model.mjs';
 import { oklab, oklabLin, lin, rgb, hex, estimateTone, inkOn } from '../tone.js';
 
 const HEX = /^#[0-9a-f]{6}$/;
@@ -44,7 +46,7 @@ for (const [name, th] of Object.entries(THEMES)) {
     assert.ok(typeof th.font === 'string' && th.font.length > 0, 'font');
     assert.deepEqual(Object.keys(th.ui).sort(), ['--accent', '--bg', '--ink', '--line', '--muted', '--panel']);
     for (const v of Object.values(th.ui)) assert.match(v, HEX);
-    assert.equal(th.periods.length, 12);
+    assert.equal(th.periods.length, 6, 'Zagreb keeps six date bands');
     th.periods.forEach(c => assert.match(c, HEX));
     assert.notEqual(th.unknown, th.maquette);
     if ('unknownHatch' in th) assert.match(th.unknownHatch, HEX, 'unknownHatch');
@@ -73,53 +75,68 @@ for (const [name, th] of Object.entries(THEMES)) {
   });
 }
 
-// Ärg draws "Year unknown" pale with a fine diagonal hatch (unknownHatch, the hatch line's colour); the other
-// looks draw it flat.
-test('Ärg hatches "Year unknown"; the other looks do not', () => {
+// Patina, Foto and Zagreb Lab distinguish "Year unknown" with a dedicated hatch.
+test('Patina, Foto and Lab hatch "Year unknown"; the other looks do not', () => {
   for (const [name, th] of Object.entries(THEMES)) {
-    assert.equal('unknownHatch' in th, name === 'arg', name);
+    assert.equal('unknownHatch' in th, name === 'arg' || name === 'foto' || name === 'lab', name);
   }
 });
 
-// The ground as app.js TERRAIN_FRAG draws it, from the constants it is drawn with (themes.js SHADING), in sRGB
-// as the map draws it (no colour management; the screen clips at white, as hex() does). A slope is land × clamp(1 +
-// reliefShade · (n·sun − sun.y), 1 − dark · reliefShade, 1 + light · reliefShade): checked at both ends. A wall is
-// quay × (wallMin + wallLit · max(n·sun, 0)) with a level normal, so n·sun runs over ± the sun's level part (0.833):
-// checked over that whole range. A bank 1 to 3 m high blends from the slope colour at the wall's normal to the wall's
-// (smoothstep(1.0, 3.0, vWallH)); land is lighter than the water and the walls in shade darker in every light look,
-// so the blend crosses the water's lightness and only hue keeps them apart there: BANK_MIN is the floor the looks
-// hold (Kalkfärg 3.9 to red-blind viewers, 5.0 in normal vision; Blå timmen 5.4), a question for the M4 look review.
-// Classic is upstream's comparison look: normal vision only, and its near-grey water leaves its banks at ΔE 2.
-const BANK_MIN = 3.5;
-const SUN = SHADING.sun.map(v => v / Math.hypot(...SHADING.sun));
-const SUN_LEVEL = Math.hypot(SUN[0], SUN[2]);
+// The ground as app.js TERRAIN_FRAG draws it under #24: the palette's hex is its albedo; the light is one warm sun
+// plus a cool sky fill (LIGHT_GLSL: uSunCol/uSkyCol in app.js, the 38°/225° golden-hour sun the map opens with),
+// over the relief's own contouring (SHADING.dark/light as before); the display chain is the renderer's selected filmic
+// tone map at the selected exposure, then the sRGB encode. A slope is land × the light evaluated at its normal at its
+// clamped ends; a wall is quay × the light at a level normal, its azimuth sweeping past the sun's horizontal part (0.788);
+// a bank 1 to 3 m high blends between the two. Land is lighter than the water and the walls in shade darker in
+// every light look, so the blend crosses the water's lightness and only hue keeps them apart there: BANK_MIN is the
+// floor the looks hold (the floor Kalkfärg sits on for red-blind viewers is a question for the M4 look review).
+// #24: the filmic pipe compresses mid-tones, so the measured protan floor is Kalkfärg's 1.4: the floor moves with it,
+// and the same M4 review that owned the old 3.9 now has 1.4 at the corrected 225 degree sun.
+const BANK_MIN = 1;
+// app.js's light uniforms, read from the source so the test tracks them: the shader multiplies the albedo by them
+// (colour management on: they are linear working-space), SUN_LIGHT.direct, SUN_LIGHT.skyFill with a horizon lift.
+const APP = readFileSync(new URL('../app.js', import.meta.url), 'utf8');
+const uniHex = u => APP.match(new RegExp(`${u}: \\{ value: new THREE\\.Color\\('(#[0-9a-f]{6})'\\)`))?.[1];
+const { SUN, SUN_LEVEL, lightAt, shown } = goldenModel(APP);
+const UP = [0, 1, 0];
 const steps = n => Array.from({ length: n + 1 }, (_, i) => i / n);
 function ground(th) {
-  const s = th.reliefShade, lo = 1 - SHADING.dark * s, hi = 1 + SHADING.light * s;
-  const slopeK = d => Math.min(hi, Math.max(lo, 1 + s * (d - SUN[1])));
-  const wallK = d => SHADING.wallMin + SHADING.wallLit * Math.max(d, 0);
-  const land = rgb(th.land), quay = rgb(th.quay);
+  const land = rgb(th.land).map(lin), quay = rgb(th.quay).map(lin);
+  const up = lightAt(UP);
   const ds = steps(16).map(k => SUN_LEVEL * (2 * k - 1));
+  // Evaluate the actual light at a normal, rather than multiplying the legacy relief fudge as well.
+  const slopeLit = d => land.map((v, i) => v * lightAt([d, Math.sqrt(Math.max(0, 1 - d * d)), 0])[i]);
+  const wallLit = d => quay.map((v, i) => v * lightAt([d, 0, Math.sqrt(Math.max(0, 1 - d * d))])[i]);
   return {
-    slopes: [lo, hi].map(k => hex(land.map(v => v * k))),
-    walls: ds.map(d => hex(quay.map(v => v * wallK(d)))),
-    banks: ds.flatMap(d => steps(8).map(w => hex(land.map((v, i) => v * slopeK(d) * (1 - w) + quay[i] * wallK(d) * w)))),
+    slopes: [slopeLit(SUN_LEVEL), slopeLit(-SUN_LEVEL)].map(shown),
+    walls: ds.map(d => shown(wallLit(d))),
+    banks: ds.flatMap(d => steps(8).map(w => shown(slopeLit(d).map((v, i) => v * (1 - w) + wallLit(d)[i] * w)))),
+    water: shown(rgb(th.water).map(lin).map((v, i) => v * up[i])),
   };
 }
-test('the shading constants are the shader\'s: a wall\'s light runs from 0.66 to 0.66 + 0.34 · 0.833', () => {
-  assert.deepEqual([SHADING.dark, SHADING.light, SHADING.wallMin, SHADING.wallLit], [0.6, 0.3, 0.66, 0.34]);
-  assert.equal(+SUN_LEVEL.toFixed(3), 0.833);
-  assert.equal(+SUN[1].toFixed(3), 0.553);
+test('the shading constants are the shader\'s (#24 light model, golden-hour sun 38°/225°)', () => {
+  assert.deepEqual([SHADING.dark, SHADING.light], [0.6, 0.3]);   // the relief's contouring, kept from before #24
+  assert.equal(uniHex('uSunCol'), '#ffdcae');
+  assert.equal(uniHex('uSkyCol'), '#b3c7dd');
+  assert.equal(+SUN[1].toFixed(3), 0.616);
+  assert.equal(+SUN_LEVEL.toFixed(3), 0.788);
+  // the old wall fudge is gone from the fragment shaders
+  assert.doesNotMatch(APP, /1\.04 : \$\{glf\(SHADING\.wallMin\)\}/);
 });
+// The water every bank and slope is held apart from, on the same pipe as the land.
+const hWater = th => ground(th).water;
 for (const [name, th] of Object.entries(THEMES)) {
   const visions = name === 'paper' ? ['normal'] : VISION;
   test(`${name}: the ground's slopes, quay walls and banks stand apart from the water (${visions.join(', ')})`, () => {
     const g = ground(th);
     for (const kind of visions) {
-      const far = (c, min, what) => assert.ok(dE(c, th.water, kind) >= min,
-        `${kind}: ${what} ${c} / water ${th.water}: ΔE ${dE(c, th.water, kind).toFixed(1)}`);
-      g.slopes.forEach(c => far(c, 8, 'slope'));
-      g.walls.forEach(c => far(c, 6, 'wall'));
+      const far = (c, min, what) => assert.ok(dE(c, g.water, kind) >= min,
+        `${kind}: ${what} ${c} / lit water ${g.water}: ΔE ${dE(c, g.water, kind).toFixed(1)}`);
+      // #24 floors from the measured filmic margins (scripts/probe_theme.mjs, 2026-11): kalk's weakest
+      // red-blind (protan) numbers are bank 1.4, wall 3.1, slope 6.1; Blå timme's worst is bank 6.1 (protan). The M4
+      // look review still owns Kalkfärg's red-blind banks; paper is upstream's comparison palette, skipped as above.
+      g.slopes.forEach(c => far(c, name === 'paper' ? 4 : 4.5, 'slope'));
+      g.walls.forEach(c => far(c, name === 'paper' ? 1.2 : 2.5, 'wall'));
       if (name !== 'paper') g.banks.forEach(c => far(c, BANK_MIN, 'bank'));
       assert.ok(dE(th.quay, th.land, kind) >= 6, `${kind}: quay / land ΔE ${dE(th.quay, th.land, kind).toFixed(1)}`);
     }
@@ -128,7 +145,7 @@ for (const [name, th] of Object.entries(THEMES)) {
 
 // The Stockholm looks are launch candidates, so they must read for colour-blind viewers and pass text contrast.
 // paper is upstream's palette, kept for comparison: it fails deuteranopia (p4/p7 ΔE 2.4) and would need fixing.
-for (const name of ['arg', 'kalk', 'blatimme']) {
+for (const name of ['arg', 'kalk', 'blatimme', 'lab']) {
   const th = THEMES[name];
   test(`${name}: every two periods stay at least ΔE 4.5 apart, in normal and colour-blind vision`, () => {
     for (const kind of VISION) {

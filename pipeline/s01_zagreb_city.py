@@ -10,7 +10,7 @@ import pandas as pd
 import shapely
 
 from . import address_sources as ads
-from . import city, codes, terrain
+from . import city, codes, contributions, terrain
 from . import zagreb_city as zc
 from . import zagreb_heritage as zh
 from . import zagreb_sat as zs
@@ -101,6 +101,17 @@ def main_city(src: dict, helpers) -> None:
     # estimate tier (cross-validated), then the privacy rule
     # Trained and tested on the record years only (EXACT/RANGE/LONG); area and typology years (AREA) never enter it.
     accuracy = zc.run_estimate(b, kategori, height_max, district, y)
+    # On Zagreb's own footprints, apply accepted GitHub-issue years from pipeline/contributions.csv
+    # after every other tier (they neither train nor test the estimate) and before the privacy mark.
+    # The existing contributor loader checks the marker against this actual build's gids.
+    # `b` is still the raw merged frame here and has no uuid column; give it the same per-building uuid
+    # the shipped buildings.parquet gets below, or reader_years cannot detect a stale contribution.
+    b["uuid"] = uuids(b.oid.to_numpy(),
+                      [osm_b.osm_id.iat[o] if o >= 0 else "" for o in b.osm],
+                      np.arange(n, dtype=np.int32))
+    reader = contributions.reader_years(contributions.read(contributions.PATH), b)
+    readers = contributions.apply_years(reader, pd.Series(np.arange(n), index=b.gid), y["year"], y["y_from"],
+                                        y["y_to"], y["ysrc"], y["yflag"])
     period, private = zc.privacy(y, kategori == "house")
     log(t0, f"estimate: {accuracy['result']}; cells estimating: "
             f"{[(c['group'], c['era'], c['inner'], c.get('right_period'), c.get('band')) for c in accuracy['cells'] if c['status'] == 'estimate']}")
@@ -306,10 +317,11 @@ def main_city(src: dict, helpers) -> None:
         "winner": {k: int((y["winner"] == k).sum()) for k in zc.PRIORITY},
         "yflag": {k: int((yf == v).sum()) for k, v in (("exact", codes.EXACT), ("range", codes.RANGE),
                                                        ("long", codes.LONG), ("area", codes.AREA),
-                                                       ("estimate", codes.ESTIMATE), ("unknown", codes.UNKNOWN))},
+                                                       ("estimate", codes.ESTIMATE), ("bound", codes.BOUND),
+                                                       ("unknown", codes.UNKNOWN))},
         "heritage": her_info, "heritage_reads": {f"{a}: {b_}": int(c) for (a, b_), c in her_reads.items()},
         "satellite": {"after_1990": int((sat.sat == 1990).sum()), "after_2000": int((sat.sat == 2000).sum())},
-        "private_houses": int((kategori == "house").sum()), "private_dated": int(private.sum()),
+        "private_houses": int((kategori == "house").sum()), "private_dated": int(private.sum()), "reader_years": readers,
         "periods": np.bincount(period[yf != codes.UNKNOWN], minlength=len(city.PERIODS)).tolist(),
         "addresses": int(len(addr)), "address_coverage": address_coverage, "address_matches": ads.summary(evidence),
         "street_label_candidates": len(cands), "water_pieces": int(len(water)),

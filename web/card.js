@@ -22,8 +22,15 @@ const SRC = { [YSRC.RAA]: 'raa', [YSRC.RAA_OLD]: 'raa_old', [YSRC.WIKIDATA]: 'wi
 const EST_FLAGS = [YFLAG.AREA, YFLAG.ESTIMATE, YFLAG.PERIOD];
 export const isEstimate = b => EST_FLAGS.includes(b.yflag);
 
+// A one-sided source bound is a labeled observation, not an exact construction year or an estimate.
+export const boundClass = b => b && (b.ysrc === YSRC.ZBSM || b.yflag === YFLAG.BOUND)
+  && b.yflag === YFLAG.BOUND && b.yearFrom === 0 && b.year === b.yearTo
+  ? ({ 1968: 'pre1968', 2007: '1968_2007' })[b.year] || null : null;
+
 // The big line in the card's header band.
 export function yearLine(b, periodLabel, T) {
+  const bound = boundClass(b);
+  if (bound) return T(`card.bound.${bound}`);
   if (b.yflag === YFLAG.UNKNOWN) return T('card.unknown');
   // Period only, private house or not: the estimate's band is wider than a decade, so a decade would claim too much.
   if (b.yflag === YFLAG.PERIOD) return periodLabel || T('card.unknown');
@@ -37,6 +44,8 @@ export function yearLine(b, periodLabel, T) {
 // its line names the source, then the decade rule, never a span or a band. A curated building rebuilt from new on
 // older cellars says so (`card.cellars`); the year stays the standing building's.
 export function sourceLine(b, T, card = {}) {
+  const bound = boundClass(b);
+  if (bound) return T(`card.src.zbsm.bound.${bound}`);
   // Zagreb: satellite maps show the land still empty in 1990 or 2000 (card `sat`, s03_tiles): text only, never a year
   if (b.yflag === YFLAG.UNKNOWN) return card?.sat ? `${T('card.src.unknown')} ${T('card.sat', { year: card.sat })}` : T('card.src.unknown');
   if (b.yflag === YFLAG.PERIOD) return T('card.src.period');

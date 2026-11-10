@@ -19,6 +19,27 @@
 // the band under the picture and its text, the paper round it and the imprint on the paper, each from the look's own
 // colours (web/test/poster.test.mjs checks that they read).
 export const THEMES = {
+  // Zagreb Lab: an indigo/violet-to-gold ladder on PiEEG's navy ground.
+  // Inter and all UI surfaces are local; no reference-page JavaScript or telemetry is loaded.
+  lab: {
+    name: 'Zagreb Lab',
+    // Reference water #161a78 fails the slope test at dE 7.0. Raising only blue by
+    // 12 levels preserves its navy identity and clears every ground/vision check.
+    sky: '#0b0d33', land: '#11144a', water: '#161a84', maquette: '#11144a',
+    // Reference hatch #3d4390 insufficiently separates from the unknown ground.
+    // +4 green and +1 blue gives at least dE 8.23 in every colour-vision mode.
+    unknown: '#2b3170', unknownHatch: '#3d4791', quay: '#4c4a4b', reliefShade: 0.35,
+    labelInk: '#ecebf7', labelHalo: 'rgba(11,13,51,0.85)', waterInk: '#b6bbff',
+    estimateTo: '#000000', hoverTo: '#ecebf7', font: 'Inter',
+    // Deep violet through the specified #5c5cff and #8f96ff to the metallic gold.
+    periods: ['#2d1b49', '#583870', '#4e3db9', '#5c5cff', '#8f96ff', '#d8b55a'],
+    floors: ['#536eaa', '#849cc5', '#bfc8df', '#fff1cf'],
+    ui: {
+      '--bg': '#0b0d33', '--ink': '#ecebf7', '--muted': '#9a9ccc', '--panel': '#11144a',
+      '--line': '#2b3170', '--accent': '#d8b55a',
+    },
+    poster: { title: '#ecebf7', band: '#d8b55a', bandInk: '#0b0d33', paper: '#f4efe6', imprint: '#171717' },
+  },
   // Ärg (patina): building age read like copper roofs ageing. Verdigris for the old city, darkening through the
   // 19th century, then warm copper for the modern city; ink-dark Baltic water makes the islands read at a glance.
   // "Year unknown" is a pale warm neutral with a darker hatch, so the city reads as a light model with the
@@ -90,6 +111,11 @@ export const THEMES = {
 export const SHADING = { dark: 0.6, light: 0.3, wallMin: 0.66, wallLit: 0.34, sun: [-0.55, 0.55, 0.62] };
 // Foto: the Ärg palette with every roof in its real photographed colour (data/<version>/roof_rgb.bin, sampled by
 // scripts/sample_ortho.py from the City of Zagreb orthophoto, permission 29.10.2026) and the ground painted from the
-// photograph. Walls keep the period colour, so the age still reads. Foto is the default look; ?fotoground=0 keeps
-// the look's light land for viewers who find the photo ground competing with the period colours.
+// photograph. Walls keep the period colour, so the age still reads. Foto is the default map look under Lab chrome;
+// the explicit Lab map look swaps the photographic ground for navy. ?fotoground=0 keeps the look's light land for
+// viewers who find the photo ground competing with period colours.
 THEMES.foto = { ...THEMES.arg, name: 'Foto' };
+
+// #24: measured directional light for the whole scene. Applied in working-linear space,
+// never as a second conversion or a per-view gamma adjustment.
+export const SUN_LIGHT = { direct: 1.8, skyFill: 0.2 };

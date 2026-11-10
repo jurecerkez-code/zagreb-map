@@ -71,11 +71,11 @@ assert ATTR_DTYPE.itemsize == 24
 
 # stats.byFlag names by yflag code; 5 (once DECADE) is retired and refused.
 FLAG_NAMES = {codes.EXACT: "exact", codes.RANGE: "range", codes.LONG: "long", codes.AREA: "area",
-              codes.ESTIMATE: "estimate", codes.PERIOD: "period", codes.UNKNOWN: "unknown"}
+              codes.ESTIMATE: "estimate", codes.PERIOD: "period", codes.UNKNOWN: "unknown", codes.BOUND: "bound"}
 SRC_NAMES = ["none", "curated", "raa", "raa_area", "wikidata", "estimate", "raa_old", "osm", "reader", "zbsm",
              "kd", "zg_her", "zg_facade", "zg_area", "zg_tipo"]  # index = codes ysrc
 # histogram holds the building-level years; histogramEst the area and kNN years (PERIOD rows are kNN products too).
-KNOWN_FLAGS = (codes.EXACT, codes.RANGE, codes.LONG)
+KNOWN_FLAGS = (codes.EXACT, codes.RANGE, codes.LONG, codes.BOUND)  # bounded classes join the film at their bound
 ESTIMATED_FLAGS = (codes.AREA, codes.ESTIMATE, codes.PERIOD)
 CARD_FIELDS = ("name", "en", "architects", "raa", "prot", "since", "qid", "wp", "photo", "nofloors", "rebuilt",
                "cellars", "addr", "addrn", "tower", "yrd", "br", "arch", "sat")
@@ -666,6 +666,8 @@ def make_config(df, tiles, packs, version, tile, sources, accuracy, terrain, lan
         "yearMin": int(years.min()) if len(years) else city.PERIODS[0][3],
         "yearMax": int(years.max()) if len(years) else LATEST_YEAR,
         "histogram": hist, "histogramEst": hist_est, "unknown": int(flags[codes.UNKNOWN]),
+        "bounds": {"pre1968": int(((df.yflag == codes.BOUND) & (df.year == 1968)).sum()),
+                   "1968_2007": int(((df.yflag == codes.BOUND) & (df.year == 2007)).sum())},
         "attrStride": ATTR_DTYPE.itemsize,
         "tiles": [{k: v for k, v in t.items() if k != "data"} for t in tiles],
         "packs": [f"pack{k}.bin.gz" for k in range(len(packs))],
@@ -673,6 +675,8 @@ def make_config(df, tiles, packs, version, tile, sources, accuracy, terrain, lan
         "stats": {
             "buildings": len(df),
             "byFlag": {name: int(flags[code]) for code, name in FLAG_NAMES.items()},
+            "byBound": {"pre1968": int(((df.yflag == codes.BOUND) & (df.year == 1968)).sum()),
+                        "1968_2007": int(((df.yflag == codes.BOUND) & (df.year == 2007)).sum())},
             "bySrc": {name: int(srcs[i]) for i, name in enumerate(SRC_NAMES)},
             "floorsOsm": int((df.fsrc == codes.FLOORS_OSM).sum()),
             "floorsHeight": int((df.fsrc == codes.FLOORS_HEIGHT).sum()),

@@ -3,9 +3,11 @@
  "near.triangles": 1800000,
  "far.triangles": 12000000,
  "home.groups.veg": 400000,
+ "home.groups.monuments": 150000,
  "far.groups.veg": 400000,
  "home.calls": 100,
- "bytesBeforeReveal": 45000000,
- "bytesTotal": 48000000,
+ "bytesBeforeReveal": 5500000,
+ "bytesTotal": 33000000,
+ "bytesTotalStatus": "measured 32,069,212 with scripts/perf.mjs on v20261110-compact (was 43,705,626 on v20261103-fix); the 33 MB gate keeps 3% headroom and claims the >9 MB saving the issue asked for",
  "http404": 0
 }

@@ -67,21 +67,79 @@
   src: url(fonts/schibsted-grotesk/schibsted-grotesk-latin-ext-wght-normal.woff2) format('woff2');
   unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
 }
+/* Zagreb Lab uses Inter's optical-size cut for display type and JetBrains Mono for instrument values.
+   These are the package's latin + latin-ext ranges, not CDN or synthetic-font fallbacks. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(fonts/inter/inter-latin-opsz-normal.woff2) format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url(fonts/inter/inter-latin-ext-opsz-normal.woff2) format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url(fonts/jetbrains-mono/jetbrains-mono-latin-wght-normal.woff2) format('woff2');
+  unicode-range: U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url(fonts/jetbrains-mono/jetbrains-mono-latin-ext-wght-normal.woff2) format('woff2');
+  unicode-range: U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
 
-/* Hus för hus: a pale architectural model under a northern sky. The colour tokens, the font and the color-scheme
-   below are the default look, Ärg (D28, web/look.js DEFAULT_LOOK), so the first paint is already in it;
-   app.js overwrites them from web/themes.js for the other looks (?theme=kalk|blatimme|paper).
-   web/test/styles.test.mjs checks that they match. */
+/* Base tokens match the default Zagreb Lab worksheet, so the first paint is already in it.
+   app.js applies the shared Lab/Paper chrome from web/zagreb-lab.js while retaining each scene's own palette.
+   web/test/styles.test.mjs checks that the default base agrees with Zagreb Lab. */
 :root {
-  --bg: #d9dfe3;
-  --panel: #f6f6f4;
-  --ink: #15232b;
-  --muted: #56636b;
-  --line: #c8cfd3;
-  --accent: #1e625d;
+  /* The exact Zagreb Lab source tokens also appear in web/zagreb-lab.js. */
+  --ui-bg: #0b0d33;
+  --ui-glass: rgba(11,13,51,.72);
+  --ui-surface: #11144a;
+  --ui-line: #2b3170;
+  --ui-line-strong: #3d4390;
+  --ui-fg: #ecebf7;
+  --ui-muted: #9a9ccc;
+  --ui-faint: #5d6199;
+  --ui-gold: #d8b55a;
+  --ui-gold-light: #e3c46f;
+  --ui-link: #8f96ff;
+  --ui-ok: #6ee7a8;
+  --ui-bad: #ff6b81;
+  --paper: #F4EFE6;
+  --red: #FE2A00;
+  --step: 8px;
+  --display: "Inter",system-ui,sans-serif;
+  --mono: "JetBrains Mono",ui-monospace,Menlo,monospace;
+  --bg: #0b0d33;
+  --panel: #11144a;
+  --ink: #ecebf7;
+  --muted: #9a9ccc;
+  --line: #2b3170;
+  --accent: #d8b55a;
+  --link: #8f96ff;
+  --card-bg: #161a78;
+  --card-ink: #ecebf7;
+  --card-ground: #0b0d33;
+  --muted-content: #9a9ccc;
+  --accent-content: #d8b55a;
   --gutter: clamp(16px, 2.4vw, 32px);
-  --font: "Albert Sans";
-  color-scheme: light;
+  --font: "Inter";
+  color-scheme: dark;
   font: 400 14px/1.5 var(--font), "Helvetica Neue", Arial, sans-serif;
 }
 * { box-sizing: border-box; }
@@ -90,6 +148,10 @@
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; }
 button { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.map-update { position: fixed; z-index: 70; top: calc(env(safe-area-inset-top, 0px) + var(--gutter)); left: 50%;
+  transform: translateX(-50%); max-width: calc(100vw - 2 * var(--gutter)); padding: 8px 14px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink);
+  box-shadow: 0 2px 12px #0002; cursor: pointer; font-weight: 600; }
 
 #scene { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 /* Sky veils keep the masthead and the timeline legible over the model. */
@@ -157,6 +219,17 @@ h1 { margin: 0; font-size: clamp(34px, 4.4vw, 56px); font-weight: 800; letter-sp
   text-align: left; padding: 4px 0; cursor: pointer; }
 .swatch i { width: 12px; height: 12px; border-radius: 2px; }
 .swatch .n { color: var(--muted); font-size: 12px; }
+/* Public, prefilled GitHub issue: no report form or nonexistent year-submission endpoint. */
+.year-cta { margin: .8rem 16px; }
+.year-cta h3 { margin: 0 0 .35rem; font: inherit; font-size: 14px; }
+.year-cta p { margin: 0; font-size: 13px; }
+/* BOUND has its own concise, headed counts. Its swatch is the period colour at 50%, with dots, never the unknown hatch. */
+.bound-legend { margin-top: 1rem; padding-top: .7rem; border-top: 1px solid var(--muted); }
+.bound-legend h3 { margin: 0 0 .5rem; font: inherit; font-size: 12px; }
+.bound-row { display: grid; grid-template-columns: 12px 1fr auto; gap: 10px; align-items: center; margin: .4rem 0; font-size: 12px; }
+.bound-swatch { width: 12px; height: 12px; opacity: .5; border-radius: 2px; background-color: var(--bound-color);
+  background-image: radial-gradient(currentColor .6px, transparent .75px); background-size: 3px 3px; }
+.bound-count { color: var(--muted); }
 .swatch.unknown { cursor: default; row-gap: 2px; }
 /* The "Year unknown" row's switch, "Show" (D30, revised): under the label, a small track in the muted ink that fills
    with the accent when on. On reads "they are on the map now". A button with aria-pressed, like the legend's other
@@ -324,6 +397,22 @@ h1 { margin: 0; font-size: clamp(34px, 4.4vw, 56px); font-weight: 800; letter-sp
 .card .photo figcaption { padding-bottom: 6px; line-height: 1.4; }
 .card.pinned .photo + .card-head { padding-top: 10px; }
 .card .sources a { white-space: nowrap; }
+
+/* A monument's two media: the real photograph, or its own 512 x 384 map render. No placeholder graphic;
+   pinMonument fills the mount with the renderer's readback before it first shows the card. */
+.card .monument-media-tabs { display: flex; gap: 4px; padding: 6px 12px 0; background: var(--panel); }
+.card .monument-media-tabs [role="tab"] { flex: 1; min-height: 36px; padding: 5px 12px; border: 1px solid var(--line);
+  border-radius: 6px 6px 0 0; background: none; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.card .monument-media-tabs [role="tab"][aria-selected="true"] { color: var(--ink); border-bottom-color: var(--panel);
+  box-shadow: inset 0 2px var(--accent); }
+.card .monument-render { margin: 0; overflow: hidden; border-radius: 10px 10px 0 0; background: #f4e3c0; }
+.card .monument-media .monument-render { border-radius: 0; }
+.card .monument-render-mount { display: block; width: 100%; aspect-ratio: 4 / 3; overflow: hidden; }
+.card .monument-render-canvas { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: contain; }
+.card .monument-render figcaption { padding: 5px 16px 7px; color: var(--muted); background: var(--panel);
+  font-size: 11px; text-align: right; }
+.card .monument-render-mount:has(.monument-render-canvas) { min-height: 0; }
+@media (pointer: coarse) { .card .monument-media-tabs [role="tab"] { min-height: 44px; } }
 
 /* How to move: a quiet line under the timeline's right end. */
 .howto { position: fixed; right: var(--gutter); bottom: calc(env(safe-area-inset-bottom, 0px) + 146px); color: var(--muted); background: color-mix(in srgb, var(--bg) 85%, transparent); padding: 2px 8px; border-radius: 4px;

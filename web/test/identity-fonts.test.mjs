@@ -38,3 +38,28 @@ test('every look has real latin-ext fonts and the exact package ranges', () => {
   }
   assert.deepEqual(errors, []);
 });
+
+test('@zagreb-lab Inter and JetBrains Mono are real bundled latin/latin-ext variables', () => {
+  const required = [
+    ['Inter', 'inter', 'opsz', 'inter-latin-opsz-normal.woff2', 'inter-latin-ext-opsz-normal.woff2', '100 900'],
+    ['JetBrains Mono', 'jetbrains-mono', 'wght', 'jetbrains-mono-latin-wght-normal.woff2', 'jetbrains-mono-latin-ext-wght-normal.woff2', '100 800'],
+  ];
+  for (const [family, dir, axis, latin, extended, weights] of required) {
+    const pkg = readFileSync(join(root, 'node_modules', '@fontsource-variable', dir, `${axis}.css`), 'utf8');
+    for (const filename of [latin, extended]) {
+      const local = join(root, 'web', 'fonts', dir, filename);
+      assert.ok(existsSync(local), `${family}: missing ${filename}`);
+      if (!existsSync(local)) continue;
+      assert.equal(readFileSync(local).subarray(0, 4).toString(), 'wOF2', `${filename}: WOFF2 magic bytes`);
+      const face = styles.split(/@font-face\s*/).find(part => part.includes(`font-family: "${family}"`) && part.includes(filename));
+      assert.ok(face, `${family}: ${filename} is declared`);
+      if (!face) continue;
+      assert.ok(face.includes(`font-weight: ${weights};`), `${filename}: full variable weight range`);
+      assert.ok(face.includes('font-display: swap;'), `${filename}: readable fallback while loading`);
+      assert.ok(face.includes(`unicode-range: ${rangeFor(pkg, filename)};`), `${filename}: exact package glyph range`);
+      if (filename.includes('-ext-')) assert.match(face, /U\+0100-(?:024F|02BA)/i, `${filename}: Croatian diacritics`);
+    }
+    const license = join(root, 'web', 'fonts', dir, 'OFL.txt');
+    assert.ok(existsSync(license) && statSync(license).size > 100, `${family}: OFL.txt`);
+  }
+});

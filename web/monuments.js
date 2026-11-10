@@ -7,16 +7,28 @@
 // Sizes: the tagged height (OSM or Wikidata P2048), else a typical height for the kind (pipeline side).
 // The timeline: a monument shows from its year (unveiling), and not in a `removed` span ([[1947, 1989]] for Jelačić);
 // one without a year always shows. Colours: bronze, stone and metal per look (MATERIALS), lit by the map's sun.
+import { makeFigureGeometry, monumentVariant, FIGURE_VARIANTS, FIGURE_HEIGHT } from './monument-forms.js';
+import { makeMonumentPreview } from './monument-preview.js';
+import { DISPLAY_FOG_GLSL } from './display-fog.js';
+import { SUN_LIGHT } from './themes.js';
+
+export { FIGURE_VARIANTS, monumentVariant, makeFigureGeometry, nearestStreetDirection, monumentFront } from './monument-forms.js';
+
 export const MONUMENTS_KEY = 'hfh-monuments';
 export const monumentsOnFrom = stored => stored !== 'off';   // on by default
 
 // Per look: bronze, stone, metal (a figure's material), water (a fountain's basin). Unknown looks fall back to arg.
+// Foto shares Arg's woven materials because the two looks share their authored palette.
+const ARG_MATERIALS = { bronze: '#5f5340', stone: '#cdc6b8', metal: '#8c949a', gold: '#b8963e', water: '#4f8197' };
 export const MATERIALS = {
-  arg: { bronze: '#5f5340', stone: '#cdc6b8', metal: '#8c949a', gold: '#b8963e', water: '#4f8197' },
+  arg: ARG_MATERIALS,
+  foto: ARG_MATERIALS,
   kalk: { bronze: '#6a4f35', stone: '#e0d4bd', metal: '#8f969c', gold: '#bf9a45', water: '#7fa2b0' },
   blatimme: { bronze: '#a98656', stone: '#8d93a0', metal: '#a3afbf', gold: '#e6c066', water: '#3c6f9e' },
   paper: { bronze: '#57514b', stone: '#dddad2', metal: '#8f969a', gold: '#b39445', water: '#9fb9b8' },
 };
+MATERIALS.foto = { ...MATERIALS.arg };
+MATERIALS.lab = { ...MATERIALS.blatimme, gold: '#d8b55a' };
 const MAT_INDEX = { bronze: 0, stone: 1, metal: 2 };
 // Nominal height (m) each kind's shape is built at; an instance is scaled to its own height.
 export const NOMINAL = { equestrian: 9, statue: 7, bust: 3, column: 12, obelisk: 6, fountain: 2.5, sculpture: 3.5,
@@ -68,12 +80,7 @@ function shapes(THREE) {
   const kinds = {};
   const take = () => { const p = parts.splice(0); return p; };
 
-  // Statue on a pedestal (7 m): pedestal 3.3 m, figure 3.7 m.
-  figure(pedestal(1.9, 1.9, 3.6), 3.7, 1, true); kinds.statue = take();
-  // Bust (3 m): a pillar and a bust.
-  box(0.95, 0.18, 0.95, 0, -0.3, 0, 0); box(0.62, 1.75, 0.62, 0, -0.12, 0, 0); box(0.74, 0.14, 0.74, 0, 1.63, 0, 0);
-  lathe([[0, 0], [0.42, 0.02], [0.4, 0.3], [0.3, 0.52], [0.12, 0.6], [0, 0.6]], 1, 10, M(0, 1.77, 0, 0, 0, 0, 0.75, 1, 1));
-  cyl(0.12, 0.1, 0.16, 0, 2.3, 0, 1, 6); ball(0.21, 0.02, 2.62, 0, 1, 1, 1.2, 0.95); kinds.bust = take();
+  // Statues and busts are built by monument-forms.js, not as a single generic human mesh.
   // Column (12 m): base, shaft, capital, a gilded figure on top.
   box(2.2, 0.5, 2.2, 0, -0.3, 0, 0); box(1.6, 1.4, 1.6, 0, 0.2, 0, 0);
   cyl(0.42, 0.34, 7.4, 0, 1.6, 0, 0, 12); box(1.0, 0.45, 1.0, 0, 9.0, 0, 0);
@@ -143,18 +150,24 @@ function shapes(THREE) {
     g.computeBoundingSphere();
     out[k] = g;
   }
+  // Figure forms below are the only statue/bust geometries in the layer.
+  for (const [kind, variants] of Object.entries(FIGURE_VARIANTS)) {
+    for (const variant of variants) out[`${kind}:${variant}`] = makeFigureGeometry(THREE, kind, variant);
+  }
   return out;
 }
 
 // Pseudo-random facing for a monument without a tagged direction: stable per id.
 function hashAngle(s) { let h = 2166136261; for (const c of String(s)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return ((h >>> 0) % 360); }
 
-export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, renderer, look, yearMax }) {
+export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, renderer, look, yearMax, streets = {} }) {
   const group = new THREE.Group();
   group.name = 'monuments';
   const geos = shapes(THREE);
   const mat = new THREE.ShaderMaterial({
-    uniforms: { uYear: uniforms.uYear, uSun: uniforms.uSun, uFog: uniforms.uFog, uFogColor: uniforms.uFogColor,
+    uniforms: { uYear: uniforms.uYear, uSun: uniforms.uSun, uSunCol: uniforms.uSunCol, uSkyCol: uniforms.uSkyCol,
+      uNight: uniforms.uNight, uFog: uniforms.uFog, uFogColor: uniforms.uFogColor,
+      uFogDisplay: uniforms.uFogDisplay,
       uYearMax: { value: yearMax }, uStone: { value: new THREE.Color() }, uFig: { value: [new THREE.Color(), new THREE.Color(), new THREE.Color()] },
       uWater: { value: new THREE.Color() }, uGold: { value: new THREE.Color() } },
     side: THREE.DoubleSide,
@@ -173,22 +186,34 @@ export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, render
         gl_Position = hidden ? vec4(2.0, 2.0, 2.0, 1.0) : projectionMatrix * mv;
       }`,
     fragmentShader: `
-      uniform vec3 uSun, uFogColor, uStone, uFig[3], uWater, uGold;
+      uniform vec3 uSun, uSunCol, uSkyCol, uFogColor, uStone, uFig[3], uWater, uGold;
+      uniform float uNight;
       uniform vec2 uFog;
+      ${DISPLAY_FOG_GLSL}
       varying vec3 vN; varying float vPart, vMat, vDEye, vY;
       void main() {
         vec3 n = normalize(vN) * (gl_FrontFacing ? 1.0 : -1.0);
         vec3 c = vPart < 0.5 ? uStone : vPart < 1.5 ? uFig[int(vMat + 0.5)] : vPart < 2.5 ? uWater : uGold;
-        float sun = max(dot(n, normalize(uSun)), 0.0), sky = 0.5 + 0.5 * n.y;
         float spec = vPart > 0.5 && vPart < 1.5 && vMat < 0.5 ? pow(max(dot(reflect(-normalize(uSun), n), vec3(0.0, 1.0, 0.0)), 0.0), 12.0) * 0.18 : 0.0;
-        c = c * (0.5 + 0.22 * sky + 0.42 * sun) + spec;
-        c = mix(c, uFogColor, smoothstep(uFog.x, uFog.y, vDEye));
+        vec3 direct = uSunCol * (max(dot(n, normalize(uSun)), 0.0) * ${SUN_LIGHT.direct.toFixed(1)});
+        vec3 ambient = uSkyCol * (mix(0.6, 1.0, n.y * 0.5 + 0.5) * ${SUN_LIGHT.skyFill.toFixed(1)});
+        c = c * (direct + ambient) + spec;
+        c = mix(c, c * vec3(0.30, 0.36, 0.56), uNight);
         gl_FragColor = vec4(c, 1.0);
+        // #24: the display transform is the renderer's own tail
+        #include <tonemapping_fragment>
+        #include <colorspace_fragment>
+        gl_FragColor.rgb = displayFog(gl_FragColor.rgb, vDEye, 1.0);
       }`,
   });
-  // One InstancedMesh per kind.
+  // One InstancedMesh per kind, with human figures split into their four meaningful variants.
   const byKind = {};
-  list.forEach((m, i) => { const k = NOMINAL[m.kind] ? m.kind : 'memorial'; (byKind[k] ||= []).push(i); });
+  list.forEach((m, i) => {
+    const kind = NOMINAL[m.kind] ? m.kind : 'memorial';
+    const k = FIGURE_VARIANTS[kind] ? `${kind}:${monumentVariant(m)}` : kind;
+    m.which = [k];
+    (byKind[k] ||= []).push(i);
+  });
   const meshes = [], slot = new Array(list.length);
   for (const [k, idx] of Object.entries(byKind)) {
     const g = geos[k].clone();
@@ -205,8 +230,10 @@ export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, render
     meshes.push(mesh);
     group.add(mesh);
   }
-  const scale = m => Math.min(3, Math.max(0.4, (m.h || NOMINAL[m.kind] || 3) / (NOMINAL[m.kind] || 3)));
-  const lift = m => (m.plinth && m.plinth <= 7 && PEDESTALLED.has(m.kind) ? Math.max(0, m.plinth - FIGURE_AT[m.kind] * scale(m)) : 0);
+  const scale = m => (m.h || NOMINAL[m.kind] || 3) / (FIGURE_HEIGHT[m.kind] || NOMINAL[m.kind] || 3);
+  // Keep the established city-model plinth offset; the scaled figure itself is exactly h above that base.
+  const lift = m => (m.plinth && m.plinth <= 7 && PEDESTALLED.has(m.kind)
+    ? Math.max(0, m.plinth - FIGURE_AT[m.kind] * scale(m)) : 0);
   const yaw = m => THREE.MathUtils.degToRad(90 - (m.dir ?? hashAngle(m.id)));
   const ys = new Float32Array(list.length).fill(NaN);
   const q = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), v = new THREE.Vector3(), s3 = new THREE.Vector3(), mx = new THREE.Matrix4();
@@ -264,8 +291,28 @@ export function makeMonuments(THREE, { list, uniforms, surfaceAt, camera, render
     return [(a.x + 1) / 2 * renderer.domElement.clientWidth, (1 - a.y) / 2 * renderer.domElement.clientHeight];
   }
   const shownCount = () => !group.visible ? 0 : list.filter(m => shownAt(m, uniforms.uYear.value, yearMax)).length;
+  const cardPreview = makeMonumentPreview(THREE, { renderer, surfaceAt, streets });
+  // An isolated one-instance view of the actual map mesh: same form, materials, real h, ground and real facing.
+  // The source stays untouched; cloned single-instance attributes and uniforms are disposed after readback.
+  function previewMesh(m) {
+    const i = list.indexOf(m), pair = slot[i];
+    if (i < 0 || !pair) throw new Error(`monument is not in this map's list: ${m.id || m.name}`);
+    const [meshIndex, j] = pair, original = meshes[meshIndex];
+    if (original.userData.idx[j] !== i || !(original instanceof THREE.InstancedMesh)) throw new Error(`no map mesh for ${m.id}`);
+    const geometry = original.geometry.clone();
+    const span = original.geometry.getAttribute('aSpan');
+    geometry.setAttribute('aSpan', new THREE.InstancedBufferAttribute(span.array.slice(j * 4, j * 4 + 4), 4));
+    const mesh = new THREE.InstancedMesh(geometry, original.material.clone(), 1), matrix = new THREE.Matrix4();
+    original.getMatrixAt(j, matrix); mesh.setMatrixAt(0, matrix); mesh.instanceMatrix.needsUpdate = true;
+    mesh.frustumCulled = false;
+    mesh.name = `monument-card-${m.id}`;
+    mesh.userData = { kind: original.userData.kind, idx: [i] };
+    return mesh;
+  }
+  const renderCard = m => cardPreview.render(m, () => previewMesh(m));
   retheme();
-  return { group, list, place, retheme, setOn, under, screenAt, shownCount, get on() { return on; }, draws: () => meshes.length };
+  return { group, list, meshes, place, retheme, setOn, under, screenAt, shownCount, previewMesh, renderCard,
+    get on() { return on; }, draws: () => meshes.length };
 }
 
 // The monument's card: name, kind, year (unveiling; removal and return), sculptor, material, height, photo with its
@@ -274,6 +321,9 @@ export function monumentCard(m, { T, esc, link, lang, photoHtml }) {
   const kind = T(`monument.type.${m.kind}`);
   const year = m.year ? T('monument.unveiled', { year: m.year }) : T('monument.noYear');
   const removed = (m.removed || []).map(([a, b]) => T('monument.removed', { from: a, to: b + 1 })).join('; ');
+  const evidence = m.year && m.ysrc
+    ? ` · <span class="monument-year-source" title="${esc(m.yquote || m.ysrc)}">${m.yurl ? link(m.yurl, m.ysrc) : esc(m.ysrc)}</span>`
+    : '';
   const facts = [
     m.by?.length && [esc(T(m.by.length > 1 ? 'monument.sculptors' : 'monument.sculptor')), m.by.map(esc).join(', ')],
     [esc(T('monument.material')), esc(T(`monument.mat.${m.mat}`))],
@@ -285,20 +335,34 @@ export function monumentCard(m, { T, esc, link, lang, photoHtml }) {
   const excerpt = ex ? `<section class="extract" lang="${exLang}"><p>${esc(ex.t)}</p>
       <p class="credit">${T('card.extract.credit', { wikipedia: link(`https://${exLang}.wikipedia.org/w/index.php?oldid=${+ex.r}`, 'Wikipedia'),
         licence: link('https://creativecommons.org/licenses/by-sa/4.0/', 'CC BY-SA 4.0') })}</p></section>` : '';
+  const renderLabel = esc(T('monument.render'));
+  const mediaId = `monument-media-${hashAngle(m.id || m.name || 'map')}`;
+  const renderFigure = `<figure class="monument-render"><div class="monument-render-mount"></div><figcaption>${renderLabel}</figcaption></figure>`;
+  const media = photoHtml ? `<div class="monument-media">
+    <div class="monument-media-tabs" role="tablist" aria-label="${esc(T('monument.media'))}">
+      ${['photo', 'render'].map((tab, i) => `<button type="button" role="tab" id="${mediaId}-${tab}-tab" data-monument-tab="${tab}"
+        aria-controls="${mediaId}-${tab}-panel" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}">${esc(T(`monument.${tab}`))}</button>`).join('')}
+    </div>
+    <div role="tabpanel" id="${mediaId}-photo-panel" data-monument-panel="photo" aria-labelledby="${mediaId}-photo-tab">${photoHtml}</div>
+    <div role="tabpanel" id="${mediaId}-render-panel" data-monument-panel="render" aria-labelledby="${mediaId}-render-tab" hidden>${renderFigure}</div>
+  </div>` : renderFigure;
   const links = [
     ...Object.entries(m.wp || {}).map(([l, t]) => [`https://${l}.wikipedia.org/wiki/${encodeURIComponent(t.replace(/ /g, '_'))}`, `Wikipedia (${l})`]),
     m.qid && [`https://www.wikidata.org/wiki/${m.qid}`, 'Wikidata'],
+    (m.commons || m.photo?.page) && [m.commons && /^https?:\/\//.test(m.commons) ? m.commons
+      : m.commons ? `https://commons.wikimedia.org/wiki/${encodeURIComponent(m.commons.startsWith('Category:') ? m.commons : `Category:${m.commons}`)}`
+        : m.photo.page, 'Wikimedia Commons'],
     m.osm && [`https://www.openstreetmap.org/${m.osm}`, 'OpenStreetMap'],
   ].filter(Boolean);
   return `
     <button class="card-close" aria-label="${esc(T('card.close'))}">×</button>
-    ${photoHtml || ''}
+    ${media}
     <header class="card-head" style="--band:var(--panel);--band-ink:var(--ink)">
       <h3 id="card-title">${esc(m.name || kind)}</h3>
       ${m.en && lang === 'en' ? `<p class="en">${esc(m.en)}</p>` : ''}
       <div class="when"><span class="y">${esc(m.year || '')}</span><span class="period">${esc(T('monument.kind'))} · ${esc(kind)}</span></div>
     </header>
-    <p class="dating">${esc(year)}${removed ? ` · ${esc(removed)}` : ''}</p>
+    <p class="dating">${esc(year)}${evidence}${removed ? ` · ${esc(removed)}` : ''}</p>
     <section><dl>${facts.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></section>
     ${excerpt}
     ${links.length ? `<section class="sources"><h4>${esc(T('card.readmore'))}</h4><p>${links.map(([h, t]) => link(h, t)).join(' · ')}</p></section>` : ''}

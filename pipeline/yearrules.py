@@ -1,5 +1,7 @@
 """Year rules shared by every year source (split out of s02_years so the source modules can use them
 without importing s02_years): the plausible-year bounds, the RAÄ display rule and the RAÄ record cleaner."""
+import re
+
 import numpy as np
 import pandas as pd
 
@@ -10,6 +12,23 @@ LATEST_YEAR = 2026             # s99's upper bound; a later year is a typo
 MIN_YEAR = 1250                # older RAÄ years are typos (a house dated 1065–1067) or site origins
 OLD_OK = {"Religionsutövning", "Försvarsväsende"}   # medieval churches and defence works may be older
 RANGE_MAX = 15                 # longest span still shown as a completion year
+
+
+def parse_odo(value) -> tuple[int, int] | None:
+    """(year_from=0, year_to=bound) for ZBSM or ODO's two cadastre-before forms.
+
+    An optional source prefix accepts an ODO field labelled `ODO:`. Nearby 1967 and arbitrary
+    before-years are not silently assigned these source-specific meanings.
+    """
+    if not isinstance(value, str):
+        return None
+    text = value.strip().casefold()
+    text = re.sub(r"^(?:zbsm|odo)\s*:\s*", "", text)
+    if text in {"prije dnkat 1968", "prije 15.2.1968."}:
+        return 0, 1968
+    if text in {"prije skat 2007", "prije 1.10.2007."}:
+        return 0, 2007
+    return None
 
 
 def display(year_from, year_to) -> tuple[np.ndarray, np.ndarray]:

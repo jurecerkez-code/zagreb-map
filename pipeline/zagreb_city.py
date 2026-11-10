@@ -14,8 +14,9 @@ pipeline/zagreb_osm.py and pipeline/zagreb_wikidata.py, run once by hand):
    further part of that building (data/towers.parquet, drawn from the building's ground to the part's own top; see
    s03_tiles.tower_parts). Parts in no OSM building stay single buildings.
 3. Years, best source first: ZBSM heritage rows > other ZBSM rows > Wikidata > OSM start_date. Spans follow the
-   engine (one year EXACT; span <= 15 RANGE showing the last year; longer LONG showing the first). Cadastre cut-offs
-   ('prije 15.2.1968.', 'prije 1.10.2007.'), centuries and 'before X' are not years. Disagreements of more than
+   engine (one year EXACT; span <= 15 RANGE showing the last year; longer LONG showing the first). The two named
+   cadastre-before statements are BOUND (year_from 0, year_to 1968 / 2007), never an invented interval or estimate.
+   Disagreements of more than
    DISAGREE_YEARS go to data/year_disagreements.csv.
 4. The estimate tier (pipeline/estimate.py) as in husforhus: whole 250 m blocks held out, a cell is estimated only
    with >= 70% right period, a band <= 15 years and 30+ test buildings, and only for the groups in
@@ -34,7 +35,7 @@ from scipy.spatial import cKDTree
 
 from . import city, codes
 from . import estimate as est
-from .yearrules import FLOOR_YEAR, LATEST_YEAR
+from .yearrules import FLOOR_YEAR, LATEST_YEAR, parse_odo
 
 DATA = Path("data")
 DISAGREE_YEARS = 10
@@ -77,7 +78,16 @@ def parse_osm_date(s) -> tuple | None:
 
 
 def parse_zbsm(text, y2) -> tuple | None:
-    """ZBSM `datacija` (text) and `datacija2` (int) → (year, from, to, yflag) or None for the cadastre cut-offs."""
+    """(year, from, to, yflag), retaining each cadastre-before statement as a one-sided BOUND.
+
+    datacija2 is not silently treated as an exact year. The 2007 class never invents 1968 as
+    year_from; year_from remains zero in either class. Measured spans use the existing rules below.
+    """
+    bound = None
+    for value in (text, y2):
+        bound = parse_odo(value) or bound
+    if bound:
+        return bound[1], bound[0], bound[1], codes.BOUND
     if not isinstance(text, str) or not text.strip() or text.strip().startswith("prije"):
         return None
     t = text.strip()
@@ -385,7 +395,7 @@ def run_estimate(b, kategori, height, district, y):
     y["y_from"][rows] = np.maximum(FLOOR_YEAR, yh - bd)
     y["y_to"][rows] = np.minimum(LATEST_YEAR, yh + bd)
     ext = np.isin(y["ysrc"], (codes.SRC_WIKIDATA, codes.SRC_OSM))
-    core = y["ysrc"] == codes.SRC_ZBSM
+    core = dated & (y["ysrc"] == codes.SRC_ZBSM)
     table["external"] = est.check_external(f, np.where(dated, y["year"], 0), core, ext, table, city.ESTIMATE, district)
     table["area"] = {"n": 0, "status": "not measurable"}
     table["calibration"] = calibration(y, kategori)
@@ -409,7 +419,7 @@ def calibration(y, kategori):
         return {"n": n, "share": share}
 
     return {"target": city.CALIBRATION_TARGET, "source": city.CALIBRATION_SOURCE,
-            "dated": mix(np.ones(len(year), dtype=bool)),
+            "dated": mix(np.isin(flag, (codes.EXACT, codes.RANGE, codes.LONG))),
             "estimated": mix(flag == codes.ESTIMATE)}
 
 

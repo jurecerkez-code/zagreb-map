@@ -17,8 +17,9 @@ Writes, with the columns and dtypes the later steps (s03_tiles, s04_base, s07_la
   data/accuracy.json (no estimate tier), data/wiki.parquet + photos.json + extracts.json (empty), data/landmarks.json ([])
   data/domain.geojson (s04_base's land: the parts grown by DOMAIN_GROW_M), data/labels_zagreb.json (s07_labels)
 
-Years, honestly: cls exact -> EXACT with ysrc SRC_ZBSM; 'pre1968' and '1968-2007' are cadastre cut-offs that span
-several periods, so they stay UNKNOWN (no year, no colour), as does 'unknown'. Nothing is estimated.
+Years, honestly: cls exact -> EXACT with ysrc SRC_ZBSM. 'pre1968' and '1968-2007' are real source
+classes, so they become BOUND with year_from = 0 and year = year_to = 1968 / 2007; they enter their bound's
+own film/chart bucket and legend counts, rather than borrowing 1968 as a fabricated start. Nothing is estimated.
 """
 import argparse
 import hashlib
@@ -228,6 +229,28 @@ def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def years_for(cls, values, gids=None) -> pd.DataFrame:
+    """Ship the real pre1968 / 1968-2007 classes as one-sided upper bounds, not UNKNOWN."""
+    cls = np.asarray(cls)
+    exact = cls == "exact"
+    bound = np.select([cls == "pre1968", cls == "1968-2007"], [1968, 2007], default=0).astype(np.int16)
+    exact_value = pd.to_numeric(pd.Series(values), errors="coerce").fillna(0).astype(int).to_numpy()
+    exact &= exact_value > 0
+    year = np.where(exact, exact_value, bound).astype(np.int16)
+    source = exact | (bound > 0)
+    flag = np.where(exact, codes.EXACT, np.where(source, codes.BOUND, codes.UNKNOWN)).astype(np.uint8)
+    src = np.where(source, codes.SRC_ZBSM, codes.SRC_NONE).astype(np.uint8)
+    n = len(year)
+    return pd.DataFrame({
+        "gid": np.arange(n, dtype=np.int32) if gids is None else gids,
+        "year": year, "year_from": np.where(exact, year, 0).astype(np.int16),
+        "year_to": np.where(source, year, 0).astype(np.int16), "ysrc": src, "yflag": flag,
+        "period": np.where(source, city.period_indices(np.where(source, year, 2000)), 0).astype(np.uint8),
+        "private": np.zeros(n, bool), "raa_id": pd.array([""] * n, dtype="str"),
+        "landmark": pd.array([""] * n, dtype="str"),
+    })
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="s01_zagreb", description=__doc__.splitlines()[0])
     ap.add_argument("--version", help="ignored (the version the later steps write)")
@@ -267,16 +290,10 @@ def main(argv: list[str] | None = None) -> None:
     # years.parquet
     cls = p.cls.to_numpy()
     exact = cls == "exact"
-    y = np.where(exact, pd.to_numeric(p.get("y"), errors="coerce").fillna(0).astype(int).to_numpy(), 0)
-    exact &= y > 0
-    yflag = np.where(exact, codes.EXACT, codes.UNKNOWN).astype(np.uint8)
-    ysrc = np.where(exact, codes.SRC_ZBSM, codes.SRC_NONE).astype(np.uint8)
-    period = np.where(exact, city.period_indices(np.where(exact, y, 2000)), 0).astype(np.uint8)
-    years = pd.DataFrame({
-        "gid": gid, "year": y.astype(np.int16), "year_from": y.astype(np.int16), "year_to": y.astype(np.int16),
-        "ysrc": ysrc, "yflag": yflag, "period": period, "private": np.zeros(n, bool),
-        "raa_id": pd.array([""] * n, dtype="str"), "landmark": pd.array([""] * n, dtype="str"),
-    })
+    years = years_for(cls, p.get("y"), gid)
+    exact = years.yflag.to_numpy() == codes.EXACT
+    yflag = years.yflag.to_numpy()
+    period = years.period.to_numpy()
     years.to_parquet(DATA / "years.parquet", index=False)
 
     # attributes.parquet
@@ -347,8 +364,8 @@ def main(argv: list[str] | None = None) -> None:
                                              encoding="utf-8")
 
     print(f"wrote data/ for {n:,} Donji grad parts: {int(exact.sum())} exact years (ZBSM), "
-          f"{int((cls == 'pre1968').sum())} 'before 1968' and {int((cls == '1968-2007').sum())} '1968-2007' kept "
-          f"unknown, {int((yflag == codes.UNKNOWN).sum())} unknown in all; periods "
+          f"{int((yflag == codes.BOUND).sum())} cadastre bounds ({int((cls == 'pre1968').sum())} before 1968, "
+          f"{int((cls == '1968-2007').sum())} before 2007), {int((yflag == codes.UNKNOWN).sum())} unknown in all; periods "
           f"{np.bincount(period[exact], minlength=len(city.PERIODS)).tolist()}; {len(addr)} addresses on "
           f"{addr.gid.nunique()} parts, {addr.street.nunique()} streets; {sum(bool(x) for x in names)} named; "
           f"terrain {grid.nx} x {grid.nz} nodes, {float(h.min()):.1f}-{float(h.max()):.1f} m above {city.DATUM_M:g} m, "

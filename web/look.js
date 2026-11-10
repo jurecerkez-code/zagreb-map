@@ -5,9 +5,8 @@ import { THEMES } from './themes.js';
 
 // localStorage key for the viewer's last choice.
 export const LOOK_KEY = 'hfh-look';
-// Foto (the realistic look: photographed roofs and ground over the Ärg palette). styles.css's :root tokens and
-// pipeline/city.py's PERIODS colours are its base palette's (Foto spreads Ärg), so the first paint,
-// before this module runs, is already in it.
+// Foto remains the default map look: Lab is the default UI chrome, not a replacement for the photograph.
+// The navy Lab map ground is an explicit option in the Look switcher (?theme=lab).
 export const DEFAULT_LOOK = 'foto';
 
 // The first look: ?theme= in the URL wins (a shared link shows what its sender saw), then the viewer's remembered
