@@ -59,6 +59,8 @@ import { makeRoofYears, roofYearsOnFrom, ROOF_YEARS_KEY } from './roofyears.js';
 import { makeMonuments, monumentsOnFrom, monumentCard, MONUMENTS_KEY } from './monuments.js';
 import { nextMonumentMediaTab } from './monument-preview.js';
 import { makeVeg } from './veg.js';
+import { makeSkyDome } from './air.js';
+import { ERA_GLSL, FACADE_GLSL, SKIN_GLSL } from './facade.js';
 import { makePosterPass, posterInks, posterColours, posterYear, nearestIndex } from './poster.js';
 import { DISPLAY_FOG_GLSL, syncDisplaySky } from './display-fog.js';
 import { makeStartupQueue, buildInfoAllowed } from './startup-load.js';
@@ -872,9 +874,11 @@ const VERT = /* glsl */`
   uniform float uShowUnknown, uHatch, uHideEst, uPhotoOnly;
   ${GRID_GLSL}
   ${TERRAIN_GLSL}
+  ${ERA_GLSL}
   out vec3 vColor;
   out vec3 vWorld;
   out float vRel;        // metres above the building's own base (its foot and hatch use this, not world height)
+  out float vEra;        // #33: the facade's era, 0 historic to 3 contemporary (web/facade.js)
   flat out float vGid;   // flat: the pick pass reads it as an exact integer, never interpolated
   flat out vec3 vHatchInk;
   flat out float vHatch; // 1: the fragment shader hatches this building in vHatchInk ("Year unknown")
@@ -901,6 +905,7 @@ const VERT = /* glsl */`
     vec4 lay = texelFetch(uAttr, tc + ivec2(1, 0), 0);
     float groundDm = texelFetch(uAttr, tc + ivec2(2, 0), 0).x;   // web/worker.js: the building's ground
     float year = a.x;
+    vEra = eraIn(year);   // #33: walls take their era's bays (web/facade.js), the roofs stay the map's colour
     int pf = int(a.y + 0.5);
     int period = pf % 16;
     int yflag = pf / 16;   // 3/4/6 estimates, 7 UNKNOWN, 8 BOUND (one-sided latest-year limit)
@@ -1073,9 +1078,12 @@ const FRAG = /* glsl */`
   ${LIGHT_GLSL}
   ${SHADOW_GLSL}
   ${DISPLAY_FOG_GLSL}
+  ${FACADE_GLSL}
+  ${SKIN_GLSL}
   in vec3 vColor;
   in vec3 vWorld;
   in float vRel;
+  in float vEra;
   flat in float vGid;
   flat in vec3 vHatchInk;
   flat in float vHatch;
@@ -1117,34 +1125,18 @@ const FRAG = /* glsl */`
       // BOUND: its own fine screen-space stipple. This is neither the estimate darkening nor unknown hatching.
       float stipple = 1.0 - smoothstep(0.16, 0.27, length(fract(gl_FragCoord.xy / 6.0) - 0.5));
       vec3 base = mix(mix(vColor, vHatchInk, vHatch * mix(0.250000, line, fade)), vHatchInk, vStipple * stipple * 0.5);
-      // The skin: windows, a plinth and a little plaster grain on the walls, in metres along the wall and above its
-      // own foot, so they are the same real size on every building. No texture: a grid, softened by one pixel and
-      // gone before it would alias (past a few hundred metres the cells fall under a pixel) or add cost to the far
-      // city. Roofs keep the period colour the map is made of; only the walls get the facade.
+      // The skin (#33, web/facade.js): windows, a plinth and a little plaster grain on the walls, in metres along the
+      // wall and above its own foot, so they are the same real size on every building. No texture: a grid, softened by
+      // one pixel and gone before it would alias (past a few hundred metres the cells fall under a pixel) or add cost to
+      // the far city. Roofs keep the period colour the map is made of; only the walls get the facade. The grid's own
+      // proportions come from the building's era: 19c bays stand close and tall, the socialist blocks run in bands, the
+      // last thirty years glaze wide. The pixel's size in metres is measured here, outside any branch (a derivative
+      // inside one is undefined), for every fragment.
+      float uxWall = dot(vWorld.xz, along);
+      vec2 cellPx = vec2(fwidth(uxWall), fwidth(vRel)) + 1e-5;
       if (roof < 0.5) {
-        float ux = dot(vWorld.xz, along);
-        // Window spacing sways per building: 19c bays sit close, later walls breathe wider. One hash from the
-        // gid, so the rhythm is stable on every load and never uniform across a column of same-era facades.
-        float ws = fract(sin(vGid * 78.233) * 43758.5453);
-        vec2 step2 = vec2(3.2, 3.3) * mix(0.85, 1.18, ws);   // metres between windows, floor to floor
-        vec2 g = vec2(ux, vRel) / step2;
-        vec2 aa = fwidth(g) + 1e-5;                       // cells per pixel, each way
-        vec2 cell = fract(g);
-        // one window per cell: a soft-edged rectangle, 1 px of edge, 0.55 m above the floor
-        float wx = smoothstep(0.20 - aa.x, 0.20 + aa.x, cell.x) * (1.0 - smoothstep(0.74 - aa.x, 0.74 + aa.x, cell.x));
-        float wy = smoothstep(0.38 - aa.y, 0.38 + aa.y, cell.y) * (1.0 - smoothstep(0.78 - aa.y, 0.78 + aa.y, cell.y));
-        float win = wx * wy;
-        // the shopfront band at the foot: wider openings, every other cell, below 4 m
-        float shop = (1.0 - smoothstep(0.06 - aa.y, 0.06 + aa.y, cell.y)) * (1.0 - smoothstep(0.62, 0.70, abs(cell.y - 0.45)));
-        float skin = (1.0 - smoothstep(0.11, 0.30, max(aa.x, aa.y))) * (1.0 - smoothstep(300.0, 850.0, d));
-        vec3 glass = mix(base * 0.30, vec3(0.52, 0.58, 0.65), 0.45);
-        glass = mix(glass, vec3(0.86, 0.78, 0.55), uNight * 0.55);   // windows lit after dark
-        base = mix(base, glass, win * skin * 0.85);
-        base = mix(base, base * 0.42, shop * skin * 0.5);
-        base *= mix(1.0, 0.80, (1.0 - smoothstep(0.0, 1.4, vRel)) * skin);       // plinth
-        // a building's own grain: a few percent, fixed to the wall
-        float gr = fract(sin(dot(floor(vec2(ux, vRel) * 2.0), vec2(12.9898, 78.233))) * 43758.5453);
-        base *= 1.0 + (gr - 0.5) * 0.07 * skin;
+        float skin = facadeSkin(max(cellPx.x, cellPx.y) / 3.3, d);
+        if (skin > 0.0) base = mix(base, eraFacade(base, uxWall, vRel, vGid, d, uNight, vEra, cellPx), skin);
       }
       // Foto: a sampled roof takes its photographed colour (the mean of its own pixels in the City's orthophoto);
       // a building with no samples keeps the period colour (alpha 0). Up close a flat mean reads as paint, not as
@@ -4464,6 +4456,11 @@ function applyNightSky(night) {
     document.documentElement.style.setProperty('--bg', chromeTokens(THEME_NAME)['--bg']);
   }
 }
+// The sky dome (#33, web/air.js): the background is a gradient with the sun's halo in it, its horizon the very
+// colour the fog uses, so the city still joins the sky without a seam. The material shares uniforms, so the weather,
+// the look switch and the Night reach it with no wiring of their own; the frame loop keeps it on the camera.
+const sky = makeSkyDome(THREE, { uniforms });
+scene.add(sky.mesh);
 // What an atmosphere's start(ctx) gets to work with (web/look.js).
 looks.atmospheres.context = { scene, uniforms, camera, renderer, get theme() { return THEME; } };
 // ---------- Weather ----------
@@ -4520,6 +4517,10 @@ async function loadTrees() {
     performance.measure('veg', 'veg-start');
     veg = v;
     v.retheme(looks.current);
+    // #33: the trees are the season the visitor arrives in, unless ?month= says otherwise, and the wind stills itself
+    // under reduced motion or ?wind=0 (a map that never draws must never move).
+    v.setSeason(Number(QUERY.get('month')) || undefined);
+    v.setWind(QUERY.get('wind') === '0' || calm.matches ? 0 : undefined);
     syncVegNight();
     if (vegDebug) vegDebug.textContent = `veg: ${v.trees.toLocaleString()} trees, ${v.triangles.toLocaleString()} green tris, ${v.on ? 'ON' : 'OFF'}`;
   } catch (error) {
@@ -4771,6 +4772,7 @@ renderer.setAnimationLoop(now => {
     }
     drawHist();
   }
+  sky.step(camera, uniforms.uNight.value > 0.5);   // the dome is the background at every distance (#33)
   if (postcard.on) drawShot(); else renderer.render(scene, camera);
   // The poster's copy of the frame is as large as the screen's buffer: let go once the Poster is not on screen.
   if (!postcard.on || postcard.filter !== 'poster') posterPass.release();
