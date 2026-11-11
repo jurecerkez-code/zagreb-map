@@ -13,6 +13,9 @@ for (const [, name, body] of src.matchAll(/const (\w+) = \/\* glsl \*\/`([\s\S]*
 // Shared shader helpers are imported modules too. Expand them before checking the final GPU source.
 glsl.DISPLAY_FOG_GLSL = readFileSync(new URL('../display-fog.js', import.meta.url), 'utf8')
   .match(/export const DISPLAY_FOG_GLSL = \/\* glsl \*\/`([\s\S]*?)`;/)[1];
+// issue #36: the orthophoto clipmap's three levels, shared by FRAG (roofs) and TERRAIN_FRAG (ground).
+glsl.CLIPMAP_GLSL = readFileSync(new URL('../ortho-clipmap.js', import.meta.url), 'utf8')
+  .match(/export const CLIPMAP_GLSL = \/\* glsl \*\/`([\s\S]*?)`;/)[1];
 
 test('buildings stand on their ground: the lift, skirts down the slope, a base-relative foot and hatch, lifted boxes', () => {
   // the lift comes last, after the unknown-year sinking, a layer's rise and the fly-in, so a building sinks into its own ground

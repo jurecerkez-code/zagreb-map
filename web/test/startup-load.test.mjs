@@ -83,7 +83,7 @@ test('app wires the reveal gate to the specified work and starts the service wor
   const src = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
   const plan = src.slice(src.indexOf('function scheduleDeferredLayers()'), src.indexOf('// ?at=x,z'));
   const names = [...plan.matchAll(/afterReveal\.add\('([^']+)'/g)].map(m => m[1]);
-  assert.deepEqual(names, ['restPacks', 'terrain', 'attributes', 'roads', 'trees', 'foto', 'cityHeight', 'monuments', 'facts', 'funicular', 'tour', 'trams']);
+  assert.deepEqual(names, ['restPacks', 'terrain', 'attributes', 'roads', 'trees', 'foto', 'ortho', 'cityHeight', 'monuments', 'facts', 'funicular', 'tour', 'trams']);
   assert.ok(plan.indexOf('await loadTerrain(base);') < plan.indexOf("afterReveal.add('roads'"), 'roads wait for the terrain attempt');
   assert.ok(plan.indexOf("afterReveal.add('attributes'") > plan.indexOf('try { await loadTerrain(base); }'), 'attributes wait for terrain');
   assert.match(src, /if \(name === 'foto'\) afterReveal\.add\('foto', loadPhotoColours\);/, 'switching to Foto later still requests its colours');
