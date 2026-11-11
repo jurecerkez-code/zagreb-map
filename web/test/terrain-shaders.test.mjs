@@ -16,6 +16,12 @@ glsl.DISPLAY_FOG_GLSL = readFileSync(new URL('../display-fog.js', import.meta.ur
 // issue #36: the orthophoto clipmap's three levels, shared by FRAG (roofs) and TERRAIN_FRAG (ground).
 glsl.CLIPMAP_GLSL = readFileSync(new URL('../ortho-clipmap.js', import.meta.url), 'utf8')
   .match(/export const CLIPMAP_GLSL = \/\* glsl \*\/`([\s\S]*?)`;/)[1];
+// #33: the facades live in their own module (web/facade.js) and are generated from a table, so the runtime strings —
+// not their source — are what the builder compiles.
+const facade = await import('../facade.js');
+glsl.ERA_GLSL = facade.ERA_GLSL;
+glsl.FACADE_GLSL = facade.FACADE_GLSL;
+glsl.SKIN_GLSL = facade.SKIN_GLSL;
 
 test('buildings stand on their ground: the lift, skirts down the slope, a base-relative foot and hatch, lifted boxes', () => {
   // the lift comes last, after the unknown-year sinking, a layer's rise and the fly-in, so a building sinks into its own ground

@@ -36,6 +36,10 @@ test('every real ShaderMaterial writes the required ordered display tail', () =>
     ['roads-layer.js', 'fragmentShader:', 'new THREE.ShaderMaterial', 1, 'gl_FragColor'],
     ['roofyears.js', 'fragmentShader:', 'new THREE.ShaderMaterial', 1, 'gl_FragColor'],
     ['monuments.js', 'fragmentShader:', 'new THREE.ShaderMaterial', 1, 'gl_FragColor'],
+    // #33: the sky dome is the background, drawn in display sRGB already (it replaces the clear colour, which carries no
+    // tone curve either), so it is a raw display-byte pass like the poster's: no tail, and its horizon is the fog colour
+    // itself.
+    ['air.js', 'const SKY_FRAG =', 'fragmentShader: SKY_FRAG', 0, 'gl_FragColor'],
   ];
   // Discover new shader-bearing files, not just new include calls. Raw display-byte passes are registered explicitly.
   const covered = new Set([...blocks.map(b => b[0]), 'poster.js']);

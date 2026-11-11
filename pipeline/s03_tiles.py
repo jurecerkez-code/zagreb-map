@@ -814,6 +814,13 @@ def write_outputs(df: pd.DataFrame, out: Path, version: str, *, tile: float = ci
     wiki_stats = {"photos": len(used), "extracts": {lang: sum(lang in v for v in excerpts) for lang in city.WIKI["langs"]}}
     config = make_config(df, tiles, packs, version, tile, sources, accuracy, terrain, timeline_landmarks(df, landmarks),
                          wiki_stats, laser=bool(parts) and not own)
+    # s04_base writes the compact road and ortho switches into the same config; a later s03 must not drop them.
+    previous = out / f"{city.SLUG}.json"
+    if previous.exists():
+        old = json.loads(previous.read_text(encoding="utf-8"))
+        for key in ("roads2", "orthoGz"):
+            if key in old:
+                config[key] = old[key]
     config["districts"] = names
     config["about"] = {**about_stats(df, cards), "readers": n_reader}
     # the accuracy table's rows and columns in each language (About): the groups by key, the eras by their English
