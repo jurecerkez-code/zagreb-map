@@ -1562,6 +1562,24 @@ function addTile(m) {
   invalidate(1300);     // the tile's drop-in weighs in at about a second: frames until the dust settles (#23)
   mesh.scale.setScalar(0.1);
   mesh.position.set(m.origin[0], 0, m.origin[1]);
+  if (m.flatIdx) {
+    // Issue #32: the v2 tile carries the near roof and the v1 flat roof. The far switch keeps the same vertices and
+    // materials and swaps only the index list, so a pitched roof disappears below a pixel without a second texture.
+    const fg = new THREE.BufferGeometry();
+    fg.setAttribute('position', g.attributes.position);
+    fg.setAttribute('bld', g.attributes.bld);
+    fg.setIndex(new THREE.BufferAttribute(m.flatIdx, 1));
+    liftBounds(fg, m, config.terrain);
+    const flat = new THREE.Mesh(fg, mesh.material);
+    flat.userData = { draw: mesh.material, pick: mesh.userData.pick, flat: true };
+    flat.layers.set(1);
+    flat.scale.setScalar(0.1);
+    flat.position.copy(mesh.position);
+    flat.visible = false;
+    scene.add(flat);
+    mesh.userData.flat = flat;
+    mesh.userData.centre = new THREE.Vector3(m.origin[0] + 600, 0, m.origin[1] + 600);
+  }
   for (const [k, pass] of ['depth', 'colour'].entries()) {
     const f = new THREE.Mesh(g, makeMaterial(tex, false, born, pass));
     f.renderOrder = 1 + k;
@@ -2006,6 +2024,14 @@ function updateLods() {
     const d = Math.max(0, camera.position.distanceTo(u.centre) - u.radius);
     const lod = d > LOD_FAR * (u.lod ? 0.9 : 1.1) ? 1 : 0;
     if (lod !== u.lod) { u.lod = lod; mesh.geometry = u.geos[lod]; }
+  }
+  // Issue #32: past 3 km a pitched roof is below a pixel; the flat v1 roof is the cheaper index list.
+  for (const mesh of meshes) {
+    const flat = mesh.userData.flat;
+    if (!flat) continue;
+    const far = camera.position.distanceTo(mesh.userData.centre) > 3000;
+    mesh.visible = !far;
+    flat.visible = far;
   }
 }
 // After the controls each frame: the target rides on the ground (MapControls pans on a level plane through it), the
