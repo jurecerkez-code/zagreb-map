@@ -15,6 +15,7 @@ STEPS = ["s00_fetch_city", "s00_fetch_raa", "s00_fetch_raa_old", "s00_fetch_wiki
          "s00_fetch_plaques", "s00_fetch_stadsmuseet", "s01_load", "s01_zagreb", "s02_lod2", "s02_zagreb_curated", "s08_landmarks", "s02_years", "s02_attributes",
          "s02_addresses", "s02_stadsmuseet", "s02_stadsmuseet_photos", "s02_terrain", "s06_wiki", "s00_fetch_laser", "s02_towers", "s03_tiles", "s05_zagreb_monuments",
          "s06_zagreb_ortho", "s07_zagreb_veg", "s08_zagreb_height", "s16_zagreb_trams", "s17_zagreb_roads",
+         "s18_zagreb_ortho_tiles",
          "s16_metro", "s04_base", "s17_ferries", "s07_labels", "s14_search", "s15_plaques", "s13_quests", "s99_validate"]
 
 

@@ -66,6 +66,7 @@ import { DISPLAY_FOG_GLSL, syncDisplaySky } from './display-fog.js';
 import { makeStartupQueue, buildInfoAllowed } from './startup-load.js';
 import { makeMapUpdateMonitor, makeMapUpdateChip } from './cache-update.js';
 import { loadOrthoData } from './ortho-img.js';
+import { Clipmap, CLIPMAP_GLSL, parseIndex } from './ortho-clipmap.js';
 
 // #24: authored sRGB becomes the renderer's working space. Every texture the city photographs (the roof and ground
 // bytes, the trees, the roads' taper, the labels) carries its space on the texture; every uniform colour is a
@@ -753,6 +754,13 @@ const uniforms = {
   uFotoGround: { value: 0 },      // Foto's ground too, or the look's land (?fotoground=0)
   uRoof: { value: null },
   uGround: { value: null },
+  // The orthophoto clipmap (web/ortho-clipmap.js, issue #36): three levels of real tiles in wrapping canvases, sampled
+  // by plan position in FRAG (roofs) and TERRAIN_FRAG (ground). uClipOn stays 0 until the tiles are there and the look
+  // is Foto, so every other look and every city without tiles draws exactly what it did before (the sampled means).
+  uClip0: { value: null }, uClip1: { value: null }, uClip2: { value: null },
+  uClipC0: { value: new THREE.Vector2() }, uClipC1: { value: new THREE.Vector2() }, uClipC2: { value: new THREE.Vector2() },
+  uClipS0: { value: 1 }, uClipS1: { value: 1 }, uClipS2: { value: 1 },
+  uClipOn: { value: 0 },
   uFaint: { value: 0.13 },                         // today's city during a story: its opacity (setFaint)
   uFaintColor: { value: col(THEME.ui['--ink']) },
   // The weather (web/weather.js makeWeather sets them; WEATHER_GLSL and WAVE_GLSL read them): how far snow lies and
@@ -1077,6 +1085,7 @@ const FRAG = /* glsl */`
   ${WEATHER_GLSL}
   ${LIGHT_GLSL}
   ${SHADOW_GLSL}
+  ${CLIPMAP_GLSL}
   ${DISPLAY_FOG_GLSL}
   ${FACADE_GLSL}
   ${SKIN_GLSL}
@@ -1143,8 +1152,14 @@ const FRAG = /* glsl */`
       // the tiles it was measured from, so give clay roofs their courses and flat roofs their felt: a few percent
       // of chip pattern inside the measured tone, stable per tile cell, softened out by 300 m so the far city
       // never shimmers on a uniform texture the phone sees anyway.
+      // With the orthophoto clipmap in (issue #36) the roof is read where it actually stands: the photographed tiles
+      // replace the mean at their own coverage, which is 0 past 8 km, over water and outside the city.
       if (uFoto > 0.5 && roof > 0.5) {
         vec4 pc = texelFetch(uRoof, ivec2(int(vGid) % 512, int(vGid) / 512), 0);
+        if (uClipOn > 0.5) {
+          vec4 ph = orthoAt(vWorld.xz);
+          pc = mix(pc, vec4(ph.rgb, 1.0), ph.a);
+        }
         if (pc.a > 0.0) {
           vec3 col = pc.rgb;
           float rfade = 1.0 - smoothstep(60.0, 300.0, d);
@@ -1788,6 +1803,7 @@ const TERRAIN_FRAG = /* glsl */`
   ${SHADOW_GLSL}
   ${DISPLAY_FOG_GLSL}
   ${WAVE_GLSL}
+  ${CLIPMAP_GLSL}
   in vec3 vWorld;
   in vec3 vNormal;
   in float vWallH;
@@ -1803,6 +1819,12 @@ const TERRAIN_FRAG = /* glsl */`
         vec4 photoGround = vec4(0.0);
         if (uFoto > 0.5 && uFotoGround > 0.5) {
           photoGround = texture(uGround, ((vWorld.xz - uGridO) / uCell + 0.5) / uGridN);
+          // The orthophoto clipmap (issue #36): the real photograph where the tiles reach, over the node's mean colour.
+          // Its coverage is 0 past 8 km, over water and outside the city, and the mean shows through there.
+          if (uClipOn > 0.5) {
+            vec4 clip = orthoAt(vWorld.xz);
+            photoGround = mix(photoGround, vec4(clip.rgb, 1.0), clip.a);
+          }
           c = mix(c, photoGround.rgb, photoGround.a);
         }
         // The mapped green cover (parks, meadows, the Medvednica forest) painted over the ground: a texture, not
@@ -1873,6 +1895,80 @@ async function loadPhotoColours() {
   } catch (e) {
     uniforms.uFoto.value = 0;   // no files: the look's own colours, never a broken shader
   }
+}
+
+// ---------- The orthophoto clipmap (issue #36) ----------
+// Three levels of real tiles (web/data/ortho, pipeline/s18_zagreb_ortho_tiles.py) fetched and decoded in
+// web/ortho-worker.js, drawn into three wrapping canvases by web/ortho-clipmap.js, and sampled by FRAG and
+// TERRAIN_FRAG in place of the mean colours above. Off unless the deploy names a tile base in data/current.json
+// (`ortho: {base}`): the tiles are deliberately not in git (issue #36: nothing is published until a human records the
+// permission), so a city without them must not spend a frame, a request or a 404 on the feature.
+let clipmap = null, clipTried = false;
+const clipWanted = () => looks.current === 'foto' && uniforms.uFoto.value > 0.5;
+// An idle map sets frameDue to Infinity (the scheduler's sleep); a tile that arrives has to wake it, or the canvas it
+// was drawn into never reaches the GPU. invalidate() alone only raises the rate of a frame that is already due.
+const wakeClipmap = () => { frameDue = -1; invalidate(); };
+async function loadClipmap() {
+  // ?ortho=/data/ortho/ points a probe at tiles that are not published; data/current.json's ortho.base is the deploy
+  const base = new URLSearchParams(location.search).get('ortho') || current.ortho?.base;
+  if (clipTried || !base) return;
+  clipTried = true;
+  try {
+    const index = parseIndex(await getJson(`${base}index.json`, { cache: 'no-cache' }), base);
+    const worker = new Worker(new URL('./ortho-worker.js', import.meta.url));
+    const waiting = new Map();
+    worker.onmessage = ({ data }) => {
+      const job = waiting.get(data.key);
+      if (!job) return;
+      waiting.delete(data.key);
+      if (data.error) job.reject(new Error(data.error)); else job.resolve({ bmp: data.bmp, bytes: data.bytes });
+    };
+    worker.onerror = e => {
+      for (const job of waiting.values()) job.reject(new Error(e.message || 'the tile worker failed'));
+      waiting.clear();
+    };
+    const load = url => new Promise((resolve, reject) => {
+      waiting.set(url, { resolve, reject });
+      worker.postMessage({ jobs: [{ key: url, url }] });
+    }).then(v => { wakeClipmap(); return v; });   // a frame uploads the canvas it was drawn into
+    clipmap = new Clipmap({
+      index,
+      makeCanvas: (w, h) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        return { canvas, ctx: canvas.getContext('2d') };
+      },
+      load,
+    });
+    clipmap.levels.forEach((level, i) => {
+      const tex = new THREE.CanvasTexture(level.canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.minFilter = tex.magFilter = THREE.LinearFilter;
+      tex.generateMipmaps = false;
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;   // a level's canvas is a torus (ortho-clipmap.js)
+      level.tex = tex;
+      uniforms[`uClip${i}`].value = tex;
+      uniforms[`uClipS${i}`].value = level.span;
+    });
+    wakeClipmap();   // one frame places the first levels and asks for their tiles; an idle map would otherwise wait for a click
+  } catch (e) {
+    clipmap = null;
+    console.warn('The orthophoto tiles are unavailable; the ground and roofs keep their mean colours.', e);
+  }
+}
+// Per frame: follow the point the map is looking at, upload every canvas that changed, and switch the shaders on once a
+// tile is in. A level redraws only when its centre moved SNAP_M metres, so a still camera costs nothing but this test.
+function stepClipmap() {
+  if (!clipmap) return;
+  clipmap.update(controls.target.x, controls.target.z);
+  clipmap.levels.forEach((level, i) => {
+    uniforms[`uClipC${i}`].value.set(level.cx, level.cz);
+    if (!level.dirty) return;
+    level.tex.needsUpdate = true;
+    level.dirty = false;
+  });
+  uniforms.uClipOn.value = clipWanted() && clipmap.stats.loaded > 0 ? 1 : 0;
 }
 
 async function loadTerrain(base) {
@@ -4389,6 +4485,7 @@ function applyLook(name) {
   invalidate(400);   // everything drawn in the look's colours re-inks; the new sky eases for a breath (#23)
   applyPageLook(name);
   if (name === 'foto') afterReveal.add('foto', loadPhotoColours);
+  if (name === 'foto') afterReveal.add('ortho', loadClipmap);   // issue #36: the real tiles follow the Foto look
   uniforms.uFoto.value = name === 'foto' && uniforms.uRoof.value ? 1 : 0;
   uniforms.uFotoGround.value = uniforms.uFoto.value && fotoGroundOn() ? 1 : 0;
   periods.forEach((p, i) => {
@@ -4585,6 +4682,7 @@ function scheduleDeferredLayers() {
   afterReveal.add('roads', () => startRoads(terrainRoadGrid));
   afterReveal.add('trees', loadTrees);
   if (looks.current === 'foto') afterReveal.add('foto', loadPhotoColours);
+  if (looks.current === 'foto') afterReveal.add('ortho', loadClipmap);
   afterReveal.add('cityHeight', () => loadCityHeight().catch(optional('The shadows')));
   afterReveal.add('monuments', () => loadMonuments().catch(optional('The monuments')));
   afterReveal.add('facts', () => loadFacts().catch(optional('The history facts')));
@@ -4740,6 +4838,7 @@ renderer.setAnimationLoop(now => {
   lastDueAt = now;
 
   updateLods();
+  stepClipmap();   // the tiles follow the camera: this frame draws them and uploads any canvas that changed
   roads?.update(camera);        // far tiles keep only their tertiary-and-up range
   if (weather.step(dt, dist, controls.target)) applySky();   // the sky moves only while the weather eases
   weatherMoved = weather.kind !== 'none';
@@ -4829,6 +4928,15 @@ window.__dbg = { get veg() { return veg; }, get facts() { return facts; }, pinFa
   get weather() { return weather.state(); }, pauseEffects: on => weather.pause(on), skyNow, postcard,
   posterPass: () => posterPass.state(), placeNow, roofYears, setRoofYears,
   invalidate,   // #23: scripts (perf, shots, the sleeper) draw a frame or more on drawless idle
+  wake: () => { frameDue = -1; },   // the same, for a scheduler already asleep (frameDue = Infinity): a probe measuring frames needs it
+  // issue #36: the orthophoto clipmap as scripts/ortho_probe.mjs reads it (null when the deploy has no tile base)
+  get clipmap() { return clipmap; },
+  set clipmap(v) { clipmap = v; },   // a probe's A/B: dropping the clipmap turns uClipOn to 0, exactly as a deploy without tiles
+  clipStats: () => (clipmap ? { ...clipmap.stats, on: uniforms.uClipOn.value,
+    levels: clipmap.levels.map(l => ({ at: l.at, res: l.res, span: l.span, cx: l.cx, cz: l.cz, tiles: l.index.keys.size, bytes: l.index.bytes })),
+    flying: clipmap.flying.size, cached: clipmap.bitmaps.size,
+    indexBytes: clipmap.index.bytes, tileBytes: clipmap.index.levels.reduce((n, l) => n + l.bytes, 0), credit: clipmap.index.credit } : null),
+  clipTilesOn: () => clipWanted(),
   rate: () => (performance.now() < dirtyUntil || playing || (typeof flight !== 'undefined' && !!flight) ||
     (typeof reliefTween !== 'undefined' && !!reliefTween) || !!ride || postcard.on) ? 60
     : weatherMoved ? 30 : (trams && tramsShown() && trams.inView(camera)) ? 20 : 0,

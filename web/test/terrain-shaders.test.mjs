@@ -13,6 +13,9 @@ for (const [, name, body] of src.matchAll(/const (\w+) = \/\* glsl \*\/`([\s\S]*
 // Shared shader helpers are imported modules too. Expand them before checking the final GPU source.
 glsl.DISPLAY_FOG_GLSL = readFileSync(new URL('../display-fog.js', import.meta.url), 'utf8')
   .match(/export const DISPLAY_FOG_GLSL = \/\* glsl \*\/`([\s\S]*?)`;/)[1];
+// issue #36: the orthophoto clipmap's three levels, shared by FRAG (roofs) and TERRAIN_FRAG (ground).
+glsl.CLIPMAP_GLSL = readFileSync(new URL('../ortho-clipmap.js', import.meta.url), 'utf8')
+  .match(/export const CLIPMAP_GLSL = \/\* glsl \*\/`([\s\S]*?)`;/)[1];
 // #33: the facades live in their own module (web/facade.js) and are generated from a table, so the runtime strings —
 // not their source — are what the builder compiles.
 const facade = await import('../facade.js');
