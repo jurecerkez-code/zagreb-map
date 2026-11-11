@@ -233,7 +233,7 @@ def main(argv=None) -> int:
         print(f"l{L} {res:g} m/px ({tile_m:.0f} m tiles, {'source' if direct else 'children'}): {written} written, "
               f"{skipped} skipped, {total / 1e6:.2f} MB", flush=True)
 
-    levels.sort(key=lambda l: l["level"])
+    levels.sort(key=lambda level: level["level"])
     index = {
         "format": "zagreb-ortho-tiles", "version": 1,
         "generated": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -241,11 +241,11 @@ def main(argv=None) -> int:
         "tilePx": TILE_PX, "quality": args.quality,
         "credit": "© Grad Zagreb, Ortofoto 2022, used with permission (email 29.10.2026)",
         "levels": levels,
-        "bytes": sum(l["bytes"] for l in levels),
+        "bytes": sum(level["bytes"] for level in levels),
         "buildSeconds": round(time.time() - t0, 1),
     }
     (out / "index.json").write_text(json.dumps(index, separators=(",", ":")))
-    print(f"index.json: {sum(len(l['tiles']) for l in levels)} tiles, {index['bytes'] / 1e6:.2f} MB, "
+    print(f"index.json: {sum(len(level['tiles']) for level in levels)} tiles, {index['bytes'] / 1e6:.2f} MB, "
           f"{index['buildSeconds']} s -> {out}", flush=True)
     return 0
 
