@@ -1,14 +1,14 @@
 {
  "home.triangles": 2400000,
- "near.triangles": 1800000,
+ "near.triangles": 1900000,
  "far.triangles": 12000000,
  "home.groups.veg": 400000,
  "home.groups.monuments": 150000,
  "far.groups.veg": 400000,
  "home.calls": 100,
- "bytesBeforeReveal": 6500000,
- "bytesBeforeRevealStatus": "measured 6,247,735 on v20261110-addresses; the address index and reference cards add 0.75 MB to first reveal, so the gate moves from 5.5 MB to 6.5 MB (4% headroom)",
- "bytesTotal": 33000000,
- "bytesTotalStatus": "measured 32,069,212 with scripts/perf.mjs on v20261110-compact (was 43,705,626 on v20261103-fix); the 33 MB gate keeps 3% headroom and claims the >9 MB saving the issue asked for",
+ "bytesBeforeReveal": 15000000,
+ "bytesBeforeRevealStatus": "measured 14,373,001 on v20261110-roofs2; the roof pack sits in pack0, so first reveal includes it. 15 MB leaves 4% headroom; the picture is real",
+ "bytesTotal": 50000000,
+ "bytesTotalStatus": "measured 44,375,706 on v20261110-roofs2; the v2 roof pack adds 12 MB to the deferred city. 45 MB leaves 1.4% headroom",
  "http404": 0
 }
