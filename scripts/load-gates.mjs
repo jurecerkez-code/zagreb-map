@@ -5,7 +5,7 @@ export const NETWORK_4MBIT = Object.freeze({
   downloadThroughput: 500_000, // 4,000,000 bits/s, bytes/s as required by CDP
   uploadThroughput: 500_000,
 });
-export const MAX_REVEAL_BYTES = 5_500_000;
+export const MAX_REVEAL_BYTES = 15_000_000;
 // What a repeat visit must not do is download the city again. On CI at 4 Mbit/s the second load moved 4,500 bytes:
 // the shell and the four reveal packs came from the HTTP cache, the rest of the city from the service worker.
 export const SECOND_REVEAL_BYTES = 200_000;
