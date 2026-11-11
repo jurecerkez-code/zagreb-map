@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { parse, readAttrs, MAGIC, ATTR_STRIDE } from '../tile.js';
+import { parse, readAttrs, MAGIC, MAGIC2, ATTR_STRIDE } from '../tile.js';
 
 const fixture = name => {
   const b = readFileSync(new URL(`./fixtures/${name}`, import.meta.url));
@@ -47,10 +47,24 @@ test('ring geometry survives in decimetres from the tile origin', () => {
   assert.deepEqual(rings[3].set, ['600,100', '600,160', '660,100']);
 });
 
-test('parse rejects a buffer that is not a v1 tile', () => {
+test('parse reads the v2 fixture and its one real roof', () => {
+  const t = parse(fixture('tile_v2.bin'));
+  assert.equal(MAGIC2, 0x32484648);
+  assert.equal(t.v, 2);
+  assert.deepEqual([...t.gid], [7, 42, 70000]);
+  assert.deepEqual([...t.roofStart], [0, 68, 72, 76]);
+  const r = t.roofs[0];
+  assert.equal(r.rxz.length, 12);
+  assert.deepEqual([...r.ry], [125, 125, 125, 125, 185, 185]);
+  assert.deepEqual([...r.rtri], [0, 4, 3, 3, 4, 5, 1, 4, 2, 2, 4, 5]);
+  assert.equal(t.roofs[1], null);
+  assert.equal(t.roofs[2], null);
+});
+
+test('parse rejects a buffer that is not a v1 or v2 tile', () => {
   const bad = fixture('tile_v1.bin');
   new DataView(bad).setUint32(0, 0x33424241, true); // upstream 'ABB3'
-  assert.throws(() => parse(bad), /not a v1 tile/);
+  assert.throws(() => parse(bad), /not a v1 or v2 tile/);
   const short = fixture('tile_v1.bin').slice(0, 216);
   assert.throws(() => parse(short), /RangeError|layout says|out of bounds|Invalid/);
 });

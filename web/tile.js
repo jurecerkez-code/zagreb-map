@@ -1,6 +1,7 @@
 // Binary formats shared with the pipeline. No three.js here, so node --test can import it.
 
 export const MAGIC = 0x31484648; // 'HFH1', little-endian
+export const MAGIC2 = 0x32484648; // 'HFH2': v1 plus each building's real roof triangles (issue #32)
 
 // Tile v1 (pipeline/s03_tiles.py pack_tile). Every array starts on a 4-byte boundary.
 // header  u32 magic, nB, nP, nR, nV; f32 originX, originZ
@@ -14,12 +15,13 @@ export const MAGIC = 0x31484648; // 'HFH1', little-endian
 export function parse(buf) {
   const h = new DataView(buf);
   const magic = h.getUint32(0, true);
-  if (magic !== MAGIC) throw new Error(`not a v1 tile (magic 0x${magic.toString(16)})`);
+  if (magic !== MAGIC && magic !== MAGIC2) throw new Error(`not a v1 or v2 tile (magic 0x${magic.toString(16)})`);
   const nB = h.getUint32(4, true), nP = h.getUint32(8, true), nR = h.getUint32(12, true), nV = h.getUint32(16, true);
   const origin = [h.getFloat32(20, true), h.getFloat32(24, true)];
   let o = 28;
   const take = (Type, n) => { const a = new Type(buf, o, n); o += Math.ceil(n * Type.BYTES_PER_ELEMENT / 4) * 4; return a; };
   const t = {
+    v: magic === MAGIC2 ? 2 : 1,
     nB, nP, nR, nV, origin,
     gid: take(Uint32Array, nB), year: take(Int16Array, nB), yflag: take(Uint8Array, nB),
     period: take(Uint8Array, nB), floors: take(Uint8Array, nB), ground: take(Int16Array, nB),
@@ -27,6 +29,30 @@ export function parse(buf) {
     height: take(Float32Array, nP), ringStart: take(Uint32Array, nP + 1),
     vertStart: take(Uint32Array, nR + 1), hole: take(Uint8Array, nR), xz: take(Int16Array, 2 * nV),
   };
+  if (t.v === 2) {
+    const roofStart = take(Uint32Array, nB + 1);
+    const base = o;
+    if (roofStart[0] !== 0 || roofStart[nB] > buf.byteLength - base) throw new Error('roofStart does not name a section inside the tile');
+    t.roofStart = roofStart;
+    t.roofs = new Array(nB);
+    for (let b = 0; b < nB; b++) {
+      if (roofStart[b + 1] < roofStart[b] + 4) throw new Error(`building ${b}: roofStart advances backwards`);
+      const at = base + roofStart[b];
+      const nRV = h.getUint32(at, true);
+      if (!nRV) { t.roofs[b] = null; continue; }
+      const p0 = at + 4;
+      if (p0 + 6 * nRV + 4 > buf.byteLength) throw new Error(`building ${b}: roof vertices are truncated`);
+      const rxz = new Int16Array(buf, p0, 2 * nRV);
+      const p = p0 + 4 * nRV;
+      const ry = new Uint16Array(buf, p, nRV);
+      const q = (p + 2 * nRV + 3) & ~3;
+      const nRT = h.getUint32(q, true);
+      if (q + 4 + 6 * nRT > buf.byteLength) throw new Error(`building ${b}: roof triangles are truncated`);
+      const rtri = new Uint16Array(buf, q + 4, 3 * nRT);
+      t.roofs[b] = { rxz, ry, rtri };
+    }
+    o = base + roofStart[nB];
+  }
   if (o !== buf.byteLength) throw new Error(`tile is ${buf.byteLength} bytes, layout says ${o}`);
   return t;
 }
