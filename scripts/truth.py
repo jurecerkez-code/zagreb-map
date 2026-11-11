@@ -4,11 +4,9 @@ The orthophoto roof mask is not publishable as a vector layer, so this measures 
 without inventing one: the ZG3D part union against the OSM footprint it is drawn in, and the model's own
 LoD2 height against the published height where one is known. A footprint IoU below 0.85 is listed with its cause.
 """
-import json
 from pathlib import Path
 
 import geopandas as gpd
-import numpy as np
 import pandas as pd
 import shapely
 

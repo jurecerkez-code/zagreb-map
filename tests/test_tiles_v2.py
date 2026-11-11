@@ -1,8 +1,7 @@
 import numpy as np
 import pytest
-from shapely.geometry import Polygon
 
-from pipeline import city, codes, s03_tiles, tiles_decode
+from pipeline import codes, s03_tiles, tiles_decode
 from tests.tinycity import local_box
 
 
