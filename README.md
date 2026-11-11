@@ -19,7 +19,7 @@ No account or application server is required for normal map use. The viewer is `
 
 ## Current data
 
-The checked-in build is `web/data/v20261110-addresses/`: the whole city with 3,824 buildings bounded by the cadastre's two registers (before 1968 and before 2007), plus the compact road, tree and gzip layout. It is ~55 MB on disk.
+The checked-in build is `web/data/v20261110-roofs2/`: the whole city with 3,824 buildings bounded by the cadastre's two registers (before 1968 and before 2007), plus the compact road, tree and gzip layout. It is ~55 MB on disk.
 
 | Measure | Count |
 |---|---:|
