@@ -116,19 +116,24 @@ except Exception:                                    # no pyproj: the same proje
         return east - ORIGIN[0], -(north - ORIGIN[1])
 
 
-# ---- the trip ids the schedule has, so a live vehicle can be marked as a tram
-_schedule = {"version": None, "trips": frozenset()}
+# ---- the trip ids and line numbers the schedule has, so a live vehicle can be marked as a tram
+_schedule = {"version": None, "trips": frozenset(), "lines": frozenset()}
 
 
 def _trip_ids():
     """The trip ids in web/data/<current version>/trams.json, reloaded when the version changes: a vehicle whose
     trip is not one of them is a bus on another ZET line and the map does not draw it."""
+    _load_schedule()
+    return _schedule["trips"]
+
+
+def _load_schedule():
     try:
         current = json.loads((WEB / "data" / "current.json").read_text(encoding="utf-8"))
         city_version = current["version"]
         version = current.get("trams_version", city_version)
     except Exception:
-        return frozenset()
+        return
     # A new timetable does not change the city's immutable geometry version.
     # Key the cache by both, so it reloads when just the timetable changes.
     cache_key = (city_version, version)
@@ -136,10 +141,18 @@ def _trip_ids():
         try:
             trams = json.loads((WEB / "data" / version / "trams.json").read_text(encoding="utf-8"))
             _schedule["trips"] = frozenset(trams.get("trip_ids") or ())
+            # ZET rebuilds the trip ids every service day, but the tram line numbers stay the same. A feed
+            # vehicle whose trip id is from today (unknown here) is still a tram when its route is one of ours.
+            _schedule["lines"] = frozenset(str(line.get("id")) for line in trams.get("lines") or ())
         except Exception:
             _schedule["trips"] = frozenset()
+            _schedule["lines"] = frozenset()
         _schedule["version"] = cache_key
-    return _schedule["trips"]
+
+
+def _is_tram(trip, route):
+    _load_schedule()
+    return trip in _schedule["trips"] or route in _schedule["lines"]
 
 
 def read_feed(buf):
@@ -177,11 +190,10 @@ def read_feed(buf):
                 "speed": speed,
                 "ts": veh.get(5, header),
             })
-    known = _trip_ids()
     for v in vehicles:
         east, north = to_engine(v["lat"], v["lon"])
         v["x"], v["z"] = round(east, 1), round(north, 1)
-        v["kind"] = "tram" if v["trip"] in known else "bus"
+        v["kind"] = "tram" if _is_tram(v["trip"], v["route"]) else "bus"
     return {"ts": header, "vehicles": vehicles}
 
 

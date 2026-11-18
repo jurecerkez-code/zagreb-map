@@ -536,6 +536,15 @@ def test_load_towers_refuses_parts_made_from_other_buildings(tmp_path, capsys):
 
 
 
+def test_current_payload_keeps_the_tram_timetable_pointer():
+    """A city rebuild switches current.json without taking every tram's shapes and stops with it."""
+    assert s03_tiles.current_payload("v20261118") == {"version": "v20261118"}
+    assert s03_tiles.current_payload("v20261118", {"trams_version": "v20261110-trams"}) == {
+        "version": "v20261118", "trams_version": "v20261110-trams",
+    }
+    assert s03_tiles.current_payload("v20261118", None) == {"version": "v20261118"}
+
+
 def test_a_card_carries_its_laser_tower_height():
     # the tallest of a building's laser parts (tower_parts' drawn heights), whole metres; never on a hidden house
     df = pd.DataFrame({"gid": [0, 1], "name": ["Stadshuset", ""], "architects": [[], []], "raa_id": ["", ""],

@@ -853,6 +853,15 @@ def keep_keys(buildings: Path, folder: Path, version: str) -> Path:
     return folder / f"{version}.parquet"
 
 
+def current_payload(version: str, previous: dict | None = None) -> dict:
+    """The data version a build switches current.json to; the tram timetable keeps its own version, so a new
+    city build must carry the pointer over instead of silently leaving every live tram without a shape."""
+    payload = {"version": version}
+    if isinstance(previous, dict) and isinstance(previous.get("trams_version"), str):
+        payload["trams_version"] = previous["trams_version"]
+    return payload
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="s03_tiles", description=__doc__.splitlines()[0])
     ap.add_argument("--version", help="output version vYYYYMMDD or vYYYYMMDD-tag (default: today)")
@@ -862,7 +871,8 @@ def main(argv: list[str] | None = None) -> None:
     version = out.name
     s = write_outputs(load(), out, version, tile=args.tile, towers=load_towers())
     if os.environ.get("HFH_NO_CURRENT") != "1":     # Zagreb port: build a version without switching the live one
-        io.write_json(CURRENT, {"version": version})
+        previous = json.loads(CURRENT.read_text(encoding="utf-8")) if CURRENT.exists() else {}
+        io.write_json(CURRENT, current_payload(version, previous))
     keep_keys(DATA / "buildings.parquet", DATA / "keys", version)
     mb = 1e6
     print(f"{s['buildings']} buildings in {s['tiles']} tiles of {args.tile:g} m (max {s['max_tile']} per tile); "
