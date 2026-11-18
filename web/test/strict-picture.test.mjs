@@ -42,6 +42,11 @@ test('strict picture gate permits equal baseline and its 1.25 mean ceiling, not 
   assert.equal(run(inputs(80 * 1.251, 40), true).status, 1);
 });
 
+test('strict picture gate allows half a percent of mean noise, not a one-and-a-half percent drop', () => {
+  assert.equal(run(inputs(80 * 0.995, 40), true).status, 0, '0.5% mean is SwiftShader noise');
+  assert.equal(run(inputs(80 * 0.985, 40), true).status, 1, '1.5% mean is a regression, not noise');
+});
+
 test('strict picture gate does not permit the older five-percent mean drop', () => {
   assert.equal(run(inputs(80 * 0.97, 40), false).status, 0);
   assert.equal(run(inputs(80 * 0.97, 40), true).status, 1);
@@ -52,5 +57,5 @@ test('CI invokes the picture comparison with the strict gate, not just support f
   const command = workflow.split(/\r?\n/).find(line => line.includes('node scripts/shots-compare.mjs'));
   assert.ok(command, 'the workflow must include a picture comparison step');
   assert.match(command, /node\s+scripts\/shots-compare\.mjs\s+.*\s--strict(?:\s|$)/,
-    'the CI command must opt into the 1% noise floor and the 1.00x to 1.25x mean bounds');
+    'the CI command must opt into the 1% noise floor and the 0.99x to 1.25x mean bounds');
 });

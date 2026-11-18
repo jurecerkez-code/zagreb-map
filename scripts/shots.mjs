@@ -26,12 +26,15 @@ page.on('console', m => { if (m.type() === 'warning' || m.type() === 'error') co
 page.on('pageerror', e => console.log('[capture-pageerror]', e.message));
 // The tram layer draws live vehicles whose positions differ between runs; the picture gate measures the renderer's
 // own light, so it asks for the same city with the trams switched off.
-await page.goto(`${url}?theme=foto&sunmode=day&date=2026-06-21&veg=1&tram=0`);
+await page.goto(`${url}?theme=foto&sunmode=day&date=2026-06-21&veg=1&tram=0&quality=0`);
 await page.waitForFunction(() => document.getElementById('loading')?.hidden, null, { timeout: 180000 });
 // The Foto colour pack is loaded after the reveal, and uFoto stays 0 until it lands. On a slow runner the first
 // screenshot used to catch the period-colour fallback and the next view the real texture, which read as a tone
 // change between runs. Wait for the pack itself, not just the revealing tiles.
 await page.waitForFunction(() => window.__dbg?.uniforms.uFoto.value === 1, null, { timeout: 180000 });
+// The quality ladder lowers the internal pixel ratio when frames are slow. Pinned at step 0, every run captures the
+// same full-scale frame instead of one run's slow first view and the next run's recovered one.
+await page.waitForFunction(() => window.__dbg?.quality().pinned === 0, null, { timeout: 30000 });
 await page.waitForFunction(() => { const s = window.__dbg?.stats(); return s && s.tiles >= s.tilesTotal && s.terrain === 'ready'; },
   null, { timeout: 300000 }).catch(error => {
     console.log('[capture-ready-timeout]', error.message);

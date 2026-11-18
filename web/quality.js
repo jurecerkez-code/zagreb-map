@@ -50,7 +50,7 @@ export function nextStep(i, fps, sinceChange) {
 // `startStep` opens the ladder one notch down on GPUs whose own name says integrated (Intel, Mali, Adreno, ...).
 export function makeQuality({ renderer, base = Math.min(
     typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1, 1.5), boost = Math.min(
-    typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1, 2), startStep = 0,
+    typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1, 2), startStep = 0, locked = false,
   say = (...a) => console.info(...a) } = {}) {
   const gaps = [];
   let boosted = false;
@@ -80,5 +80,6 @@ export function makeQuality({ renderer, base = Math.min(
     },
     get step() { return i; },
     get boosted() { return boosted; },
+    get locked() { return locked; },
   };
 }
