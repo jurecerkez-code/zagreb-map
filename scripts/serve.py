@@ -16,6 +16,8 @@ from pathlib import Path
 WEB = Path(__file__).resolve().parent.parent / "web"
 RT_URL = "https://zet.hr/gtfs-rt-protobuf"
 RT_CACHE_S = 5          # the feed is a 90 KB download from a city server: one fetch serves every poll in this window
+RT_ATTEMPTS = 3         # a scheduled snapshot has no cache to fall back on: one city-server timeout must not fail it
+RT_RETRY_S = 2.0
 ORIGIN = (459370.1, 5074937.5)      # pipeline/city.py's ORIGIN, EPSG:3765: engine local metres from here
 
 # ---- GTFS-Realtime, read by hand
@@ -187,20 +189,26 @@ _cache = {"at": 0.0, "body": None}
 
 
 def feed_json():
-    """The feed as JSON, cached for RT_CACHE_S; a stale copy still served beats an empty map when zet.hr hiccups."""
+    """The feed as JSON, cached for RT_CACHE_S; a stale copy still served beats an empty map when zet.hr hiccups.
+    A fresh process (the scheduled snapshot) has no stale copy: retry a timed-out city server before giving up."""
     now = time.time()
     if _cache["body"] is not None and now - _cache["at"] < RT_CACHE_S:
         return _cache["body"]
-    try:
-        req = urllib.request.Request(RT_URL, headers={"User-Agent": "zagreb-by-building dev server"})
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            body = json.dumps(read_feed(resp.read()), ensure_ascii=False).encode("utf-8")
-        _cache.update(at=now, body=body)
-        return body
-    except Exception as exc:
-        if _cache["body"] is not None:
-            return _cache["body"]
-        raise RuntimeError(f"zet.hr did not answer: {exc}") from exc
+    last = None
+    for attempt in range(RT_ATTEMPTS):
+        try:
+            req = urllib.request.Request(RT_URL, headers={"User-Agent": "zagreb-by-building dev server"})
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                body = json.dumps(read_feed(resp.read()), ensure_ascii=False).encode("utf-8")
+            _cache.update(at=now, body=body)
+            return body
+        except Exception as exc:
+            last = exc
+            if attempt + 1 < RT_ATTEMPTS:
+                time.sleep(RT_RETRY_S * 2 ** attempt)
+    if _cache["body"] is not None:
+        return _cache["body"]
+    raise RuntimeError(f"zet.hr did not answer: {last}") from last
 
 
 class NoStore(http.server.SimpleHTTPRequestHandler):
