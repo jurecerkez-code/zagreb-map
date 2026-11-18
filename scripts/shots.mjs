@@ -24,8 +24,14 @@ const browser = await chromium.launch({
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 page.on('console', m => { if (m.type() === 'warning' || m.type() === 'error') console.log('[capture-console]', m.text()); });
 page.on('pageerror', e => console.log('[capture-pageerror]', e.message));
-await page.goto(`${url}?theme=foto&sunmode=day&date=2026-06-21&veg=1`);
+// The tram layer draws live vehicles whose positions differ between runs; the picture gate measures the renderer's
+// own light, so it asks for the same city with the trams switched off.
+await page.goto(`${url}?theme=foto&sunmode=day&date=2026-06-21&veg=1&tram=0`);
 await page.waitForFunction(() => document.getElementById('loading')?.hidden, null, { timeout: 180000 });
+// The Foto colour pack is loaded after the reveal, and uFoto stays 0 until it lands. On a slow runner the first
+// screenshot used to catch the period-colour fallback and the next view the real texture, which read as a tone
+// change between runs. Wait for the pack itself, not just the revealing tiles.
+await page.waitForFunction(() => window.__dbg?.uniforms.uFoto.value === 1, null, { timeout: 180000 });
 await page.waitForFunction(() => { const s = window.__dbg?.stats(); return s && s.tiles >= s.tilesTotal && s.terrain === 'ready'; },
   null, { timeout: 300000 }).catch(error => {
     console.log('[capture-ready-timeout]', error.message);

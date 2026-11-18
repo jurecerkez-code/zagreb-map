@@ -1,17 +1,17 @@
 {
  "home": {
-  "mean": 67.53,
-  "stddev": 33.82,
+  "mean": 84.96,
+  "stddev": 53.16,
   "png": "home.png"
  },
  "near": {
-  "mean": 71.5,
-  "stddev": 39.99,
+  "mean": 72.79,
+  "stddev": 42.08,
   "png": "near.png"
  },
  "far": {
-  "mean": 83.79,
-  "stddev": 70.24,
+  "mean": 90.37,
+  "stddev": 69.79,
   "png": "far.png"
  }
 }
