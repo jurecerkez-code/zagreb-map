@@ -119,7 +119,8 @@ def test_a_burst_of_connections_waits_in_the_queue():
             socks.append(socket.create_connection(("127.0.0.1", port), timeout=10))
         thread.start()
         for s in socks:
-            s.sendall(b"GET /index.html HTTP/1.0\r\nHost: 127.0.0.1\r\n\r\n")
+            eol = bytes((13, 10))
+            s.sendall(b"GET /index.html HTTP/1.0" + eol + b"Host: 127.0.0.1" + eol + eol)
         for s in socks:
             assert s.makefile("rb").readline().split()[1] == b"200"
     finally:
@@ -129,3 +130,48 @@ def test_a_burst_of_connections_waits_in_the_queue():
             httpd.shutdown()
         httpd.server_close()
         thread.join(timeout=10)
+
+
+def test_feed_json_retries_a_transient_timeout(monkeypatch):
+    """The scheduled snapshot is a fresh process with no cache: one zet.hr timeout must not fail the Live job."""
+    serve = load_serve()
+    serve._cache = {"at": 0.0, "body": None}
+    calls = []
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return b""
+
+    def urlopen(req, timeout):
+        calls.append(timeout)
+        if len(calls) < serve.RT_ATTEMPTS:
+            raise TimeoutError("timed out")
+        return Response()
+
+    monkeypatch.setattr(serve.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(serve, "read_feed", lambda raw: {"ts": 1, "vehicles": []})
+    monkeypatch.setattr(serve.time, "sleep", lambda seconds: None)
+    assert serve.feed_json() == b'{"ts": 1, "vehicles": []}'
+    assert len(calls) == serve.RT_ATTEMPTS
+
+
+def test_feed_json_names_the_last_timeout_after_every_attempt(monkeypatch):
+    serve = load_serve()
+    serve._cache = {"at": 0.0, "body": None}
+    calls = []
+
+    def urlopen(req, timeout):
+        calls.append(timeout)
+        raise TimeoutError(f"attempt {len(calls)} timed out")
+
+    monkeypatch.setattr(serve.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(serve.time, "sleep", lambda seconds: None)
+    with pytest.raises(RuntimeError, match="attempt 3 timed out"):
+        serve.feed_json()
+    assert len(calls) == serve.RT_ATTEMPTS
