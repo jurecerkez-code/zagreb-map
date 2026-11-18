@@ -1,11 +1,12 @@
 name: Live
 # The map invites you to watch real trams move, and ZET's feed sends no CORS header, so a browser cannot read it.
-# The dev server parses it at /rt; a static host has nothing to parse with. This job writes the same JSON every five
-# minutes to a one-file `live` branch, and raw.githubusercontent serves that branch with CORS, so the page on Pages
-# has a feed that is at most a few minutes old.
+# The dev server parses it at /rt; a static host has nothing to parse with. This job writes the same JSON to a
+# one-file `live` branch, and raw.githubusercontent serves that branch with CORS. GitHub throttles frequent
+# schedules down to a handful of runs a day, so each run holds the runner and republishes every 90 seconds for
+# almost four hours instead of pretending a five-minute cron is reliable.
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '0 */4 * * *'
   workflow_dispatch:
 permissions:
   contents: write
@@ -15,6 +16,9 @@ concurrency:
 jobs:
   snapshot:
     runs-on: ubuntu-latest
+    timeout-minutes: 230
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,18 +33,32 @@ jobs:
           mkdir -p "web/data/$v"
           curl -fsS "$base/$v/trams.json" -o "web/data/$v/trams.json"
           echo "schedule $v, $(wc -c < "web/data/$v/trams.json") bytes"
-      - name: Snapshot
-        working-directory: src
-        run: python3 scripts/rt_snapshot.py rt.json
-      - name: Publish to the live branch
+      - name: Publish a fresh snapshot until the next run starts
         working-directory: src
         run: |
-          cp rt.json "$RUNNER_TEMP/rt.json"
-          git config user.name live
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git checkout --orphan live
-          git rm -rqf .
-          cp "$RUNNER_TEMP/rt.json" rt.json
-          git add rt.json
-          git commit -qm "live $(date -u +%FT%TZ)"
-          git push -f origin live
+          publish="$RUNNER_TEMP/publish"
+          mkdir -p "$publish"
+          git -C "$publish" init -q
+          git -C "$publish" config user.name live
+          git -C "$publish" config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git -C "$publish" remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          failures=0
+          end=$(( $(date +%s) + 13200 ))
+          while [ "$(date +%s)" -lt "$end" ]; do
+            if python3 scripts/rt_snapshot.py rt.json; then
+              failures=0
+              cp rt.json "$publish/rt.json"
+              git -C "$publish" add rt.json
+              if git -C "$publish" rev-parse --verify HEAD >/dev/null 2>&1; then
+                git -C "$publish" commit -q --amend -m "live $(date -u +%FT%TZ)"
+              else
+                git -C "$publish" commit -qm "live $(date -u +%FT%TZ)"
+              fi
+              git -C "$publish" push -qf origin HEAD:live || echo "publish failed, next snapshot will retry"
+            else
+              failures=$((failures + 1))
+              echo "snapshot failed ($failures in a row)"
+              [ "$failures" -ge 8 ] && exit 1
+            fi
+            sleep 90
+          done
