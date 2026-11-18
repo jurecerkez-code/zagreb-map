@@ -35,6 +35,7 @@ await page.waitForFunction(() => window.__dbg?.uniforms.uFoto.value === 1, null,
 // The quality ladder lowers the internal pixel ratio when frames are slow. Pinned at step 0, every run captures the
 // same full-scale frame instead of one run's slow first view and the next run's recovered one.
 await page.waitForFunction(() => window.__dbg?.quality().pinned === 0, null, { timeout: 30000 });
+console.log('gpu', await page.evaluate(() => { const gl = window.__dbg.renderer.getContext(); const e = gl.getExtension('WEBGL_debug_renderer_info'); return e ? gl.getParameter(e.UNMASKED_RENDERER_WEBGL) : 'n/a'; }));
 await page.waitForFunction(() => { const s = window.__dbg?.stats(); return s && s.tiles >= s.tilesTotal && s.terrain === 'ready'; },
   null, { timeout: 300000 }).catch(error => {
     console.log('[capture-ready-timeout]', error.message);
@@ -97,6 +98,16 @@ for (const [name, go, wait] of views) {
   await page.evaluate(go);
   await page.waitForTimeout(wait);
   await settle();
+  if (name === 'home') console.log('home-state', JSON.stringify(await page.evaluate(() => ({
+    uFoto: window.__dbg.uniforms.uFoto.value, uFotoGround: window.__dbg.uniforms.uFotoGround.value,
+    uHgtOn: window.__dbg.uniforms.uHgtOn.value, sun: window.__dbg.sun,
+    fog: window.__dbg.uniforms.uFog.value.toArray(), fogColor: window.__dbg.uniforms.uFogColor.value.getHexString(),
+    sky: getComputedStyle(document.documentElement).getPropertyValue('--sky'), look: document.documentElement.dataset.look,
+    weather: document.documentElement.dataset.weather, clip: window.__dbg.clipStats() ? {
+      on: window.__dbg.clipStats().on, loaded: window.__dbg.clipStats().loaded,
+      flying: window.__dbg.clipStats().flying, tiles: window.__dbg.clipStats().levels.reduce((n, l) => n + l.tiles, 0),
+    } : null,
+  }))));
   let shot = await shoot(name);
   if (shot.stddev < 1) {
     console.log(name, 'frame uniform, settling before a re-shoot');
