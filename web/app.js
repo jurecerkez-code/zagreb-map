@@ -336,7 +336,10 @@ if (gpuLow) console.info(`[quality] integrated GPU (${gpuName.slice(0, 48)}) —
 // median frame overshoots the budget, and brings it back when the ground is clear. Nothing touchy: the stack below
 // still renders 1:1 for posters, postcards and the pick pass whenever it matters. Full dpr (the `boost`) is earned,
 // not default: four seconds of median frames under 8 ms at the top step.
-const quality = makeQuality({ renderer, startStep: gpuLow ? 1 : 0 });
+// ?quality=<step> pins the ladder at that step (0 = full scale) for captures and posters, where a screenshot must
+// not depend on how fast the runner happened to draw the first frame. Without it the ladder adapts as before.
+const QUALITY_PIN = PARAMS.has('quality') ? Math.max(0, Math.min(STEPS.length - 1, Number.parseInt(PARAMS.get('quality'), 10) || 0)) : null;
+const quality = makeQuality({ renderer, startStep: QUALITY_PIN ?? (gpuLow ? 1 : 0), locked: QUALITY_PIN !== null });
 // A lost context (a GPU reset, a phone short of memory) leaves a blank map: say so, and that a reload draws it again.
 canvas.addEventListener('webglcontextlost', e => loadFailed(e, 'ui.contextlost'));
 // ... and when the browser gives it back (three.js asks it to), the map draws again and the message goes.
@@ -349,7 +352,7 @@ canvas.addEventListener('webglcontextrestored', () => {
   el.hidden = true;
 });
 // dpr 1.5 at the top ladder step (0.85 of it on an integrated chip): the boost to full dpr is quality.js's to grant.
-const pxStart = Math.min(devicePixelRatio || 1, 1.5) * STEPS[gpuLow ? 1 : 0];
+const pxStart = Math.min(devicePixelRatio || 1, 1.5) * STEPS[QUALITY_PIN ?? (gpuLow ? 1 : 0)];
 renderer.setPixelRatio(pxStart);
 renderer.setClearColor(THEME.sky);
 const scene = new THREE.Scene();
@@ -1277,6 +1280,7 @@ async function loadMonuments() {
 // position), not by a fixed afternoon from the south-west: ?date=2026-06-21 and ?sun=07:30 set it, otherwise it is the
 // moment the visitor arrives. #24: below six degrees there is no sun to shade with: the Night look takes over
 // (applySunMode), so the floor here only keeps the 6-degree band itself believable.
+const SUN_MODE = ['golden', 'live', 'day', 'night'].includes(QUERY.get('sunmode')) ? QUERY.get('sunmode') : 'golden';
 let sunState = null;
 function setSun({ date = null, clock = null } = {}) {
   const s = sunFor({ date, clock });
@@ -1286,7 +1290,20 @@ function setSun({ date = null, clock = null } = {}) {
   sunState = { ...s, clamped: low };
   return sunState;
 }
-setSun({ date: QUERY.get('date'), clock: QUERY.get('sun') });
+// The mode's direction at boot, not the visitor's actual clock: otherwise the first frame is lit by the moment the
+// page opened and the deferred applySunMode moves the sun afterwards, so a slow first frame and a fast one show
+// different light (the picture gate caught exactly that as two stable, unrelated home means).
+function setSunModeDirection(mode) {
+  if (mode === 'golden') {
+    uniforms.uSun.value.set(...sunVector({ elevation: 38, azimuth: 225 })).normalize();
+    sunState = { ...sunState, elevation: 38, azimuth: 225, clamped: false, mode };
+  } else {
+    setSun({ date: QUERY.get('date'), clock: mode === 'day' ? '12:00' : QUERY.get('sun') });
+    sunState.mode = mode;
+  }
+  return sunState;
+}
+setSunModeDirection(SUN_MODE);
 
 // gzip in transit, inflated in the browser: 12.8 MB of uint16 becomes 4.9 MB over the wire and 0.23 MB of mask
 // becomes 231 KB (pipeline/s08_zagreb_height.py, s07_zagreb_veg.py). DecompressionStream, no library.
@@ -1327,18 +1344,11 @@ async function loadCityHeight() {
 // exposure walks a little above its base at noon towards 5° so the low sun keeps its light.
 // Golden and day sit at unit exposure; the Night gets the same base, its own dimming comes after the tone curve.
 const SUN_EXPOSURE = { golden: 1, day: 1, night: 1 };   // live walks its own ramp by the elevation
-let sunMode = ['golden', 'live', 'day', 'night'].includes(QUERY.get('sunmode')) ? QUERY.get('sunmode') : 'golden';
+let sunMode = SUN_MODE;
 function applySunMode(mode = sunMode) {
   invalidate(600);   // the day's light (or the Night) lands on walls, roofs, sky (#23)
   sunMode = mode;
-  if (mode === 'golden') {
-    // Golden's fixed direction uses the same coordinate convention as the real solar clock.
-    uniforms.uSun.value.set(...sunVector({ elevation: 38, azimuth: 225 })).normalize();
-    sunState = { ...sunState, elevation: 38, azimuth: 225, clamped: false, mode };
-  } else {
-    setSun({ date: QUERY.get('date'), clock: mode === 'day' ? '12:00' : QUERY.get('sun') });
-    sunState.mode = mode;
-  }
+  setSunModeDirection(mode);
   const night = sunIsNight(mode, sunState.elevation);
   if (night) {
     // Explicit Night and a live sun below six degrees share this vector, not the clamped grazing light.
@@ -4833,7 +4843,7 @@ renderer.setAnimationLoop(now => {
   else tier = Infinity;                          // a still map changes nothing: 0 fps, the GPU idles
   if (now < frameDue) { stepHoverTips(); return; }   // a rest: nothing drawn changes until the next due frame
   frameDue = now + tier;
-  quality.frame(now);   // drawn frames only: the ladder judges real cadence, not an idling vsync
+  if (!quality.locked) quality.frame(now);   // drawn frames only: the ladder judges real cadence, not an idling vsync
   const dueDt = lastDueAt ? (now - lastDueAt) / 1000 : dt;   // the dt a due-frame step actually spans
   lastDueAt = now;
 
@@ -4926,6 +4936,7 @@ window.__dbg = { get veg() { return veg; }, get facts() { return facts; }, pinFa
   get timelineLabels() { return placedLabels; }, get pinned() { return pinnedGid; }, districtOf,
   get forced() { return forcedGid; }, force, scene, highlight: () => highlight.state(),
   get weather() { return weather.state(); }, pauseEffects: on => weather.pause(on), skyNow, postcard,
+  quality: () => ({ step: quality.step, boosted: quality.boosted, pixelRatio: renderer.getPixelRatio(), pinned: QUALITY_PIN }),
   posterPass: () => posterPass.state(), placeNow, roofYears, setRoofYears,
   invalidate,   // #23: scripts (perf, shots, the sleeper) draw a frame or more on drawless idle
   wake: () => { frameDue = -1; },   // the same, for a scheduler already asleep (frameDue = Infinity): a probe measuring frames needs it
