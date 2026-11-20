@@ -13,7 +13,7 @@ const arg = k => { const i = process.argv.indexOf(k); return i > 0 ? process.arg
 const baseline = process.argv.includes('--baseline');
 const out = arg('--out');
 const dir = baseline ? 'e2e/__screenshots__' : 'shots';
-const jsonPath = baseline ? `e2e/__screenshots__/baseline.${process.platform}.json` : (out || 'shots.json');
+const jsonPath = baseline ? 'e2e/__screenshots__/baseline.json' : (out || 'shots.json');
 mkdirSync(dir, { recursive: true });
 mkdirSync(dirname(jsonPath), { recursive: true });
 
@@ -82,7 +82,7 @@ const shoot = async name => {
     if (renderer.domElement.width !== innerWidth || renderer.domElement.height !== innerHeight) {
       throw new Error(`Unexpected capture buffer ${renderer.domElement.width}x${renderer.domElement.height}`);
     }
-    renderer.render(scene, camera);
+    window.__dbg.drawScene();
     return renderer.domElement.toDataURL('image/png');
   });
   await sharp(Buffer.from(dataUrl.split(',')[1], 'base64'))

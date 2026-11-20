@@ -52,13 +52,12 @@ test('strict picture gate does not permit the older five-percent mean drop', () 
   assert.equal(run(inputs(80 * 0.97, 40), true).status, 1);
 });
 
-test('a per-platform baseline wins over the shared one', () => {
-  const files = inputs(80, 40);
-  const platform = files.baseline.replace(/\.json$/, `.${process.platform}.json`);
-  writeFileSync(platform, JSON.stringify({ home: { mean: 100, stddev: 40 } }));
-  assert.equal(run(files, true).status, 1, 'the platform mean must replace the shared 80');
-  writeFileSync(platform, JSON.stringify({ home: { mean: 80, stddev: 40 } }));
-  assert.equal(run(files, true).status, 0, 'the same reading passes the platform baseline');
+test('the capture draws through the app sky step, not a bare render', () => {
+  const shots = readFileSync(join(engine, 'scripts', 'shots.mjs'), 'utf8');
+  assert.match(shots, /window\.__dbg\.drawScene\(\)/,
+    'the capture must use drawScene, which moves the dome to the camera before it draws');
+  assert.doesNotMatch(shots, /renderer\.render\(scene, camera\)/,
+    'a bare renderer.render skips the dome step and loses the sky on a slow frame');
 });
 
 test('CI invokes the picture comparison with the strict gate, not just support for it', () => {
