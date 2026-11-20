@@ -26,7 +26,7 @@ page.on('console', m => { if (m.type() === 'warning' || m.type() === 'error') co
 page.on('pageerror', e => console.log('[capture-pageerror]', e.message));
 // The tram layer draws live vehicles whose positions differ between runs; the picture gate measures the renderer's
 // own light, so it asks for the same city with the trams switched off.
-await page.goto(`${url}?theme=foto&sunmode=day&date=2026-06-21&veg=1&tram=0&quality=0`);
+await page.goto(`${url}?theme=foto&sunmode=day&date=2026-06-21&veg=1&tram=0&quality=0&aa=0`);
 await page.waitForFunction(() => document.getElementById('loading')?.hidden, null, { timeout: 180000 });
 // The Foto colour pack is loaded after the reveal, and uFoto stays 0 until it lands. On a slow runner the first
 // screenshot used to catch the period-colour fallback and the next view the real texture, which read as a tone
@@ -97,6 +97,12 @@ for (const [name, go, wait] of views) {
   await page.evaluate(go);
   await page.waitForTimeout(wait);
   await settle();
+  console.log(name, 'probe', JSON.stringify(await page.evaluate(() => ({
+    exp: window.__dbg.renderer.toneMappingExposure,
+    night: window.__dbg.uniforms.uNight.value,
+    pr: window.__dbg.renderer.getPixelRatio(),
+    gl: window.__dbg.renderer.getContext().getContextAttributes(),
+  }))));
   let shot = await shoot(name);
   if (shot.stddev < 1) {
     console.log(name, 'frame uniform, settling before a re-shoot');

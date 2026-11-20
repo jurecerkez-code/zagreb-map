@@ -314,7 +314,10 @@ const canvas = document.getElementById('scene');
 let renderer;
 // No WebGL: say so in the page's language, not that the data failed.
 // #23: start at min(dpr, 1.5) with MSAA stepping in below it (antialias only pays where the ratio is low).
-try { renderer = new THREE.WebGLRenderer({ canvas, antialias: devicePixelRatio < 1.5 }); } catch (e) { await halt(e, 'ui.nowebgl'); }
+// ?aa=0 draws without MSAA: SwiftShader resolves multisampling differently on Linux and Windows, and its effect lands
+// on the home view's distant edges, so a capture that must compare equal pixels across runners asks for it off.
+const AA = devicePixelRatio < 1.5 && PARAMS.get('aa') !== '0';
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias: AA }); } catch (e) { await halt(e, 'ui.nowebgl'); }
 // #24: filmic output. The renderer owns the display transform: the neutral curve (Khronos PBR Neutral) at unit
 // exposure. The light model already lands a lit surface on its own albedo, so exposure only has to place the
 // highlight roll-off; the curve leaves the midtones and the shade alone instead of lifting them. The pick pass
