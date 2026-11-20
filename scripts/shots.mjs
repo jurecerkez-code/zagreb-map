@@ -13,7 +13,7 @@ const arg = k => { const i = process.argv.indexOf(k); return i > 0 ? process.arg
 const baseline = process.argv.includes('--baseline');
 const out = arg('--out');
 const dir = baseline ? 'e2e/__screenshots__' : 'shots';
-const jsonPath = baseline ? `e2e/__screenshots__/baseline.${process.platform}.json` : (out || 'shots.json');
+const jsonPath = baseline ? 'e2e/__screenshots__/baseline.json' : (out || 'shots.json');
 mkdirSync(dir, { recursive: true });
 mkdirSync(dirname(jsonPath), { recursive: true });
 
@@ -26,7 +26,7 @@ page.on('console', m => { if (m.type() === 'warning' || m.type() === 'error') co
 page.on('pageerror', e => console.log('[capture-pageerror]', e.message));
 // The tram layer draws live vehicles whose positions differ between runs; the picture gate measures the renderer's
 // own light, so it asks for the same city with the trams switched off.
-await page.goto(`${url}?theme=foto&sunmode=day&date=2026-06-21&veg=1&tram=0&quality=0&aa=0`);
+await page.goto(`${url}?theme=foto&sunmode=day&date=2026-06-21&veg=1&tram=0&quality=0`);
 await page.waitForFunction(() => document.getElementById('loading')?.hidden, null, { timeout: 180000 });
 // The Foto colour pack is loaded after the reveal, and uFoto stays 0 until it lands. On a slow runner the first
 // screenshot used to catch the period-colour fallback and the next view the real texture, which read as a tone
@@ -82,7 +82,7 @@ const shoot = async name => {
     if (renderer.domElement.width !== innerWidth || renderer.domElement.height !== innerHeight) {
       throw new Error(`Unexpected capture buffer ${renderer.domElement.width}x${renderer.domElement.height}`);
     }
-    renderer.render(scene, camera);
+    window.__dbg.drawScene();
     return renderer.domElement.toDataURL('image/png');
   });
   await sharp(Buffer.from(dataUrl.split(',')[1], 'base64'))

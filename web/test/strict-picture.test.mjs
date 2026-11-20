@@ -52,11 +52,12 @@ test('strict picture gate does not permit the older five-percent mean drop', () 
   assert.equal(run(inputs(80 * 0.97, 40), true).status, 1);
 });
 
-test('the capture turns MSAA off so CI and Windows compare the same pixels', () => {
+test('the capture draws through the app sky step, not a bare render', () => {
   const shots = readFileSync(join(engine, 'scripts', 'shots.mjs'), 'utf8');
-  assert.match(shots, /&aa=0/, 'the capture URL must ask for no MSAA');
-  const app = readFileSync(join(engine, 'web', 'app.js'), 'utf8');
-  assert.match(app, /PARAMS\.get\('aa'\) !== '0'/, 'the renderer must honour ?aa=0');
+  assert.match(shots, /window\.__dbg\.drawScene\(\)/,
+    'the capture must use drawScene, which moves the dome to the camera before it draws');
+  assert.doesNotMatch(shots, /renderer\.render\(scene, camera\)/,
+    'a bare renderer.render skips the dome step and loses the sky on a slow frame');
 });
 
 test('CI invokes the picture comparison with the strict gate, not just support for it', () => {

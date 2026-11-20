@@ -314,10 +314,7 @@ const canvas = document.getElementById('scene');
 let renderer;
 // No WebGL: say so in the page's language, not that the data failed.
 // #23: start at min(dpr, 1.5) with MSAA stepping in below it (antialias only pays where the ratio is low).
-// ?aa=0 draws without MSAA: SwiftShader resolves multisampling differently on Linux and Windows, and its effect lands
-// on the home view's distant edges, so a capture that must compare equal pixels across runners asks for it off.
-const AA = devicePixelRatio < 1.5 && PARAMS.get('aa') !== '0';
-try { renderer = new THREE.WebGLRenderer({ canvas, antialias: AA }); } catch (e) { await halt(e, 'ui.nowebgl'); }
+try { renderer = new THREE.WebGLRenderer({ canvas, antialias: devicePixelRatio < 1.5 }); } catch (e) { await halt(e, 'ui.nowebgl'); }
 // #24: filmic output. The renderer owns the display transform: the neutral curve (Khronos PBR Neutral) at unit
 // exposure. The light model already lands a lit surface on its own albedo, so exposure only has to place the
 // highlight roll-off; the curve leaves the midtones and the shade alone instead of lifting them. The pick pass
@@ -4795,6 +4792,13 @@ if (new URLSearchParams(location.search).has('debug')) {
 
 let frame = 0;
 let frameDue = -1, weatherMoved = false, lastDueAt = 0;   // #23 scheduling: timestamps belong to drawn frames
+// One drawn scene: the dome is the background at every distance, so it takes the camera's place before the draw.
+// The loop and a capture both come through here; a direct renderer.render would draw the dome where the last frame
+// left it, and a camera that moved since then (the home view's flight) would lose its sky.
+function drawScene() {
+  sky.step(camera, uniforms.uNight.value > 0.5);
+  renderer.render(scene, camera);
+}
 renderer.setAnimationLoop(now => {
   frame++;
   const dt = lastFrameAt ? (now - lastFrameAt) / 1000 : 0;
@@ -4884,8 +4888,7 @@ renderer.setAnimationLoop(now => {
     }
     drawHist();
   }
-  sky.step(camera, uniforms.uNight.value > 0.5);   // the dome is the background at every distance (#33)
-  if (postcard.on) drawShot(); else renderer.render(scene, camera);
+  if (postcard.on) { sky.step(camera, uniforms.uNight.value > 0.5); drawShot(); } else drawScene();
   // The poster's copy of the frame is as large as the screen's buffer: let go once the Poster is not on screen.
   if (!postcard.on || postcard.filter !== 'poster') posterPass.release();
   // Deferred loading is scheduled once, behind the reveal, by scheduleDeferredLayers.
@@ -4942,6 +4945,7 @@ window.__dbg = { get veg() { return veg; }, get facts() { return facts; }, pinFa
   quality: () => ({ step: quality.step, boosted: quality.boosted, pixelRatio: renderer.getPixelRatio(), pinned: QUALITY_PIN }),
   posterPass: () => posterPass.state(), placeNow, roofYears, setRoofYears,
   invalidate,   // #23: scripts (perf, shots, the sleeper) draw a frame or more on drawless idle
+  drawScene,    // the loop's own draw, for a capture: the sky dome step and the render cannot be split
   wake: () => { frameDue = -1; },   // the same, for a scheduler already asleep (frameDue = Infinity): a probe measuring frames needs it
   // issue #36: the orthophoto clipmap as scripts/ortho_probe.mjs reads it (null when the deploy has no tile base)
   get clipmap() { return clipmap; },
