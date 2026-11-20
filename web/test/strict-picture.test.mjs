@@ -52,6 +52,13 @@ test('strict picture gate does not permit the older five-percent mean drop', () 
   assert.equal(run(inputs(80 * 0.97, 40), true).status, 1);
 });
 
+test('the capture turns MSAA off so CI and Windows compare the same pixels', () => {
+  const shots = readFileSync(join(engine, 'scripts', 'shots.mjs'), 'utf8');
+  assert.match(shots, /&aa=0/, 'the capture URL must ask for no MSAA');
+  const app = readFileSync(join(engine, 'web', 'app.js'), 'utf8');
+  assert.match(app, /PARAMS\.get\('aa'\) !== '0'/, 'the renderer must honour ?aa=0');
+});
+
 test('CI invokes the picture comparison with the strict gate, not just support for it', () => {
   const workflow = readFileSync(join(engine, '.github', 'workflows', 'ci.yml'), 'utf8');
   const command = workflow.split(/\r?\n/).find(line => line.includes('node scripts/shots-compare.mjs'));
