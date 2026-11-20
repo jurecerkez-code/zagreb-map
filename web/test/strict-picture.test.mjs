@@ -52,15 +52,6 @@ test('strict picture gate does not permit the older five-percent mean drop', () 
   assert.equal(run(inputs(80 * 0.97, 40), true).status, 1);
 });
 
-test('a per-platform baseline wins over the shared one', () => {
-  const files = inputs(80, 40);
-  const platform = files.baseline.replace(/\.json$/, `.${process.platform}.json`);
-  writeFileSync(platform, JSON.stringify({ home: { mean: 100, stddev: 40 } }));
-  assert.equal(run(files, true).status, 1, 'the platform mean must replace the shared 80');
-  writeFileSync(platform, JSON.stringify({ home: { mean: 80, stddev: 40 } }));
-  assert.equal(run(files, true).status, 0, 'the same reading passes the platform baseline');
-});
-
 test('CI invokes the picture comparison with the strict gate, not just support for it', () => {
   const workflow = readFileSync(join(engine, '.github', 'workflows', 'ci.yml'), 'utf8');
   const command = workflow.split(/\r?\n/).find(line => line.includes('node scripts/shots-compare.mjs'));

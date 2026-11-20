@@ -97,12 +97,6 @@ for (const [name, go, wait] of views) {
   await page.evaluate(go);
   await page.waitForTimeout(wait);
   await settle();
-  console.log(name, 'probe', JSON.stringify(await page.evaluate(() => ({
-    exp: window.__dbg.renderer.toneMappingExposure,
-    night: window.__dbg.uniforms.uNight.value,
-    pr: window.__dbg.renderer.getPixelRatio(),
-    gl: window.__dbg.renderer.getContext().getContextAttributes(),
-  }))));
   let shot = await shoot(name);
   if (shot.stddev < 1) {
     console.log(name, 'frame uniform, settling before a re-shoot');
